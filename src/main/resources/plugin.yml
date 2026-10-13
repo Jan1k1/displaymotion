@@ -2,3 +2,7 @@ name: displaymotion
 version: "1.0-SNAPSHOT"
 main: org.jan1k.displaymotion.DisplayMotionPlugin
 api-version: "26.3"
+
+commands:
+  displaymotion:
+    usage: /displaymotion
