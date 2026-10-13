@@ -15,9 +15,11 @@ import org.joml.Vector3f;
 public final class DisplayMotionPlugin extends JavaPlugin {
 
     private static final int STEP_TICKS = 10;
+    private static final int POP_TICKS = 20;
     private static final float STEP_DEGREES = 45f;
 
     private ItemDisplay display;
+    private BukkitTask popTask;
     private BukkitTask spinTask;
     private float yaw;
 
@@ -28,37 +30,49 @@ public final class DisplayMotionPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        stopSpin();
-        if (display != null) {
-            display.remove();
-        }
+        removeDisplay();
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (args.length > 0 && args[0].equalsIgnoreCase("stop")) {
+            removeDisplay();
+            sender.sendPlainMessage("removed");
+            return true;
+        }
+
         if (!(sender instanceof Player player)) {
             sender.sendPlainMessage("players only");
             return true;
         }
 
-        // last one stays in the world until we remove it
-        stopSpin();
-        if (display != null) {
-            display.remove();
-        }
-
+        removeDisplay();
         yaw = 0f;
         display = player.getWorld().spawn(player.getLocation().add(0, 1, 0), ItemDisplay.class, entity -> {
             entity.setItemStack(ItemStack.of(Material.DIAMOND_SWORD));
             entity.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.GROUND);
+            // duration 0 never saves the tiny pose, so the grow starts at full size
+            entity.setInterpolationDelay(-1);
+            entity.setInterpolationDuration(1);
+            entity.setTransformation(pose(0f, 0f, 0f));
         });
-        spinTask = getServer().getScheduler().runTaskTimer(this, this::spin, STEP_TICKS, STEP_TICKS);
+        popTask = getServer().getScheduler().runTaskLater(this, this::popIn, 3L);
         return true;
+    }
+
+    private void popIn() {
+        popTask = null;
+        if (display == null || !display.isValid()) {
+            return;
+        }
+
+        show(0f, 0f, 1f, POP_TICKS);
+        spinTask = getServer().getScheduler().runTaskTimer(this, this::spin, POP_TICKS, STEP_TICKS);
     }
 
     private void spin() {
         if (display == null || !display.isValid()) {
-            stopSpin();
+            removeDisplay();
             return;
         }
 
@@ -67,23 +81,39 @@ public final class DisplayMotionPlugin extends JavaPlugin {
             yaw -= 360f;
         }
 
-        // client fills the frames. delay must change or it will not send again
         float bob = (float) Math.sin(Math.toRadians(yaw)) * 0.3f;
-        display.setInterpolationDelay(-1);
-        display.setInterpolationDuration(STEP_TICKS);
-        display.setInterpolationDelay(0);
-        display.setTransformation(new Transformation(
-                new Vector3f(0f, bob, 0f),
-                new Quaternionf().rotationY((float) Math.toRadians(yaw)),
-                new Vector3f(1f, 1f, 1f),
-                new Quaternionf()
-        ));
+        show(bob, yaw, 1f, STEP_TICKS);
     }
 
-    private void stopSpin() {
+    private void show(float bob, float yawDegrees, float scale, int ticks) {
+        // client fills the frames. delay must change or it will not send again
+        display.setInterpolationDelay(-1);
+        display.setInterpolationDuration(ticks);
+        display.setInterpolationDelay(0);
+        display.setTransformation(pose(bob, yawDegrees, scale));
+    }
+
+    private Transformation pose(float bob, float yawDegrees, float scale) {
+        return new Transformation(
+                new Vector3f(0f, bob, 0f),
+                new Quaternionf().rotationY((float) Math.toRadians(yawDegrees)),
+                new Vector3f(scale, scale, scale),
+                new Quaternionf()
+        );
+    }
+
+    private void removeDisplay() {
+        if (popTask != null) {
+            popTask.cancel();
+            popTask = null;
+        }
         if (spinTask != null) {
             spinTask.cancel();
             spinTask = null;
+        }
+        if (display != null) {
+            display.remove();
+            display = null;
         }
     }
 }
