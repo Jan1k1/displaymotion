@@ -96,10 +96,9 @@ public final class DisplayMotionPlugin extends JavaPlugin implements Listener {
         }
 
         popAge += SAMPLE_TICKS;
-        float t = Math.min(1f, popAge / (float) POP_TICKS);
+        float t = popAge / (float) POP_TICKS;
         // client blend is a straight line, so the pop curve is sent in steps
-        float scale = 1f - (1f - t) * (1f - t);
-        show(0f, 0f, scale, SAMPLE_TICKS);
+        show(0f, 0f, Ease.out(t), SAMPLE_TICKS);
 
         if (t < 1f) {
             return;
