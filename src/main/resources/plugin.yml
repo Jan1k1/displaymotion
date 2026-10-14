@@ -6,3 +6,8 @@ api-version: "26.3"
 commands:
   displaymotion:
     usage: /displaymotion [stop]
+    permission: displaymotion.use
+
+permissions:
+  displaymotion.use:
+    default: op
