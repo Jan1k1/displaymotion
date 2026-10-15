@@ -11,6 +11,7 @@ Use these facts when you write code with this library:
 - Every spawn returns a `MotionDisplay`. Its methods return the same object, so chain them. They are safe from any thread.
 - Animate: `display.play(animation)`, `display.play(animation, onEnd)`, `display.play("part", animation)`, `display.stop()`.
 - Animations: `Animations.popIn(ticks)`, `popOut(ticks)`, `spin(ticksPerTurn)`, `turn(pitch, yaw, roll, ticks)`, `bob(height, ticks)`, `slide(x, y, z, ticks, ease)`, `hold(ticks)`. Combine with `a.then(b)`, `a.with(b)`, `a.loop()`. Custom: `Animation.keyframes().at(tick, pose, ease).build()`.
+- Events: `animation.event(tick, "name")` marks a tick (works through then, with, loop). `display.onEvent(event -> ...)` runs on the main thread with `event.name()`, `event.part()` (null for the whole display).
 - Pose: `Pose.IDENTITY.withOffset(x, y, z).withRotation(pitch, yaw, roll).withScale(s)`. Degrees. Rotation order yaw, pitch, roll.
 - Ease: `Ease.LINEAR`, `Ease.IN`, `Ease.OUT`, `Ease.IN_OUT`.
 - Groups: `.group(name, pose[, parent])` is an invisible pivot. Matrix parts: `.block(name, blockData, float[16] rowMajorMatrix, parent)` (also item, text, group) work like vanilla, corner pivot, whole matrix inherited.

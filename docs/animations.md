@@ -104,6 +104,33 @@ display.stop();
 - `stop()` freezes the display where it is.
 - `isPlaying()` tells you if an animation plays on the whole display.
 
+## Events
+
+An event is a name at one tick of an animation. When the display reaches that tick, your code runs. Use it to play a sound or spawn particles at the exact moment something happens.
+
+```java
+static final Animation PRESS = Animation.keyframes()
+        .at(0, Pose.IDENTITY)
+        .at(2, Pose.IDENTITY.withOffset(0f, -0.08f, 0f))
+        .at(6, Pose.IDENTITY)
+        .build()
+        .event(2, "click");                 // tick 2, when the button is all the way down
+
+button.onEvent(event -> {
+    if (event.name().equals("click")) {
+        location.getWorld().playSound(location, Sound.BLOCK_STONE_BUTTON_CLICK_ON, 1f, 1f);
+    }
+});
+button.play("cap", PRESS);
+```
+
+- `event(tick, name)` works on any animation, also on presets: `Animations.spin(40).event(20, "half")`.
+- The tick counts from the start of that animation. After `then`, the ticks of the second part move back by the length of the first part, so the event stays at the same moment.
+- In a loop the event comes again every round.
+- `onEvent` runs on the main thread, so the Bukkit API is safe there. `event.part()` is the part the animation plays on, or `null` for the whole display.
+- One handler per display. A new `onEvent` replaces the old one.
+- Events land on the frame that shows their tick. A frame is 2 ticks, so an event can come up to 1 tick early or late.
+
 ## Timing
 
 - A frame goes out every 2 ticks. The player's game blends between frames. Lengths are rounded to whole frames.
