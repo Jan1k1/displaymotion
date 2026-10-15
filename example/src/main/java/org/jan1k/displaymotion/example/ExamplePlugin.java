@@ -15,6 +15,7 @@ import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -40,7 +41,10 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
     // text spinning would be unreadable, so it only bobs
     private static final Animation SHOW_TEXT = Animations.popIn(20).then(Animations.bob(0.15f, 60));
 
+    private static final List<String> EFFECTS = List.of("shatter", "tombstone", "swords", "soul");
+
     private final Map<UUID, MotionDisplay> displays = new HashMap<>();
+    private final Map<UUID, String> killEffects = new HashMap<>();
     private DisplayMotion motion;
 
     @Override
@@ -59,7 +63,22 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
     }
 
     @EventHandler
+    public void onKill(EntityDeathEvent event) {
+        Player killer = event.getEntity().getKiller();
+        String effect = killer == null ? null : killEffects.get(killer.getUniqueId());
+        if (effect == null) {
+            return;
+        }
+        // turn it so the front looks at the killer, the tombstone text has to be readable
+        Location at = event.getEntity().getLocation();
+        at.setDirection(killer.getLocation().toVector().subtract(at.toVector()));
+        at.setPitch(0f);
+        playEffect(effect, at, event.getEntity().name());
+    }
+
+    @EventHandler
     public void onQuit(PlayerQuitEvent event) {
+        killEffects.remove(event.getPlayer().getUniqueId());
         MotionDisplay display = displays.remove(event.getPlayer().getUniqueId());
         if (display != null) {
             display.remove();
@@ -77,6 +96,15 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 .then(Commands.literal("pet").executes(context -> show(context.getSource(), this::pet)))
                 .then(Commands.literal("stop").executes(context -> stop(context.getSource())));
 
+        LiteralArgumentBuilder<CommandSourceStack> effect = Commands.literal("effect");
+        LiteralArgumentBuilder<CommandSourceStack> killEffect = Commands.literal("killeffect")
+                .then(Commands.literal("off").executes(context -> setKillEffect(context.getSource(), null)));
+        for (String name : EFFECTS) {
+            effect.then(Commands.literal(name).executes(context -> effectHere(context.getSource(), name)));
+            killEffect.then(Commands.literal(name).executes(context -> setKillEffect(context.getSource(), name)));
+        }
+        root.then(effect).then(killEffect);
+
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
                 event.registrar().register(root.build(), "spawn an animated display", List.of("dm")));
     }
@@ -92,6 +120,39 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
         }
         displays.put(player.getUniqueId(), spawn.apply(player));
         return Command.SINGLE_SUCCESS;
+    }
+
+    private int effectHere(CommandSourceStack source, String effect) {
+        if (!(source.getSender() instanceof Player player)) {
+            source.getSender().sendPlainMessage("players only");
+            return 0;
+        }
+        playEffect(effect, inFront(player, 4), player.name());
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private int setKillEffect(CommandSourceStack source, String effect) {
+        if (!(source.getSender() instanceof Player player)) {
+            source.getSender().sendPlainMessage("players only");
+            return 0;
+        }
+        if (effect == null) {
+            killEffects.remove(player.getUniqueId());
+            player.sendPlainMessage("kill effect off");
+        } else {
+            killEffects.put(player.getUniqueId(), effect);
+            player.sendPlainMessage("kill effect: " + effect + ", now kill something");
+        }
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private void playEffect(String effect, Location at, Component name) {
+        switch (effect) {
+            case "shatter" -> motion.effects().shatter(at, Material.REDSTONE_BLOCK.createBlockData());
+            case "tombstone" -> motion.effects().tombstone(at, name);
+            case "swords" -> motion.effects().swordRain(at, ItemStack.of(Material.IRON_SWORD));
+            default -> motion.effects().soul(at);
+        }
     }
 
     private int stop(CommandSourceStack source) {
