@@ -1,9 +1,13 @@
 package org.jan1k.displaymotion.example;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Display;
 import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -27,6 +31,8 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
     private static final Animation IDLE = Animations.spin(80).with(Animations.bob(0.3f, 80));
     private static final Animation SHOW = Animations.popIn(20).then(IDLE);
     private static final Animation HIDE = Animations.popOut(10);
+    // text spinning would be unreadable, so it only bobs
+    private static final Animation SHOW_TEXT = Animations.popIn(20).then(Animations.bob(0.15f, 60));
 
     private final Map<UUID, MotionDisplay> displays = new HashMap<>();
     private DisplayMotion motion;
@@ -77,6 +83,10 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
             case "block" -> motion.block(player.getLocation().add(0, 1.5, 0), Material.DIAMOND_BLOCK.createBlockData())
                     .play(SHOW);
             case "windmill" -> windmill(player.getLocation().add(2, 0, 0));
+            case "text" -> motion.text(player.getLocation().add(0, 2, 0),
+                            Component.text("displaymotion", NamedTextColor.GOLD))
+                    .billboard(Display.Billboard.CENTER)
+                    .play(SHOW_TEXT);
             default -> motion.item(player.getLocation().add(0, 1.5, 0), ItemStack.of(Material.DIAMOND_SWORD),
                     ItemDisplay.ItemDisplayTransform.GROUND).play(SHOW);
         };
@@ -103,6 +113,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                     .withScale(0.18f, 1f, 0.04f), "hub");
         }
         return model.spawn()
+                .glow("hub", Color.ORANGE)
                 .play(Animations.popIn(20))
                 .play("hub", Animations.turn(0f, 0f, 360f, 60).loop());
     }

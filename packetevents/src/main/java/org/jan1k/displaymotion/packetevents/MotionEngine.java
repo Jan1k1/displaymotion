@@ -4,6 +4,7 @@ import com.github.retrooper.packetevents.PacketEvents;
 import com.github.retrooper.packetevents.manager.protocol.ProtocolManager;
 import com.github.retrooper.packetevents.netty.buffer.ByteBufHelper;
 import com.github.retrooper.packetevents.netty.channel.ChannelHelper;
+import com.github.retrooper.packetevents.protocol.entity.type.EntityType;
 import com.github.retrooper.packetevents.protocol.entity.type.EntityTypes;
 import com.github.retrooper.packetevents.protocol.world.Location;
 import com.github.retrooper.packetevents.wrapper.PacketWrapper;
@@ -11,6 +12,7 @@ import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerBu
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDestroyEntities;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSpawnEntity;
 import io.netty.channel.Channel;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.Plugin;
 import org.jan1k.displaymotion.Animation;
@@ -30,15 +32,17 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 
 final class MotionEngine {
 
     static final int ALL_TRACKS = -1;
+    static final int ALL_PARTS = -1;
 
     private static final long TICK_MILLIS = 50L;
     private static final long MIN_TICK_GAP_NANOS = TimeUnit.MILLISECONDS.toNanos(25);
-    private static final int INLINE_BAKE_TICKS = 600;
+    private static final int INLINE_BAKE_TICKS = 600; // bigger ones bake on another thread
     private static final int LOUD_ERRORS = 10;
     private static final long QUIET_LOG_NANOS = TimeUnit.MINUTES.toNanos(1);
 
@@ -135,11 +139,12 @@ final class MotionEngine {
         }
     }
 
-    // everything below runs on the motion thread only
+    // everything from here on runs on the motion thread only
 
     void add(DisplayState display) {
         composer.compose(display, true);
         display.index = displays.size();
+        // wait one tick so a play() called right after spawn is already in, otherwise you see a full size flash
         display.showAfter = tick + 1;
         displays.add(display);
         fresh.add(display);
@@ -188,6 +193,40 @@ final class MotionEngine {
             display.handle.playing = false;
         }
         display.active = anyRunning(display);
+    }
+
+    void look(DisplayState display, int part, Consumer<PartState> change) {
+        if (display.removed) {
+            return;
+        }
+        for (int i = 0; i < display.parts.length; i++) {
+            if (part == ALL_PARTS || part == i) {
+                PartState state = display.parts[i];
+                change.accept(state);
+                sendPart(display, state, packet.look(state));
+            }
+        }
+    }
+
+    void text(DisplayState display, int part, Component text) {
+        if (display.removed) {
+            return;
+        }
+        for (int i = 0; i < display.parts.length; i++) {
+            PartState state = display.parts[i];
+            if ((part == ALL_PARTS || part == i) && state.kind == PartState.TEXT) {
+                state.text = text;
+                sendPart(display, state, packet.content(state));
+            }
+        }
+    }
+
+    private void sendPart(DisplayState display, PartState part, DisplayPacket update) {
+        List<Viewer> targets = display.viewers;
+        if (display.fresh || targets.isEmpty()) {
+            return;
+        }
+        sendToAll(targets, encode(update, targets.getFirst().channel), false);
     }
 
     void viewRange(DisplayState display, double range) {
@@ -470,7 +509,7 @@ final class MotionEngine {
             for (int i = 0; i < parts.length; i++) {
                 PartState part = parts[i];
                 WrapperPlayServerSpawnEntity spawn = new WrapperPlayServerSpawnEntity(part.entityId, part.uuid,
-                        part.isBlock() ? EntityTypes.BLOCK_DISPLAY : EntityTypes.ITEM_DISPLAY,
+                        entityType(part),
                         new Location(display.x, display.y, display.z, display.yaw, display.pitch), display.yaw, 0, null);
                 buffers[i * 2] = encode(spawn, viewer.channel);
                 buffers[i * 2 + 1] = encode(packet.spawn(part, display.clientRange()), viewer.channel);
@@ -568,6 +607,14 @@ final class MotionEngine {
             lastQuietLog = now;
             plugin.getLogger().log(Level.WARNING, message + " (" + errors + " errors so far)", error);
         }
+    }
+
+    private static EntityType entityType(PartState part) {
+        return switch (part.kind) {
+            case PartState.BLOCK -> EntityTypes.BLOCK_DISPLAY;
+            case PartState.TEXT -> EntityTypes.TEXT_DISPLAY;
+            default -> EntityTypes.ITEM_DISPLAY;
+        };
     }
 
     private static boolean anyRunning(DisplayState display) {

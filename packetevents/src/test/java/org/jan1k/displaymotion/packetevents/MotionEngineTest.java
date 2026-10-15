@@ -8,6 +8,7 @@ import com.github.retrooper.packetevents.wrapper.PacketWrapper;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.embedded.EmbeddedChannel;
+import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.plugin.Plugin;
@@ -115,6 +116,29 @@ class MotionEngineTest {
     }
 
     @Test
+    void glowIsSentToViewersRightAway() {
+        MotionDisplay display = display();
+        tick();
+        tick();
+
+        display.glow(Color.ORANGE);
+        List<Packet> packets = tick();
+
+        assertEquals(List.of("meta"), kinds(packets));
+        assertEquals((byte) 0x40, value(packets.getFirst(), 0));
+        assertEquals(Color.ORANGE.asRGB(), value(packets.getFirst(), 22));
+    }
+
+    @Test
+    void glowSetBeforeSpawnIsInTheSpawnPacket() {
+        display().glow(Color.RED);
+        tick();
+        List<Packet> packets = tick();
+
+        assertEquals(Color.RED.asRGB(), value(packets.get(2), 22));
+    }
+
+    @Test
     void viewerAtTheEdgeDoesNotFlicker() {
         display();
         tick();
@@ -188,7 +212,7 @@ class MotionEngineTest {
 
     private MotionDisplay display() {
         World world = FakePacketEvents.proxy(World.class, (method, args) -> method.equals("getUID") ? WORLD : null);
-        PartState[] parts = {new PartState("main", ENTITY, -1, null, 0, 1, Pose.IDENTITY)};
+        PartState[] parts = {PartState.block("main", ENTITY, -1, 1, Pose.IDENTITY)};
         MotionDisplay display = new MotionDisplay(engine, new Location(world, 0, 0, 0), parts, 48);
         engine.submit(() -> engine.add(display.state()));
         return display;

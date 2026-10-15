@@ -1,6 +1,9 @@
 package org.jan1k.displaymotion.packetevents;
 
+import net.kyori.adventure.text.Component;
+import org.bukkit.Color;
 import org.bukkit.Location;
+import org.bukkit.entity.Display;
 import org.jan1k.displaymotion.Animation;
 import org.jan1k.displaymotion.Frames;
 
@@ -74,6 +77,89 @@ public final class MotionDisplay {
         return this;
     }
 
+    public MotionDisplay glow(Color color) {
+        return glow(MotionEngine.ALL_PARTS, color);
+    }
+
+    public MotionDisplay glow(String part, Color color) {
+        return glow(index(part), color);
+    }
+
+    public MotionDisplay brightness(Display.Brightness brightness) {
+        return brightness(MotionEngine.ALL_PARTS, brightness);
+    }
+
+    public MotionDisplay brightness(String part, Display.Brightness brightness) {
+        return brightness(index(part), brightness);
+    }
+
+    public MotionDisplay billboard(Display.Billboard billboard) {
+        return billboard(MotionEngine.ALL_PARTS, billboard);
+    }
+
+    public MotionDisplay billboard(String part, Display.Billboard billboard) {
+        return billboard(index(part), billboard);
+    }
+
+    public MotionDisplay text(Component text) {
+        return text(MotionEngine.ALL_PARTS, text);
+    }
+
+    public MotionDisplay text(String part, Component text) {
+        int index = index(part);
+        if (state.parts[index].kind != PartState.TEXT) {
+            throw new IllegalArgumentException("part '" + part + "' is not a text part");
+        }
+        return text(index, text);
+    }
+
+    private MotionDisplay glow(int part, Color color) {
+        requireAlive();
+        boolean on = color != null;
+        int rgb = on ? color.asRGB() : -1;
+        engine.submit(() -> engine.look(state, part, p -> {
+            p.glowing = on;
+            p.glowColor = rgb;
+        }));
+        return this;
+    }
+
+    private MotionDisplay brightness(int part, Display.Brightness brightness) {
+        requireAlive();
+        // packed the same way vanilla does it, -1 means use the world light
+        int packed = brightness == null ? -1
+                : brightness.getBlockLight() << 4 | brightness.getSkyLight() << 20;
+        engine.submit(() -> engine.look(state, part, p -> p.brightness = packed));
+        return this;
+    }
+
+    private MotionDisplay billboard(int part, Display.Billboard billboard) {
+        Objects.requireNonNull(billboard, "billboard");
+        requireAlive();
+        int id = billboard.ordinal();
+        engine.submit(() -> engine.look(state, part, p -> p.billboard = id));
+        return this;
+    }
+
+    private MotionDisplay text(int part, Component text) {
+        ModelBuilder.checkText(text);
+        if (part == MotionEngine.ALL_PARTS && !hasText()) {
+            throw new IllegalArgumentException("this display has no text part");
+        }
+        requireAlive();
+        engine.submit(() -> engine.text(state, part, text));
+        return this;
+    }
+
+    private boolean hasText() {
+        for (PartState part : state.parts) {
+            if (part.kind == PartState.TEXT) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public MotionDisplay viewRange(double blocks) {
         if (!(blocks > 0)) {
             throw new IllegalArgumentException("view range must be more than 0, got " + blocks);
@@ -115,11 +201,15 @@ public final class MotionDisplay {
     }
 
     private int track(String part) {
+        return index(part) + 1;
+    }
+
+    private int index(String part) {
         Integer index = partIndex.get(Objects.requireNonNull(part, "part"));
         if (index == null) {
             throw new IllegalArgumentException("no part named '" + part + "', parts are " + parts);
         }
-        return index + 1;
+        return index;
     }
 
     private void requireAlive() {

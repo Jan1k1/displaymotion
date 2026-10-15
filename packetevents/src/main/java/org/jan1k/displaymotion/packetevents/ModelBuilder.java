@@ -1,6 +1,8 @@
 package org.jan1k.displaymotion.packetevents;
 
 import io.github.retrooper.packetevents.util.SpigotConversionUtil;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -18,6 +20,7 @@ import java.util.Objects;
 public final class ModelBuilder {
 
     public static final int MAX_PARTS = 256;
+    public static final int MAX_TEXT_LENGTH = 32_000;
 
     private final DisplayMotion motion;
     private final Location location;
@@ -38,7 +41,17 @@ public final class ModelBuilder {
 
     public ModelBuilder block(String name, BlockData block, Pose pose, String parent) {
         Objects.requireNonNull(block, "block");
-        return add(name, null, 0, SpigotConversionUtil.fromBukkitBlockData(block).getGlobalId(), pose, parent);
+        int blockState = SpigotConversionUtil.fromBukkitBlockData(block).getGlobalId();
+        return add(name, pose, parent, (id, parentIndex) -> PartState.block(name, id, parentIndex, blockState, pose));
+    }
+
+    public ModelBuilder text(String name, Component text, Pose pose) {
+        return text(name, text, pose, null);
+    }
+
+    public ModelBuilder text(String name, Component text, Pose pose, String parent) {
+        checkText(text);
+        return add(name, pose, parent, (id, parentIndex) -> PartState.text(name, id, parentIndex, text, pose));
     }
 
     public ModelBuilder item(String name, ItemStack item, Pose pose) {
@@ -56,7 +69,19 @@ public final class ModelBuilder {
     public ModelBuilder item(String name, ItemStack item, ItemDisplay.ItemDisplayTransform transform, Pose pose, String parent) {
         Objects.requireNonNull(item, "item");
         Objects.requireNonNull(transform, "transform");
-        return add(name, SpigotConversionUtil.fromBukkitItemStack(item), transform.ordinal(), 0, pose, parent);
+        var converted = SpigotConversionUtil.fromBukkitItemStack(item);
+        // bukkit's enum is in the same order as the network ids (it just lacks ON_SHELF)
+        int itemTransform = transform.ordinal();
+        return add(name, pose, parent, (id, parentIndex) -> PartState.item(name, id, parentIndex, converted, itemTransform, pose));
+    }
+
+    static void checkText(Component text) {
+        Objects.requireNonNull(text, "text");
+        // viaversion kicks old clients on huge text displays, so keep it sane
+        int length = GsonComponentSerializer.gson().serialize(text).length();
+        if (length > MAX_TEXT_LENGTH) {
+            throw new IllegalArgumentException("text is too big, " + length + " chars of json, the limit is " + MAX_TEXT_LENGTH);
+        }
     }
 
     public MotionDisplay spawn() {
@@ -70,8 +95,11 @@ public final class ModelBuilder {
         return motion.spawn(location, parts.toArray(PartState[]::new));
     }
 
-    private ModelBuilder add(String name, com.github.retrooper.packetevents.protocol.item.ItemStack item,
-                             int itemTransform, int blockState, Pose pose, String parent) {
+    private interface PartFactory {
+        PartState create(int entityId, int parentIndex);
+    }
+
+    private ModelBuilder add(String name, Pose pose, String parent, PartFactory factory) {
         Objects.requireNonNull(name, "name");
         Objects.requireNonNull(pose, "pose");
         if (spawned) {
@@ -96,7 +124,7 @@ public final class ModelBuilder {
         }
         int entityId = Bukkit.getUnsafe().nextEntityId(world);
         names.put(name, parts.size());
-        parts.add(new PartState(name, entityId, parentIndex, item, itemTransform, blockState, pose));
+        parts.add(factory.create(entityId, parentIndex));
         return this;
     }
 }

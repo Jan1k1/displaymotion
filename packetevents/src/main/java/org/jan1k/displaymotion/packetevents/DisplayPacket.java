@@ -14,21 +14,28 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
     static final int RIGHT_ROTATION = 8;
     static final int ALL = TRANSLATION | LEFT_ROTATION | SCALE | RIGHT_ROTATION;
 
+    private static final int FLAGS_SLOT = 0;
     private static final int START_DELAY_SLOT = 8;
     private static final int DURATION_SLOT = 9;
     private static final int TRANSLATION_SLOT = 11;
     private static final int SCALE_SLOT = 12;
     private static final int LEFT_ROTATION_SLOT = 13;
     private static final int RIGHT_ROTATION_SLOT = 14;
+    private static final int BILLBOARD_SLOT = 15;
+    private static final int BRIGHTNESS_SLOT = 16;
     private static final int VIEW_RANGE_SLOT = 17;
+    private static final int GLOW_COLOR_SLOT = 22;
     private static final int CONTENT_SLOT = 23;
     private static final int ITEM_TRANSFORM_SLOT = 24;
     private static final int END = 0xFF;
+    private static final int GLOWING_FLAG = 0x40;
     private static final double BLOCKS_PER_VIEW_RANGE = 64.0;
 
     private static final int FRAME = 0;
     private static final int SPAWN = 1;
     private static final int RANGE = 2;
+    private static final int LOOK = 3;
+    private static final int CONTENT = 4;
 
     private final int intType;
     private final int byteType;
@@ -37,6 +44,7 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
     private final int quaternionType;
     private final int itemType;
     private final int blockType;
+    private final int componentType;
 
     private PartState part;
     private int changes;
@@ -54,39 +62,58 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
         quaternionType = EntityDataTypes.QUATERNION.getId(version);
         itemType = EntityDataTypes.ITEMSTACK.getId(version);
         blockType = EntityDataTypes.BLOCK_STATE.getId(version);
+        componentType = EntityDataTypes.ADV_COMPONENT.getId(version);
     }
 
     DisplayPacket frame(PartState part, int changes, int duration) {
-        this.part = part;
-        this.changes = changes;
-        this.duration = duration;
-        this.mode = FRAME;
-        return this;
+        return set(part, FRAME, changes, duration, 0);
     }
 
     DisplayPacket spawn(PartState part, double range) {
-        frame(part, ALL, 1);
-        this.range = range;
-        this.mode = SPAWN;
-        return this;
+        return set(part, SPAWN, ALL, 1, range);
     }
 
     DisplayPacket range(PartState part, double range) {
+        return set(part, RANGE, 0, 0, range);
+    }
+
+    DisplayPacket look(PartState part) {
+        return set(part, LOOK, 0, 0, 0);
+    }
+
+    DisplayPacket content(PartState part) {
+        return set(part, CONTENT, 0, 0, 0);
+    }
+
+    private DisplayPacket set(PartState part, int mode, int changes, int duration, double range) {
         this.part = part;
+        this.mode = mode;
+        this.changes = changes;
+        this.duration = duration;
         this.range = range;
-        this.mode = RANGE;
         return this;
     }
 
     @Override
     public void write() {
         writeVarInt(part.entityId);
-        if (mode == RANGE) {
-            writeViewRange();
-            writeByte(END);
-            return;
+        switch (mode) {
+            case RANGE -> writeViewRange();
+            case LOOK -> writeLook();
+            case CONTENT -> writeContent();
+            default -> {
+                writeTransform();
+                if (mode == SPAWN) {
+                    writeViewRange();
+                    writeLook();
+                    writeContent();
+                }
+            }
         }
+        writeByte(END);
+    }
 
+    private void writeTransform() {
         float[] s = part.sent;
         entry(START_DELAY_SLOT, intType);
         writeVarInt(0);
@@ -119,26 +146,41 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
             writeFloat(s[Decomposer.RZ]);
             writeFloat(s[Decomposer.RW]);
         }
-
-        if (mode == SPAWN) {
-            writeViewRange();
-            if (part.item != null) {
-                entry(CONTENT_SLOT, itemType);
-                writeItemStack(part.item);
-                entry(ITEM_TRANSFORM_SLOT, byteType);
-                writeByte(part.itemTransform);
-            } else {
-                entry(CONTENT_SLOT, blockType);
-                writeVarInt(part.blockState);
-            }
-        }
-
-        writeByte(END);
     }
 
     private void writeViewRange() {
         entry(VIEW_RANGE_SLOT, floatType);
         writeFloat((float) (range / BLOCKS_PER_VIEW_RANGE));
+    }
+
+    private void writeLook() {
+        entry(FLAGS_SLOT, byteType);
+        writeByte(part.glowing ? GLOWING_FLAG : 0);
+        entry(BILLBOARD_SLOT, byteType);
+        writeByte(part.billboard);
+        entry(BRIGHTNESS_SLOT, intType);
+        writeVarInt(part.brightness);
+        entry(GLOW_COLOR_SLOT, intType);
+        writeVarInt(part.glowColor);
+    }
+
+    private void writeContent() {
+        switch (part.kind) {
+            case PartState.ITEM -> {
+                entry(CONTENT_SLOT, itemType);
+                writeItemStack(part.item);
+                entry(ITEM_TRANSFORM_SLOT, byteType);
+                writeByte(part.itemTransform);
+            }
+            case PartState.BLOCK -> {
+                entry(CONTENT_SLOT, blockType);
+                writeVarInt(part.blockState);
+            }
+            default -> {
+                entry(CONTENT_SLOT, componentType);
+                writeComponent(part.text);
+            }
+        }
     }
 
     private void entry(int slot, int type) {

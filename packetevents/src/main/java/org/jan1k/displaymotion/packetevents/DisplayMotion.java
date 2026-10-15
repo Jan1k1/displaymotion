@@ -3,6 +3,7 @@ package org.jan1k.displaymotion.packetevents;
 import com.github.retrooper.packetevents.PacketEvents;
 import com.github.retrooper.packetevents.PacketEventsAPI;
 import com.github.retrooper.packetevents.manager.player.PlayerManager;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -72,6 +73,10 @@ public final class DisplayMotion {
 
     public MotionDisplay block(Location location, BlockData block) {
         return model(location).block(MAIN_PART, block, Pose.IDENTITY).spawn();
+    }
+
+    public MotionDisplay text(Location location, Component text) {
+        return model(location).text(MAIN_PART, text, Pose.IDENTITY).spawn();
     }
 
     public ModelBuilder model(Location location) {

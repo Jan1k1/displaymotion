@@ -50,15 +50,22 @@ Rules for a part's pose:
 | `DisplayMotion.create(plugin)` | Start the library. Call once on the main thread. It closes itself when your plugin disables. |
 | `motion.item(location, itemStack)` | Spawn one item display. Optional third argument: `ItemDisplay.ItemDisplayTransform`. |
 | `motion.block(location, blockData)` | Spawn one block display. |
-| `motion.model(location)` | Start a model. Add parts with `.block(...)` and `.item(...)`, then `.spawn()`. At most 256 parts. |
+| `motion.text(location, component)` | Spawn one text display. It grows up from the location. |
+| `motion.model(location)` | Start a model. Add parts with `.block(...)`, `.item(...)` and `.text(...)`, then `.spawn()`. At most 256 parts. |
 | `display.play(animation)` | Play on the whole display. Replaces what plays there now. |
 | `display.play(animation, onEnd)` | Same, and run `onEnd` on the main thread once, when it reaches its end. |
 | `display.play("part", animation)` | Play on one part and its children. Also with `onEnd`. |
 | `display.stop()` / `display.stop("part")` | Freeze on the current pose. `onEnd` does not run. |
+| `display.glow(color)` | Outline in this color. `null` turns it off. Text displays do not glow. |
+| `display.brightness(new Display.Brightness(block, sky))` | Fixed light, 0 to 15. `null` uses the world light. |
+| `display.billboard(Display.Billboard.CENTER)` | Turn to face the player. `FIXED` is the default. |
+| `display.text(component)` | Change the text of text parts. |
 | `display.viewRange(blocks)` | Who sees it. Default 48 blocks, same world. |
 | `display.remove()` | Remove it for every viewer. |
 | `display.parts()` | The part names. A single item or block has one part, `main`. |
 | `motion.close()` | Remove every display. Happens by itself on plugin disable. |
+
+`glow`, `brightness`, `billboard` and `text` also take a part name first, like `display.glow("hub", Color.ORANGE)`.
 
 `MotionDisplay` methods are safe from any thread. After `remove()` they throw `IllegalStateException`, except `remove()` itself.
 
@@ -110,7 +117,7 @@ There is no benchmark in this repo yet. Measure on your server with spark.
 | --- | --- | --- |
 | `core` | Animations, poses, easing, matrix math. No Bukkit, no PacketEvents. Java 21. | MIT |
 | `packetevents` | Sends the frames to players. | GPL-3.0-only |
-| `example` | Test plugin: `/displaymotion`, `/displaymotion block`, `/displaymotion windmill`, `/displaymotion stop`. | GPL-3.0-only |
+| `example` | Test plugin: `/displaymotion`, `block`, `windmill`, `text`, `stop`. | GPL-3.0-only |
 
 PacketEvents is GPL-3.0, so the module that uses it is GPL-3.0 too. `core` stays MIT, so you can write your own sender. This is not legal advice.
 

@@ -6,7 +6,7 @@ final class Track {
 
     final Frames frames;
     final Runnable onEnd;
-    long step = -1;
+    long step = -1; // first step lands on frame 0
     int frame;
     boolean running = true;
     boolean moved = true;

@@ -6,6 +6,7 @@ import com.github.retrooper.packetevents.util.Quaternion4f;
 import com.github.retrooper.packetevents.util.Vector3f;
 import com.github.retrooper.packetevents.wrapper.PacketWrapper;
 import io.netty.buffer.ByteBuf;
+import net.kyori.adventure.text.Component;
 import io.netty.buffer.Unpooled;
 import org.jan1k.displaymotion.Affine;
 import org.jan1k.displaymotion.Decomposer;
@@ -64,7 +65,7 @@ class DisplayPacketTest {
 
         List<EntityData<?>> data = readBack(44, new DisplayPacket().spawn(part, 48));
 
-        assertEquals(8, data.size());
+        assertEquals(12, data.size());
         assertEquals(1, value(data, 9));
         assertEquals(0.75f, value(data, 17));
         assertEquals(1234, value(data, 23));
@@ -80,8 +81,35 @@ class DisplayPacketTest {
         assertEquals(2f, value(data, 17));
     }
 
+    @Test
+    void lookCarriesGlowBillboardAndBrightness() {
+        PartState part = block(46, 1, Pose.IDENTITY);
+        part.glowing = true;
+        part.glowColor = 0xFF8800;
+        part.billboard = 3;
+        part.brightness = 15 << 4 | 15 << 20;
+
+        List<EntityData<?>> data = readBack(46, new DisplayPacket().look(part));
+
+        assertEquals(4, data.size());
+        assertEquals((byte) 0x40, value(data, 0));
+        assertEquals((byte) 3, value(data, 15));
+        assertEquals(15 << 4 | 15 << 20, value(data, 16));
+        assertEquals(0xFF8800, value(data, 22));
+    }
+
+    @Test
+    void textPartCarriesItsText() {
+        PartState part = PartState.text("label", 47, -1, Component.text("hello"), Pose.IDENTITY);
+
+        List<EntityData<?>> data = readBack(47, new DisplayPacket().content(part));
+
+        assertEquals(1, data.size());
+        assertEquals(Component.text("hello"), value(data, 23));
+    }
+
     private static PartState block(int entityId, int blockState, Pose pose) {
-        PartState part = new PartState("test", entityId, -1, null, 0, blockState, Pose.IDENTITY);
+        PartState part = PartState.block("test", entityId, -1, blockState, Pose.IDENTITY);
         float[] m = new float[Affine.SIZE];
         Affine.fromPose(pose, m, 0);
         new Decomposer().decompose(m, 0, part.sent, 0);

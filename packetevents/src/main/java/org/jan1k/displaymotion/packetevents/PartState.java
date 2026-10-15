@@ -1,6 +1,7 @@
 package org.jan1k.displaymotion.packetevents;
 
 import com.github.retrooper.packetevents.protocol.item.ItemStack;
+import net.kyori.adventure.text.Component;
 import org.jan1k.displaymotion.Affine;
 import org.jan1k.displaymotion.Decomposer;
 import org.jan1k.displaymotion.Pose;
@@ -9,10 +10,15 @@ import java.util.UUID;
 
 final class PartState {
 
+    static final int ITEM = 0;
+    static final int BLOCK = 1;
+    static final int TEXT = 2;
+
     final String name;
     final int entityId;
     final UUID uuid = UUID.randomUUID();
     final int parent;
+    final int kind;
     final ItemStack item;
     final int itemTransform;
     final int blockState;
@@ -24,20 +30,41 @@ final class PartState {
     final float[] sent = new float[Decomposer.SIZE];
     int changes;
 
-    PartState(String name, int entityId, int parent, ItemStack item, int itemTransform, int blockState, Pose pose) {
+    Component text;
+    boolean glowing;
+    int glowColor = -1;
+    int brightness = -1;
+    int billboard;
+
+    private PartState(String name, int entityId, int parent, int kind, ItemStack item, int itemTransform,
+                      int blockState, Component text, Pose pose) {
         this.name = name;
         this.entityId = entityId;
         this.parent = parent;
+        this.kind = kind;
         this.item = item;
         this.itemTransform = itemTransform;
         this.blockState = blockState;
+        this.text = text;
         this.sizeX = pose.scaleX();
         this.sizeY = pose.scaleY();
         this.sizeZ = pose.scaleZ();
         Affine.fromPose(pose.x(), pose.y(), pose.z(), pose.pitch(), pose.yaw(), pose.roll(), 1f, 1f, 1f, rest, 0);
     }
 
+    static PartState item(String name, int entityId, int parent, ItemStack item, int itemTransform, Pose pose) {
+        return new PartState(name, entityId, parent, ITEM, item, itemTransform, 0, null, pose);
+    }
+
+    static PartState block(String name, int entityId, int parent, int blockState, Pose pose) {
+        return new PartState(name, entityId, parent, BLOCK, null, 0, blockState, null, pose);
+    }
+
+    static PartState text(String name, int entityId, int parent, Component text, Pose pose) {
+        return new PartState(name, entityId, parent, TEXT, null, 0, 0, text, pose);
+    }
+
     boolean isBlock() {
-        return item == null;
+        return kind == BLOCK;
     }
 }
