@@ -181,6 +181,24 @@ class MotionEngineTest {
     }
 
     @Test
+    void partsAboveTheSpawnPointGetACullingBox() {
+        PartState[] parts = {
+                PartState.block("low", ENTITY, -1, 1, Pose.IDENTITY),
+                PartState.block("high", ENTITY + 1, -1, 1, Pose.IDENTITY.withOffset(0f, 2f, 0f))
+        };
+        MotionDisplay display = new MotionDisplay(engine, new Location(world(), 0, 0, 0), parts, 48);
+        engine.submit(() -> engine.add(display.state()));
+        tick();
+        List<Packet> packets = tick();
+
+        Packet low = packets.stream().filter(p -> p.kind().equals("meta") && p.entity() == ENTITY).findFirst().orElseThrow();
+        Packet high = packets.stream().filter(p -> p.kind().equals("meta") && p.entity() == ENTITY + 1).findFirst().orElseThrow();
+        assertEquals(0f, value(low, 20));
+        assertTrue((float) value(high, 20) > 1.4f);
+        assertTrue((float) value(high, 21) >= 2.5f);
+    }
+
+    @Test
     void hiddenPlayersDoNotSeeIt() {
         MotionDisplay display = display();
         tick();

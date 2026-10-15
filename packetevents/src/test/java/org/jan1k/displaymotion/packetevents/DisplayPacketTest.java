@@ -65,7 +65,7 @@ class DisplayPacketTest {
 
         List<EntityData<?>> data = readBack(44, new DisplayPacket().spawn(part, 48, 0));
 
-        assertEquals(13, data.size());
+        assertEquals(15, data.size());
         assertEquals(0, value(data, 10));
         assertEquals(1, value(data, 9));
         assertEquals(0.75f, value(data, 17));

@@ -5,6 +5,10 @@ import org.jan1k.displaymotion.Decomposer;
 
 final class Composer {
 
+    private static final float BOX_MARGIN = 0.25f;
+    private static final float BOX_GROWTH = 1.25f;
+    private static final float BELOW_TOLERANCE = 0.001f;
+
     private final Decomposer decomposer = new Decomposer();
     private final float[] root = new float[Affine.SIZE];
     private final float[] frame = new float[Affine.SIZE];
@@ -49,12 +53,59 @@ final class Composer {
             if (part.changes != 0) {
                 System.arraycopy(current, 0, part.sent, 0, Decomposer.SIZE);
             }
+            if (cullBox(part, display.pitch == 0f)) {
+                part.changes |= DisplayPacket.BOX;
+            }
         }
         for (Track track : display.tracks) {
             if (track != null) {
                 track.moved = false;
             }
         }
+    }
+
+    // the client only culls a display when width and height are not 0, and its box goes from the feet up,
+    // so a part gets a box only while all of it stays above the spawn point. the box never shrinks
+    private boolean cullBox(PartState part, boolean upright) {
+        if (!upright || part.kind == PartState.TEXT || part.billboard != 0) {
+            return noBox(part);
+        }
+        float low = part.isBlock() ? 0f : -0.5f;
+        float high = low + 1f;
+        float radius = 0f;
+        float minY = Float.MAX_VALUE;
+        float maxY = -Float.MAX_VALUE;
+        for (int corner = 0; corner < 8; corner++) {
+            float cx = (corner & 1) == 0 ? low : high;
+            float cy = (corner & 2) == 0 ? low : high;
+            float cz = (corner & 4) == 0 ? low : high;
+            float x = local[0] * cx + local[3] * cy + local[6] * cz + local[9];
+            float y = local[1] * cx + local[4] * cy + local[7] * cz + local[10];
+            float z = local[2] * cx + local[5] * cy + local[8] * cz + local[11];
+            radius = Math.max(radius, x * x + z * z);
+            minY = Math.min(minY, y);
+            maxY = Math.max(maxY, y);
+        }
+        if (minY < -BELOW_TOLERANCE) {
+            return noBox(part);
+        }
+        float width = 2f * (float) Math.sqrt(radius) + BOX_MARGIN;
+        float height = maxY + BOX_MARGIN;
+        if (width <= part.cullWidth && height <= part.cullHeight) {
+            return false;
+        }
+        part.cullWidth = Math.max(part.cullWidth, width * BOX_GROWTH);
+        part.cullHeight = Math.max(part.cullHeight, height * BOX_GROWTH);
+        return true;
+    }
+
+    private static boolean noBox(PartState part) {
+        if (part.cullWidth == 0f && part.cullHeight == 0f) {
+            return false;
+        }
+        part.cullWidth = 0f;
+        part.cullHeight = 0f;
+        return true;
     }
 
     private static int changes(float[] sent, float[] now) {

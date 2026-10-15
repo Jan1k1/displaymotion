@@ -207,6 +207,11 @@ final class MotionEngine {
                 sendPart(display, state, packet.look(state));
             }
         }
+        // billboard decides if a part can have a culling box, so check the boxes again
+        composer.compose(display, true);
+        if (!display.fresh && !display.viewers.isEmpty()) {
+            sendChanges(display, Frames.STEP_TICKS);
+        }
     }
 
     void text(DisplayState display, int part, Component text) {
@@ -253,6 +258,12 @@ final class MotionEngine {
         List<Viewer> kept = new ArrayList<>(display.viewers);
         int oldTicks = display.moveTicks;
         display.moveTicks = ticks;
+        if (display.viewers.isEmpty()) {
+            display.stale = true;
+        } else {
+            composer.compose(display, true);
+            sendChanges(display, Frames.STEP_TICKS);
+        }
         updateViewers(display);
         kept.retainAll(display.viewers);
         if (kept.isEmpty()) {

@@ -29,6 +29,8 @@ final class PartState {
     final float[] world = new float[Affine.SIZE];
     final float[] sent = new float[Decomposer.SIZE];
     int changes;
+    float cullWidth;
+    float cullHeight;
 
     Component text;
     boolean glowing;

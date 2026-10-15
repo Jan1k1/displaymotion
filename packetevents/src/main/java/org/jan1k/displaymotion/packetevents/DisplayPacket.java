@@ -13,6 +13,7 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
     static final int SCALE = 4;
     static final int RIGHT_ROTATION = 8;
     static final int ALL = TRANSLATION | LEFT_ROTATION | SCALE | RIGHT_ROTATION;
+    static final int BOX = 16;
 
     private static final int FLAGS_SLOT = 0;
     private static final int START_DELAY_SLOT = 8;
@@ -25,6 +26,8 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
     private static final int BILLBOARD_SLOT = 15;
     private static final int BRIGHTNESS_SLOT = 16;
     private static final int VIEW_RANGE_SLOT = 17;
+    private static final int WIDTH_SLOT = 20;
+    private static final int HEIGHT_SLOT = 21;
     private static final int GLOW_COLOR_SLOT = 22;
     private static final int CONTENT_SLOT = 23;
     private static final int ITEM_TRANSFORM_SLOT = 24;
@@ -114,6 +117,7 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
             default -> {
                 writeTransform();
                 if (mode == SPAWN) {
+                    writeBox();
                     writeMoveDuration();
                     writeViewRange();
                     writeLook();
@@ -126,10 +130,16 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
 
     private void writeTransform() {
         float[] s = part.sent;
-        entry(START_DELAY_SLOT, intType);
-        writeVarInt(0);
-        entry(DURATION_SLOT, intType);
-        writeVarInt(duration);
+        // a box only update must not restart the transform blend
+        if ((changes & ALL) != 0) {
+            entry(START_DELAY_SLOT, intType);
+            writeVarInt(0);
+            entry(DURATION_SLOT, intType);
+            writeVarInt(duration);
+        }
+        if ((changes & BOX) != 0) {
+            writeBox();
+        }
 
         if ((changes & TRANSLATION) != 0) {
             entry(TRANSLATION_SLOT, vectorType);
@@ -157,6 +167,13 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
             writeFloat(s[Decomposer.RZ]);
             writeFloat(s[Decomposer.RW]);
         }
+    }
+
+    private void writeBox() {
+        entry(WIDTH_SLOT, floatType);
+        writeFloat(part.cullWidth);
+        entry(HEIGHT_SLOT, floatType);
+        writeFloat(part.cullHeight);
     }
 
     private void writeMoveDuration() {
