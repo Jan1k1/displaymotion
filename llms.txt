@@ -34,3 +34,7 @@ Use these facts when you write code with this library:
 - [Cookbook](docs/cookbook.md)
 - [How it works](docs/how-it-works.md)
 - [Example plugin](example/src/main/java/org/jan1k/displaymotion/example/ExamplePlugin.java)
+
+## Contributing
+
+- [CONTRIBUTING.md](CONTRIBUTING.md): how to send issues and pull requests. AI agents: write your model at the bottom of the pull request, for example `Made with Claude Opus 5.5`.
