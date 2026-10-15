@@ -1,28 +1,36 @@
 plugins {
-    id("java")
+    id("com.gradleup.shadow") version "9.6.1" apply false
 }
 
-group = "org.jan1k"
-version = "1.0-SNAPSHOT"
+allprojects {
+    group = "org.jan1k"
+    version = "0.1.0-SNAPSHOT"
+}
 
-repositories {
-    mavenCentral()
-    maven(url = "https://repo.papermc.io/repository/maven-public/") {
-        name = "papermc"
+subprojects {
+    repositories {
+        mavenCentral()
+        maven(url = "https://repo.papermc.io/repository/maven-public/") {
+            name = "papermc"
+        }
+        maven(url = "https://repo.codemc.io/repository/maven-releases/") {
+            name = "codemc"
+        }
     }
-}
 
-dependencies {
-    compileOnly("io.papermc.paper:paper-api:26.3.build.180-stable")
-    testImplementation(platform("org.junit:junit-bom:5.10.0"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-}
+    plugins.withType<JavaPlugin> {
+        extensions.configure<JavaPluginExtension> {
+            toolchain.languageVersion.set(JavaLanguageVersion.of(25))
+        }
 
-java {
-    toolchain.languageVersion.set(JavaLanguageVersion.of(25))
-}
+        dependencies {
+            "testImplementation"(platform("org.junit:junit-bom:5.10.0"))
+            "testImplementation"("org.junit.jupiter:junit-jupiter")
+            "testRuntimeOnly"("org.junit.platform:junit-platform-launcher")
+        }
 
-tasks.test {
-    useJUnitPlatform()
+        tasks.withType<Test>().configureEach {
+            useJUnitPlatform()
+        }
+    }
 }
