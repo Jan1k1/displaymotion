@@ -43,6 +43,11 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
     private static final Animation HIDE = Animations.popOut(10);
     // spinning text is unreadable so it only bobs
     private static final Animation SHOW_TEXT = Animations.popIn(20).then(Animations.bob(0.15f, 60));
+    private static final Animation PRESS = Animation.keyframes()
+            .at(0, Pose.IDENTITY)
+            .at(2, Pose.IDENTITY.withOffset(0f, -0.08f, 0f))
+            .at(6, Pose.IDENTITY)
+            .build();
 
     private static final List<String> EFFECTS = List.of("shatter", "tombstone", "swords", "soul");
 
@@ -101,6 +106,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 .then(Commands.literal("windmill").executes(context -> show(context.getSource(), player -> windmill(inFront(player, 6)))))
                 .then(Commands.literal("text").executes(context -> show(context.getSource(), this::text)))
                 .then(Commands.literal("pet").executes(context -> show(context.getSource(), this::pet)))
+                .then(Commands.literal("button").executes(context -> show(context.getSource(), this::button)))
                 .then(Commands.literal("stop").executes(context -> stop(context.getSource())));
 
         LiteralArgumentBuilder<CommandSourceStack> effect = Commands.literal("effect");
@@ -273,6 +279,31 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
         return motion.text(player.getLocation().add(0, 2, 0), Component.text("displaymotion", NamedTextColor.GOLD))
                 .billboard(Display.Billboard.CENTER)
                 .play(SHOW_TEXT);
+    }
+
+    // right click presses it and counts, left click breaks it
+    private MotionDisplay button(Player player) {
+        Location at = inFront(player, 3);
+        int[] clicks = {0};
+        MotionDisplay button = motion.model(at)
+                .block("base", Material.POLISHED_BLACKSTONE.createBlockData(), Pose.IDENTITY.withOffset(0f, 0.1f, 0f).withScale(0.9f, 0.2f, 0.9f))
+                .block("cap", Material.RED_CONCRETE.createBlockData(), Pose.IDENTITY.withOffset(0f, 0.27f, 0f).withScale(0.6f, 0.14f, 0.6f))
+                .text("label", Component.text("Click me", NamedTextColor.GOLD), Pose.IDENTITY.withOffset(0f, 0.8f, 0f))
+                .spawn()
+                .billboard("label", Display.Billboard.CENTER)
+                .hitbox(1f, 0.5f)
+                .play(Animations.popIn(10));
+        button.onClick(click -> {
+            if (click.leftClick()) {
+                motion.effects().shatter(at, Material.RED_CONCRETE.createBlockData());
+                displays.remove(click.player().getUniqueId(), button);
+                button.remove();
+                return;
+            }
+            clicks[0]++;
+            button.play("cap", PRESS).text("label", Component.text("Clicks: " + clicks[0], NamedTextColor.GOLD));
+        });
+        return button;
     }
 
     // front of the model is +z so turn it to look back at the player
