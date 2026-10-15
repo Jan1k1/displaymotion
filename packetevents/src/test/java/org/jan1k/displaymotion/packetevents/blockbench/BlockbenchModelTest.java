@@ -173,6 +173,27 @@ class BlockbenchModelTest {
     }
 
     @Test
+    void mergeJoinsFlatCubesAndDropsHiddenOnes() {
+        String white = texture(0xCFD5D6);
+        String json = """
+                {"elements": [
+                  {"name": "a", "uuid": "a", "from": [0, 0, 0], "to": [4, 4, 4], "origin": [0, 0, 0], "faces": {"north": {"uv": [0, 0, 16, 16], "texture": 0}}},
+                  {"name": "b", "uuid": "b", "from": [4, 0, 0], "to": [8, 4, 4], "origin": [0, 0, 0], "faces": {"north": {"uv": [0, 0, 16, 16], "texture": 0}}},
+                  {"name": "hidden", "uuid": "h", "from": [1, 1, 1], "to": [2, 2, 2], "origin": [0, 0, 0], "faces": {}},
+                  {"name": "turned", "uuid": "t", "from": [8, 0, 0], "to": [12, 4, 4], "origin": [0, 0, 0], "rotation": [0, 10, 0],
+                   "faces": {"north": {"uv": [0, 0, 16, 16], "texture": 0}}}
+                ],
+                "outliner": ["a", "b", "h", "t"],
+                "textures": [{"id": "0", "source": "%s"}]}
+                """.formatted(white);
+
+        BlockbenchModel model = BlockbenchModel.parse(json);
+
+        assertEquals(List.of("a", "turned"), model.parts());
+        assertEquals(0.5f, model.restPose("a", 1f).scaleX(), 1e-6f);
+    }
+
+    @Test
     void paletteFindsObviousColors() {
         assertEquals(Material.REDSTONE_BLOCK, BlockPalette.closest(0xAF1805));
         assertEquals(Material.SNOW_BLOCK, BlockPalette.closest(0xFFFFFF));

@@ -104,7 +104,113 @@ public final class BlockbenchModel implements ImportedModel {
             Clip clip = readClip(animation.getAsJsonObject());
             clips.put(clip.name(), clip);
         }
-        return new BlockbenchModel(List.copyOf(nodes), clips);
+        return new BlockbenchModel(List.copyOf(merge(nodes)), clips);
+    }
+
+    // every part is one entity the client has to draw, so less parts means more fps.
+    // a cube hidden inside another one goes away, and touching cubes of a flat color block
+    // become one. textured blocks like planks stay apart, there the texture would stretch
+    static List<Node> merge(List<Node> nodes) {
+        List<Node> work = new ArrayList<>(nodes);
+        boolean[] gone = new boolean[work.size()];
+        boolean changed = true;
+        while (changed) {
+            changed = false;
+            for (int i = 0; i < work.size(); i++) {
+                if (gone[i] || work.get(i).group() || !unrotated(work.get(i))) {
+                    continue;
+                }
+                for (int j = 0; j < work.size(); j++) {
+                    Node a = work.get(i);
+                    Node b = work.get(j);
+                    if (i == j || gone[j] || b.group() || b.parent() != a.parent() || !unrotated(b)) {
+                        continue;
+                    }
+                    if (inside(b, a)) {
+                        gone[j] = true;
+                        changed = true;
+                    } else if (a.material() == b.material() && flat(a.material())) {
+                        float[][] joined = join(a, b);
+                        if (joined != null) {
+                            work.set(i, new Node(a.name(), a.uuid(), a.parent(), false, a.origin(), a.rotation(),
+                                    joined[0], joined[1], a.material()));
+                            gone[j] = true;
+                            changed = true;
+                        }
+                    }
+                }
+            }
+        }
+        // only cubes are removed, never groups, but the indexes after a removed cube still shift
+        int[] moved = new int[work.size()];
+        List<Node> out = new ArrayList<>();
+        for (int i = 0; i < work.size(); i++) {
+            if (gone[i]) {
+                moved[i] = -1;
+                continue;
+            }
+            Node node = work.get(i);
+            moved[i] = out.size();
+            int parent = node.parent() < 0 ? -1 : moved[node.parent()];
+            out.add(new Node(node.name(), node.uuid(), parent, node.group(), node.origin(), node.rotation(),
+                    node.from(), node.to(), node.material()));
+        }
+        return out;
+    }
+
+    private static final float EPSILON = 1e-4f;
+
+    private static boolean unrotated(Node node) {
+        return Math.abs(node.rotation()[0]) < EPSILON && Math.abs(node.rotation()[1]) < EPSILON
+                && Math.abs(node.rotation()[2]) < EPSILON;
+    }
+
+    private static boolean flat(Material material) {
+        String name = material.name();
+        return name.endsWith("_CONCRETE") || name.endsWith("_WOOL") || name.endsWith("TERRACOTTA")
+                || material == Material.SNOW_BLOCK || material == Material.QUARTZ_BLOCK
+                || material == Material.SMOOTH_STONE || material == Material.CLAY;
+    }
+
+    private static float low(Node node, int axis) {
+        return Math.min(node.from()[axis], node.to()[axis]);
+    }
+
+    private static float high(Node node, int axis) {
+        return Math.max(node.from()[axis], node.to()[axis]);
+    }
+
+    private static boolean inside(Node inner, Node outer) {
+        for (int axis = 0; axis < 3; axis++) {
+            if (low(inner, axis) < low(outer, axis) - EPSILON || high(inner, axis) > high(outer, axis) + EPSILON) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // two boxes join when they match on two axes and touch or overlap on the third
+    private static float[][] join(Node a, Node b) {
+        for (int axis = 0; axis < 3; axis++) {
+            boolean same = true;
+            for (int other = 0; other < 3; other++) {
+                if (other != axis && (Math.abs(low(a, other) - low(b, other)) > EPSILON
+                        || Math.abs(high(a, other) - high(b, other)) > EPSILON)) {
+                    same = false;
+                    break;
+                }
+            }
+            if (same && low(a, axis) <= high(b, axis) + EPSILON && low(b, axis) <= high(a, axis) + EPSILON) {
+                float[] from = new float[3];
+                float[] to = new float[3];
+                for (int i = 0; i < 3; i++) {
+                    from[i] = Math.min(low(a, i), low(b, i));
+                    to[i] = Math.max(high(a, i), high(b, i));
+                }
+                return new float[][]{from, to};
+            }
+        }
+        return null;
     }
 
     /** Spawns it at real size, 16 Blockbench pixels are one block. */
