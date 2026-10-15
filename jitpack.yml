@@ -2,4 +2,4 @@
 jdk:
   - openjdk17
 install:
-  - ./gradlew :core:publishToMavenLocal :packetevents:publishToMavenLocal -x test
+  - ./gradlew :core:publishToMavenLocal :paper:publishToMavenLocal -x test

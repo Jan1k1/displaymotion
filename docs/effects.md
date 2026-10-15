@@ -60,4 +60,4 @@ In the example plugin: `/dm effect shatter|tombstone|swords|soul`, or `/dm kille
 
 ## Make your own
 
-An effect is only a model with an animation and `display::remove` at the end. The source of [`Effects.java`](https://github.com/Jan1k1/displaymotion/blob/main/packetevents/src/main/java/org/jan1k/displaymotion/packetevents/Effects.java) is a good place to learn. See [Models](models.md) and [Animations](animations.md).
+An effect is only a model with an animation and `display::remove` at the end. The source of [`Effects.java`](https://github.com/Jan1k1/displaymotion/blob/main/paper/src/main/java/org/jan1k/displaymotion/packetevents/Effects.java) is a good place to learn. See [Models](models.md) and [Animations](animations.md).

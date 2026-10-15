@@ -19,7 +19,7 @@ cd displaymotion
 ```
 
 - IntelliJ IDEA: open the folder and load it as a Gradle project.
-- Modules: `core` (math and animations, no dependencies), `packetevents` (the API people use), `example` (a demo plugin).
+- Modules: `core` (math and animations, no dependencies), `paper` (the API people use, it sends packets through PacketEvents), `example` (a demo plugin).
 - The example plugin jar is in `example/build/libs/` after the build.
 
 ### Test in game
@@ -49,7 +49,7 @@ Use the bug report form on GitHub. Write:
 ### Tests
 
 - `./gradlew build` must pass. It runs all tests.
-- Add a test when you change the engine or the math. The tests for packets are in `packetevents/src/test`, they use a fake channel and need no server.
+- Add a test when you change the engine or the math. The tests for packets are in `paper/src/test`, they use a fake channel and need no server.
 - Test visible changes in game too, and write in the pull request what you tried.
 
 ## For AI agents
@@ -66,4 +66,4 @@ Humans do not need to add anything.
 
 ## License
 
-By sending code you agree that it uses the license of the module you change: `core` is MIT, `packetevents` and `example` are GPL-3.0-only.
+By sending code you agree that it uses the license of the module you change: `core` is MIT, `paper` and `example` are GPL-3.0-only.

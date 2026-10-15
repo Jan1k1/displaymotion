@@ -27,10 +27,10 @@ import org.bukkit.util.Vector;
 import org.jan1k.displaymotion.Animation;
 import org.jan1k.displaymotion.Animations;
 import org.jan1k.displaymotion.Pose;
-import org.jan1k.displaymotion.packetevents.DisplayMotion;
-import org.jan1k.displaymotion.packetevents.ModelBuilder;
-import org.jan1k.displaymotion.packetevents.MotionDisplay;
-import org.jan1k.displaymotion.packetevents.ImportedModel;
+import org.jan1k.displaymotion.paper.DisplayMotion;
+import org.jan1k.displaymotion.paper.ModelBuilder;
+import org.jan1k.displaymotion.paper.MotionDisplay;
+import org.jan1k.displaymotion.paper.ImportedModel;
 
 import java.io.File;
 import java.util.ArrayList;

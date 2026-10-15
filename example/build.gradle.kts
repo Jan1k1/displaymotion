@@ -4,7 +4,7 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":packetevents"))
+    implementation(project(":paper"))
     compileOnly("io.papermc.paper:paper-api:26.3.build.180-stable")
     compileOnly("com.github.retrooper:packetevents-spigot:2.14.0")
 }

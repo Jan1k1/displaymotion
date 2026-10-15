@@ -71,9 +71,9 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jan1k.displaymotion.Animations;
-import org.jan1k.displaymotion.packetevents.DisplayMotion;
-import org.jan1k.displaymotion.packetevents.ImportedModel;
-import org.jan1k.displaymotion.packetevents.MotionDisplay;
+import org.jan1k.displaymotion.paper.DisplayMotion;
+import org.jan1k.displaymotion.paper.ImportedModel;
+import org.jan1k.displaymotion.paper.MotionDisplay;
 
 import java.io.IOException;
 import java.nio.file.Path;

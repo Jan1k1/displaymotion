@@ -36,7 +36,7 @@ repositories {
 dependencies {
     compileOnly("io.papermc.paper:paper-api:26.3.build.180-stable")
     compileOnly("com.github.retrooper:packetevents-spigot:2.14.0")
-    implementation("com.github.Jan1k1.displaymotion:displaymotion-packetevents:v0.1.0")
+    implementation("com.github.Jan1k1.displaymotion:displaymotion-paper:v0.1.0")
 }
 
 tasks.shadowJar {
@@ -83,8 +83,8 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jan1k.displaymotion.Animation;
 import org.jan1k.displaymotion.Animations;
-import org.jan1k.displaymotion.packetevents.DisplayMotion;
-import org.jan1k.displaymotion.packetevents.MotionDisplay;
+import org.jan1k.displaymotion.paper.DisplayMotion;
+import org.jan1k.displaymotion.paper.MotionDisplay;
 
 public final class MyPlugin extends JavaPlugin {
 

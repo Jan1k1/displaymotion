@@ -52,7 +52,7 @@ The jar is `example/build/libs/displaymotion-example-<version>.jar`. Commands: `
 | Module | What | License |
 | --- | --- | --- |
 | `core` | Animations, poses, easing, matrix math. No Bukkit, no PacketEvents. Java 21. | MIT |
-| `packetevents` | Sends the frames to players. | GPL-3.0-only |
+| `paper` | Sends the frames to players. | GPL-3.0-only |
 | `example` | The test plugin. | GPL-3.0-only |
 
 PacketEvents is GPL-3.0, so the module that uses it is GPL-3.0 too. `core` stays MIT, so you can write your own sender. This is not legal advice.
