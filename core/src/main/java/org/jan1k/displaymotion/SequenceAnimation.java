@@ -27,6 +27,8 @@ final class SequenceAnimation implements Animation {
                 loop = part.loopTicks();
                 break;
             }
+            // next part starts where this one ended. before this popOut then hold popped back
+            // to full size, the the reviewer found that one
             base = base.combine(part.poseAt(part.introTicks()));
         }
         this.parts = parts.subList(0, count).toArray(Animation[]::new);

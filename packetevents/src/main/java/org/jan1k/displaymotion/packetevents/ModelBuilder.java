@@ -135,6 +135,7 @@ public final class ModelBuilder {
             }
             parentIndex = index;
         }
+        // take a real id from the server counter, if we made up our own it could hit a real entity
         int entityId = Bukkit.getUnsafe().nextEntityId(world);
         names.put(name, parts.size());
         parts.add(factory.create(entityId, parentIndex));

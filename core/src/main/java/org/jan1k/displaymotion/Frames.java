@@ -39,6 +39,7 @@ public final class Frames {
         int count;
         if (loop > 0) {
             introFrames = intro == 0 ? 0 : Math.max(1, Math.round(intro / (float) STEP_TICKS));
+            // loops get rounded to whole frames so spin(81) is actualy 82 ticks, close enough
             loopFrames = Math.max(1, Math.round(loop / (float) STEP_TICKS));
             count = introFrames + loopFrames;
         } else {

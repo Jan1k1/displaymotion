@@ -34,6 +34,7 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
     private static final int BACKGROUND_SLOT = 25;
     private static final int END = 0xFF;
     private static final int GLOWING_FLAG = 0x40;
+    // client hides displays past view_range * 64 blocks on its own
     private static final double BLOCKS_PER_VIEW_RANGE = 64.0;
 
     private static final int FRAME = 0;

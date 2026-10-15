@@ -6,6 +6,7 @@ import org.jan1k.displaymotion.Decomposer;
 final class Composer {
 
     private static final float BOX_MARGIN = 0.25f;
+    // grow with some room so we dont send a new box every single frame while it pops in
     private static final float BOX_GROWTH = 1.25f;
     private static final float BELOW_TOLERANCE = 0.001f;
 

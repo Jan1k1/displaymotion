@@ -10,6 +10,7 @@ import java.util.UUID;
 
 final class Viewer {
 
+    // vanila allows 4096 packets in one bundle, stay a bit under
     static final int MAX_BUNDLE = 4000;
 
     final UUID id;

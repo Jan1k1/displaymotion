@@ -3,6 +3,7 @@ package org.jan1k.displaymotion;
 /** Ready-made animations. Combine them with {@code then}, {@code with} and {@code loop}. */
 public final class Animations {
 
+    // with less then 3 frames per turn the client cant tell which way its spinning, it just flips
     public static final int MIN_TICKS_PER_TURN = 6;
 
     private Animations() {

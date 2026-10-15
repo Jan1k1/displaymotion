@@ -43,7 +43,7 @@ final class MotionEngine {
 
     private static final long TICK_MILLIS = 50L;
     private static final long MIN_TICK_GAP_NANOS = TimeUnit.MILLISECONDS.toNanos(25);
-    private static final int INLINE_BAKE_TICKS = 600; // bigger ones bake on another thread
+    private static final int INLINE_BAKE_TICKS = 600; // bigger ones bake on a seperate thread
     private static final int LOUD_ERRORS = 10;
     private static final long QUIET_LOG_NANOS = TimeUnit.MINUTES.toNanos(1);
 
@@ -372,6 +372,8 @@ final class MotionEngine {
 
     private void run() {
         long now = System.nanoTime();
+        // after a lag spike scheduleAtFixedRate runs all the missed ticks at once and
+        // everything jumps 3 frames, so skip the ones that come to to fast
         if (now - lastRun < MIN_TICK_GAP_NANOS) {
             return;
         }
@@ -455,6 +457,7 @@ final class MotionEngine {
         }
     }
 
+    // slow conection, drop frames for that player and send the full state when it catches up
     private void checkBackpressure() {
         for (int i = 0; i < viewerList.size(); i++) {
             Viewer viewer = viewerList.get(i);
@@ -708,6 +711,7 @@ final class MotionEngine {
 
     private static Object encode(PacketWrapper<?> wrapper, Object channel) {
         try {
+            // encode once and every viewer gets a retainedDuplicate, way cheaper then encoding per player
             wrapper.prepareForSend(channel, true);
             return wrapper.getBuffer();
         } catch (Throwable t) {

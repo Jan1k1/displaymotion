@@ -20,6 +20,7 @@ final class TogetherAnimation implements Animation {
         for (Animation part : this.parts) {
             intro = Math.max(intro, part.introTicks());
             if (part.isEndless()) {
+                // two loops only line up again after the lcm of they're lengths, 80 and 60 is 240
                 loop = loop == 0 ? part.loopTicks() : lcm(loop, part.loopTicks());
                 if (loop > MAX_LOOP_TICKS) {
                     throw new IllegalArgumentException("these loops only line up after " + loop

@@ -35,6 +35,7 @@ import java.util.UUID;
  */
 public final class DisplayMotion {
 
+    // 48 is less then the 64 the client uses so we always hide it before the client does
     public static final double DEFAULT_VIEW_RANGE = 48.0;
     public static final String MAIN_PART = "main";
 
@@ -133,6 +134,7 @@ public final class DisplayMotion {
         return world;
     }
 
+    // only thing on the main thread, just copy where everyone is. all the heavy stuff is is on the motion thread
     private void snapshot() {
         Collection<? extends Player> online = Bukkit.getOnlinePlayers();
         PlayerManager players = PacketEvents.getAPI().getPlayerManager();
