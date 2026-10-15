@@ -29,6 +29,7 @@ import org.jan1k.displaymotion.Animations;
 import org.jan1k.displaymotion.Pose;
 import org.jan1k.displaymotion.paper.DisplayMotion;
 import org.jan1k.displaymotion.paper.Follow;
+import org.jan1k.displaymotion.paper.SelfView;
 import org.jan1k.displaymotion.paper.ModelBuilder;
 import org.jan1k.displaymotion.paper.MotionDisplay;
 import org.jan1k.displaymotion.paper.ImportedModel;
@@ -247,7 +248,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
         }
     }
 
-    // hat or backpack on you: switch if you see it yourself, others always do
+    // hat or backpack on you: what you see of it yourself, others always see it
     private int selfView(CommandSourceStack source) {
         if (!(source.getSender() instanceof Player player)) {
             source.getSender().sendPlainMessage("players only");
@@ -258,8 +259,17 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
             player.sendPlainMessage("wear something first, /dm hat or /dm backpack");
             return 0;
         }
-        display.wearerSees(!display.isSeenByWearer());
-        player.sendPlainMessage(display.isSeenByWearer() ? "you see it on you now" : "only others see it now");
+        SelfView next = switch (display.selfView()) {
+            case SHOW -> SelfView.HIDE_LOOKING_DOWN;
+            case HIDE_LOOKING_DOWN -> SelfView.HIDE;
+            case HIDE -> SelfView.SHOW;
+        };
+        display.selfView(next);
+        player.sendPlainMessage(switch (next) {
+            case SHOW -> "you see it on you";
+            case HIDE_LOOKING_DOWN -> "you see it on you, but not when you look down";
+            case HIDE -> "only others see it";
+        });
         return Command.SINGLE_SUCCESS;
     }
 
@@ -308,29 +318,54 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
     // goes up to 1.875 so the crown sits a bit higher or it ends up inside the head
     private MotionDisplay hat(Player player) {
         ModelBuilder crown = motion.model(player.getLocation())
-                .block("band", Material.GOLD_BLOCK.createBlockData(), Pose.IDENTITY.withOffset(0f, 0.04f, 0f).withScale(0.5f, 0.12f, 0.5f));
+                .block("band", Material.GOLD_BLOCK.createBlockData(), box(0f, 0.04f, 0f, 0.52f, 0.12f, 0.52f))
+                .block("velvet", Material.RED_WOOL.createBlockData(), box(0f, 0.11f, 0f, 0.44f, 0.06f, 0.44f))
+                .block("ruby", Material.REDSTONE_BLOCK.createBlockData(), box(0f, 0.04f, 0.265f, 0.08f, 0.06f, 0.02f))
+                .block("sapphire", Material.LAPIS_BLOCK.createBlockData(), box(0f, 0.04f, -0.265f, 0.08f, 0.06f, 0.02f))
+                .block("emerald_left", Material.EMERALD_BLOCK.createBlockData(), box(-0.265f, 0.04f, 0f, 0.02f, 0.06f, 0.08f))
+                .block("emerald_right", Material.EMERALD_BLOCK.createBlockData(), box(0.265f, 0.04f, 0f, 0.02f, 0.06f, 0.08f));
         int spike = 0;
-        for (float x : new float[]{-0.2f, 0.2f}) {
-            for (float z : new float[]{-0.2f, 0.2f}) {
-                crown.block("spike_" + spike++, Material.GOLD_BLOCK.createBlockData(),
-                        Pose.IDENTITY.withOffset(x, 0.17f, z).withScale(0.1f, 0.14f, 0.1f));
+        for (float x : new float[]{-0.21f, 0.21f}) {
+            for (float z : new float[]{-0.21f, 0.21f}) {
+                crown.block("spike_" + spike, Material.GOLD_BLOCK.createBlockData(), box(x, 0.18f, z, 0.1f, 0.16f, 0.1f));
+                crown.block("tip_" + spike++, Material.GOLD_BLOCK.createBlockData(), box(x, 0.285f, z, 0.05f, 0.05f, 0.05f));
             }
         }
-        return crown.item("gem", ItemStack.of(Material.DIAMOND), Pose.IDENTITY.withOffset(0f, 0.32f, 0f).withScale(0.35f))
+        float[][] sides = {{0f, 0.21f}, {0f, -0.21f}, {0.21f, 0f}, {-0.21f, 0f}};
+        for (float[] side : sides) {
+            crown.block("spike_" + spike, Material.GOLD_BLOCK.createBlockData(), box(side[0], 0.15f, side[1], 0.08f, 0.1f, 0.08f));
+            crown.block("tip_" + spike++, Material.GOLD_BLOCK.createBlockData(), box(side[0], 0.22f, side[1], 0.04f, 0.04f, 0.04f));
+        }
+        return crown.item("gem", ItemStack.of(Material.DIAMOND), Pose.IDENTITY.withOffset(0f, 0.36f, 0f).withScale(0.3f))
                 .spawn()
                 .ride(player, Follow.HEAD)
                 .play(Animations.popIn(10))
                 .play("gem", Animations.spin(40).with(Animations.bob(0.04f, 40)));
     }
 
-    // sits on the back and turns with the body, not with the head
+    // sits on the back and turns with the body, not with the head. the back of the skin is at z -0.117,
+    // the shoulders at y -0.393 and the waist at -1.096 from the passenger point
     private MotionDisplay backpack(Player player) {
-        return motion.model(player.getLocation())
-                .block("bag", Material.BARREL.createBlockData(), Pose.IDENTITY.withOffset(0f, -0.74f, -0.235f).withScale(0.45f, 0.55f, 0.25f))
-                .block("flap", Material.BROWN_WOOL.createBlockData(), Pose.IDENTITY.withOffset(0f, -0.52f, -0.37f).withScale(0.4f, 0.2f, 0.02f))
-                .spawn()
+        ModelBuilder pack = motion.model(player.getLocation())
+                .block("bag", Material.BROWN_TERRACOTTA.createBlockData(), box(0f, -0.73f, -0.24f, 0.44f, 0.56f, 0.24f))
+                .block("lid", Material.BROWN_WOOL.createBlockData(), box(0f, -0.435f, -0.245f, 0.46f, 0.03f, 0.26f))
+                .block("flap", Material.BROWN_WOOL.createBlockData(), box(0f, -0.55f, -0.365f, 0.42f, 0.22f, 0.02f))
+                .block("buckle", Material.GOLD_BLOCK.createBlockData(), box(0f, -0.64f, -0.38f, 0.06f, 0.05f, 0.015f))
+                .block("pocket", Material.BROWN_WOOL.createBlockData(), box(0f, -0.86f, -0.375f, 0.3f, 0.18f, 0.04f))
+                .block("bedroll", Material.RED_WOOL.createBlockData(), box(0f, -1.06f, -0.25f, 0.5f, 0.1f, 0.12f));
+        for (float x : new float[]{-0.12f, 0.12f}) {
+            String side = x < 0 ? "left" : "right";
+            pack.block("strap_back_" + side, Material.DARK_OAK_PLANKS.createBlockData(), box(x, -0.73f, -0.365f, 0.04f, 0.5f, 0.012f))
+                    .block("strap_shoulder_" + side, Material.DARK_OAK_PLANKS.createBlockData(), box(x, -0.385f, 0f, 0.06f, 0.02f, 0.26f))
+                    .block("strap_chest_" + side, Material.DARK_OAK_PLANKS.createBlockData(), box(x, -0.52f, 0.125f, 0.06f, 0.26f, 0.015f));
+        }
+        return pack.spawn()
                 .ride(player, Follow.BODY)
                 .play(Animations.popIn(10));
+    }
+
+    private static Pose box(float x, float y, float z, float sizeX, float sizeY, float sizeZ) {
+        return Pose.IDENTITY.withOffset(x, y, z).withScale(sizeX, sizeY, sizeZ);
     }
 
     // right click to sit, two people fit. sneak to get up

@@ -135,7 +135,7 @@ MotionDisplay crown = motion.model(player.getLocation())
 - `Follow.BODY` turns with the body (backpacks, wings) and leans forward when a player sneaks. `Follow.HEAD` moves like the head (hats): on a player it turns and tilts around the neck and goes down when they sneak. `Follow.NONE` keeps its turn.
 - The body of a player is worked out like the game does it (walk direction, the head can turn 50 degrees before the body follows), because the server does not know it.
 - The player who wears it sees a turn a little late, about their ping. The server only learns where they look when their game tells it. Other players see it in time with the head.
-- `wearerSees(false)` hides it from the player who wears it, other players still see it. The server cannot tell first person from F5, so it is hidden in both.
+- `selfView(...)` sets what the player who wears it sees, other players always see it. `SelfView.SHOW` (default for HEAD), `SelfView.HIDE_LOOKING_DOWN` (default for BODY: hidden for the wearer while they look down more than 35 degrees, the only time a backpack shows in first person) and `SelfView.HIDE`. The server cannot tell first person from F5, so a choice counts for both.
 - Real passengers of the entity stay on it.
 - `dismount()` or `teleport(...)` stops riding. Call `ride` on the main thread.
 - When the player dies, the display waits and comes back with them. When a mob dies, the display stays where it was.
