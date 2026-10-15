@@ -21,6 +21,20 @@ class EulerTest {
     }
 
     @Test
+    void xyzBecomesTheSameRotationInYxz() {
+        Random random = new Random(5);
+        for (int i = 0; i < 2000; i++) {
+            float x = random.nextFloat() * 360f - 180f;
+            float y = random.nextFloat() * 360f - 180f;
+            float z = random.nextFloat() * 360f - 180f;
+            Quaternionf expected = new Quaternionf().rotationXYZ(rad(x), rad(y), rad(z));
+            float[] yxz = Euler.fromXyz(x, y, z);
+            Quaternionf actual = new Quaternionf().rotationYXZ(rad(yxz[1]), rad(yxz[0]), rad(yxz[2]));
+            assertEquals(1f, Math.abs(expected.dot(actual)), 1e-4f, "x " + x + " y " + y + " z " + z);
+        }
+    }
+
+    @Test
     void straightUpStillWorks() {
         assertSameRotation(0f, 90f, 30f);
         assertSameRotation(45f, -90f, 10f);

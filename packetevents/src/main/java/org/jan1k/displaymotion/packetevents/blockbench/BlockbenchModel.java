@@ -11,6 +11,7 @@ import org.jan1k.displaymotion.Euler;
 import org.jan1k.displaymotion.Frames;
 import org.jan1k.displaymotion.Pose;
 import org.jan1k.displaymotion.packetevents.DisplayMotion;
+import org.jan1k.displaymotion.packetevents.ImportedModel;
 import org.jan1k.displaymotion.packetevents.ModelBuilder;
 import org.jan1k.displaymotion.packetevents.MotionDisplay;
 
@@ -35,7 +36,7 @@ import java.util.WeakHashMap;
  * Every cube becomes a block display with the vanilla block closest to its texture color,
  * every group becomes an invisible pivot, and the animations play on the groups.
  */
-public final class BlockbenchModel {
+public final class BlockbenchModel implements ImportedModel {
 
     private static final float PIXELS_PER_BLOCK = 16f;
     private static final float MIN_SIZE = 0.01f;
@@ -107,11 +108,13 @@ public final class BlockbenchModel {
     }
 
     /** Spawns it at real size, 16 Blockbench pixels are one block. */
+    @Override
     public MotionDisplay spawn(DisplayMotion motion, Location at) {
         return spawn(motion, at, 1f);
     }
 
     /** Spawns it bigger or smaller. 0.5 is half size. */
+    @Override
     public MotionDisplay spawn(DisplayMotion motion, Location at, float scale) {
         if (!(scale > 0)) {
             throw new IllegalArgumentException("scale must be more than 0, got " + scale);
@@ -132,6 +135,7 @@ public final class BlockbenchModel {
     }
 
     /** Plays one of the model's animations. Groups it does not move go back to their rest pose. */
+    @Override
     public void play(MotionDisplay display, String animation) {
         Clip clip = clips.get(Objects.requireNonNull(animation, "animation"));
         if (clip == null) {
@@ -148,11 +152,13 @@ public final class BlockbenchModel {
     }
 
     /** Names of the animations in the file. */
+    @Override
     public List<String> animations() {
         return List.copyOf(clips.keySet());
     }
 
     /** Names of the parts, the same names {@link MotionDisplay#play(String, Animation)} takes. */
+    @Override
     public List<String> parts() {
         return nodes.stream().map(Node::name).toList();
     }

@@ -14,6 +14,26 @@ public final class Euler {
         return fromMatrix(zyxMatrix(x, y, z));
     }
 
+    /** three.js default order (bdengine uses it): Rx * Ry * Rz. Returns {@code {pitch, yaw, roll}} in degrees. */
+    public static float[] fromXyz(float x, float y, float z) {
+        return fromMatrix(xyzMatrix(x, y, z));
+    }
+
+    /** The rotation matrix of Rx * Ry * Rz, row by row, angles in degrees. */
+    public static double[] xyzMatrix(double x, double y, double z) {
+        double cx = Math.cos(Math.toRadians(x));
+        double sx = Math.sin(Math.toRadians(x));
+        double cy = Math.cos(Math.toRadians(y));
+        double sy = Math.sin(Math.toRadians(y));
+        double cz = Math.cos(Math.toRadians(z));
+        double sz = Math.sin(Math.toRadians(z));
+        return new double[]{
+                cy * cz, -cy * sz, sy,
+                cx * sz + sx * sy * cz, cx * cz - sx * sy * sz, -sx * cy,
+                sx * sz - cx * sy * cz, sx * cz + cx * sy * sz, cx * cy
+        };
+    }
+
     /** The rotation matrix of Rz * Ry * Rx, row by row, angles in degrees. */
     public static double[] zyxMatrix(double x, double y, double z) {
         double cx = Math.cos(Math.toRadians(x));
