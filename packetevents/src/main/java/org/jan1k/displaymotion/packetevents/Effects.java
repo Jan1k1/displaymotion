@@ -7,6 +7,8 @@ import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.entity.Display;
+import org.bukkit.inventory.ItemStack;
 import org.jan1k.displaymotion.Animation;
 import org.jan1k.displaymotion.Animations;
 import org.jan1k.displaymotion.Ease;
@@ -24,6 +26,8 @@ public final class Effects {
     private static final Color TRANSPARENT = Color.fromARGB(0, 0, 0, 0);
     private static final int SHATTER_PIECES = 10;
     private static final int SHATTER_TICKS = 34;
+    private static final int SWORDS = 6;
+    private static final int SWORD_TICKS = 70;
 
     private final DisplayMotion motion;
 
@@ -89,6 +93,52 @@ public final class Effects {
                 .at(74, Pose.IDENTITY)
                 .at(90, Pose.IDENTITY.withOffset(0f, -1.3f, 0f), Ease.IN)
                 .build();
+        return display.play(rise, display::remove);
+    }
+
+    /** Swords fall from the sky one after another, stick in the ground, then vanish. */
+    public MotionDisplay swordRain(Location at, ItemStack sword) {
+        Objects.requireNonNull(sword, "sword");
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        ModelBuilder model = motion.model(at);
+        Animation[] falls = new Animation[SWORDS];
+        for (int i = 0; i < SWORDS; i++) {
+            double angle = random.nextDouble() * Math.PI * 2;
+            float distance = 0.4f + random.nextFloat() * 1.3f;
+            model.item("sword_" + i, sword, Pose.IDENTITY.withOffset(
+                    (float) Math.cos(angle) * distance, 0.55f, (float) Math.sin(angle) * distance));
+
+            // rotation lives in the animation, not the part, so "up" stays up for the drop
+            float yaw = random.nextFloat() * 360f;
+            Pose high = Pose.IDENTITY.withOffset(0f, 7f, 0f).withRotation(0f, yaw, -135f);
+            Pose stuck = Pose.IDENTITY.withRotation(0f, yaw, -135f);
+            int start = i * 3;
+            falls[i] = Animation.keyframes()
+                    .at(0, high.withScale(0f))
+                    .at(start, high.withScale(0f))
+                    .at(start + 1, high)
+                    .at(start + 10, stuck, Ease.IN)
+                    .at(SWORD_TICKS - 10, stuck)
+                    .at(SWORD_TICKS, stuck.withScale(0f), Ease.IN)
+                    .build();
+        }
+        MotionDisplay display = model.spawn();
+        for (int i = 0; i < SWORDS; i++) {
+            display.play("sword_" + i, falls[i]);
+        }
+        return display.play(Animations.hold(SWORD_TICKS + 2), display::remove);
+    }
+
+    /** A glowing skull rises, spins and fades out. */
+    public MotionDisplay soul(Location at) {
+        Animation rise = Animation.keyframes()
+                .at(0, Pose.IDENTITY.withOffset(0f, 0.6f, 0f).withScale(0f))
+                .at(10, Pose.IDENTITY.withOffset(0f, 0.9f, 0f).withRotation(0f, 90f, 0f), Ease.OUT)
+                .at(40, Pose.IDENTITY.withOffset(0f, 2.6f, 0f).withRotation(0f, 450f, 0f))
+                .at(52, Pose.IDENTITY.withOffset(0f, 3.1f, 0f).withRotation(0f, 540f, 0f).withScale(0f), Ease.IN)
+                .build();
+        MotionDisplay display = motion.item(at, ItemStack.of(Material.SKELETON_SKULL))
+                .brightness(new Display.Brightness(15, 15));
         return display.play(rise, display::remove);
     }
 
