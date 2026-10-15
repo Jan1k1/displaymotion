@@ -53,8 +53,10 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
     @Override
     public void onEnable() {
         motion = DisplayMotion.create(this);
-        if (!new File(getDataFolder(), "models/robot.bbmodel").exists()) {
-            saveResource("models/robot.bbmodel", false);
+        for (String example : List.of("models/robot.bbmodel", "models/chest.bdengine")) {
+            if (!new File(getDataFolder(), example).exists()) {
+                saveResource(example, false);
+            }
         }
         getServer().getPluginManager().registerEvents(this, this);
         registerCommand();

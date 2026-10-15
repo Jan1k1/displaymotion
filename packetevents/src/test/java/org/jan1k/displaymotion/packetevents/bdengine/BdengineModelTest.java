@@ -83,6 +83,18 @@ class BdengineModelTest {
         assertTrue(still.isEndless());
     }
 
+    @Test
+    void exampleChestLoads() throws IOException {
+        String file = new String(getClass().getResourceAsStream("/chest.bdengine").readAllBytes(), StandardCharsets.US_ASCII);
+        BdengineModel chest = BdengineModel.parse(file);
+
+        assertEquals(List.of("open"), chest.animations());
+        assertTrue(chest.node("lid").animated());
+        assertTrue(chest.node("loot").animated());
+        Frames.bake(BdengineModel.clip(chest.node("lid"), 1, 70));
+        Frames.bake(BdengineModel.clip(chest.node("loot"), 1, 70));
+    }
+
     private static void rows(float[] m, float[] out) {
         out[0] = m[0];
         out[1] = m[4];
