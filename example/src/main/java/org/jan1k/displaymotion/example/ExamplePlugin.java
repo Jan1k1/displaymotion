@@ -309,8 +309,8 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
     // sits on the back and turns with the body, not with the head
     private MotionDisplay backpack(Player player) {
         return motion.model(player.getLocation())
-                .block("bag", Material.BARREL.createBlockData(), Pose.IDENTITY.withOffset(0f, -0.74f, -0.245f).withScale(0.45f, 0.55f, 0.25f))
-                .block("flap", Material.BROWN_WOOL.createBlockData(), Pose.IDENTITY.withOffset(0f, -0.52f, -0.38f).withScale(0.4f, 0.2f, 0.02f))
+                .block("bag", Material.BARREL.createBlockData(), Pose.IDENTITY.withOffset(0f, -0.74f, -0.235f).withScale(0.45f, 0.55f, 0.25f))
+                .block("flap", Material.BROWN_WOOL.createBlockData(), Pose.IDENTITY.withOffset(0f, -0.52f, -0.37f).withScale(0.4f, 0.2f, 0.02f))
                 .spawn()
                 .ride(player, Follow.BODY)
                 .play(Animations.popIn(10));
