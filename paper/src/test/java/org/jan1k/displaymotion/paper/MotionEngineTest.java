@@ -424,9 +424,15 @@ class MotionEngineTest {
         tick();
 
         engine.submit(() -> engine.ride(display.state(), VEHICLE, new int[]{77}, WORLD, 0, 0, 0, 90f));
-        List<String> kinds = kinds(tick());
+        List<Packet> packets = tick();
+        List<String> kinds = kinds(packets);
 
-        assertTrue(kinds.contains("rotation"));
+        // the client ignores turn packets for passengers, so the turn is in the transform: yaw 90 faces -x,
+        // so the back of a centered block (its -z side) has to come round to +x
+        assertFalse(kinds.contains("rotation"));
+        Vector3f translation = (Vector3f) value(packets.stream().filter(p -> p.kind().equals("meta")).findFirst().orElseThrow(), 11);
+        assertEquals(0.5f, translation.x, 1e-5f);
+        assertEquals(-0.5f, translation.z, 1e-5f);
         assertTrue(kinds.contains("passengers [77, " + ENTITY + "]"));
         assertTrue(engine.ridden(VEHICLE));
     }
@@ -443,7 +449,7 @@ class MotionEngineTest {
     }
 
     @Test
-    void followOnlySendsATurnAndNothingForTheSameTurn() {
+    void followOnlySendsTheTurnAndNothingForTheSameTurn() {
         MotionDisplay display = display();
         engine.submit(() -> engine.ride(display.state(), VEHICLE, new int[0], WORLD, 0, 0, 0, 0f));
         tick();
@@ -452,7 +458,7 @@ class MotionEngineTest {
         engine.submit(() -> engine.follow(display.state(), WORLD, 5, 0, 0, 0f));
         assertEquals(List.of(), tick());
         engine.submit(() -> engine.follow(display.state(), WORLD, 6, 0, 0, 45f));
-        assertEquals(List.of("rotation"), kinds(tick()));
+        assertEquals(List.of("meta"), kinds(tick()));
     }
 
     @Test

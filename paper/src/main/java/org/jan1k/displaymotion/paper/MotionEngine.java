@@ -13,7 +13,6 @@ import com.github.retrooper.packetevents.wrapper.PacketWrapper;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerBundle;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDestroyEntities;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityMetadata;
-import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityRotation;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSetPassengers;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityTeleport;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSpawnEntity;
@@ -253,30 +252,41 @@ final class MotionEngine {
         }
         serverPassengers.put(vehicle, passengers);
         moveTo(display, world, x, y, z);
-        display.yaw = yaw;
         display.vehicle = vehicle;
         rideGroups.computeIfAbsent(vehicle, id -> new ArrayList<>()).add(display);
         updateRiders(vehicle);
-        int oldTicks = display.moveTicks;
-        display.moveTicks = Math.max(display.moveTicks, RIDE_TURN_TICKS);
+        turnTo(display, yaw);
         if (display.fresh) {
             return;
         }
         List<Viewer> targets = display.viewers;
         if (!targets.isEmpty()) {
-            Object channel = targets.getFirst().channel;
-            for (PartState part : display.parts) {
-                if (!part.hasEntity()) {
-                    continue;
-                }
-                if (display.moveTicks != oldTicks) {
-                    sendToAll(targets, encode(packet.move(part, display.moveTicks), channel), false);
-                }
-                sendToAll(targets, encode(new WrapperPlayServerEntityRotation(part.entityId, yaw, display.pitch, false), channel), false);
-            }
-            sendToAll(targets, encode(passengers(vehicle), channel), false);
+            sendToAll(targets, encode(passengers(vehicle), targets.getFirst().channel), false);
         }
         updateViewers(display);
+    }
+
+    // the entity keeps the yaw it spawned with, the rest of the turn goes in the transform and blends
+    private void turnTo(DisplayState display, float yaw) {
+        float turn = wrap(yaw - display.yaw);
+        if (turn == display.turn) {
+            return;
+        }
+        display.turn = turn;
+        composer.compose(display, true);
+        if (!display.fresh && !display.viewers.isEmpty()) {
+            sendChanges(display, RIDE_TURN_TICKS);
+        }
+    }
+
+    private static float wrap(float degrees) {
+        float d = degrees % 360f;
+        if (d >= 180f) {
+            d -= 360f;
+        } else if (d < -180f) {
+            d += 360f;
+        }
+        return d;
     }
 
     // the client moves a passenger by itself every frame, so here only the numbers change and a turn goes out
@@ -285,20 +295,7 @@ final class MotionEngine {
             return;
         }
         moveTo(display, world, x, y, z);
-        if (yaw == display.yaw) {
-            return;
-        }
-        display.yaw = yaw;
-        List<Viewer> targets = display.viewers;
-        if (display.fresh || targets.isEmpty()) {
-            return;
-        }
-        Object channel = targets.getFirst().channel;
-        for (PartState part : display.parts) {
-            if (part.hasEntity()) {
-                sendToAll(targets, encode(new WrapperPlayServerEntityRotation(part.entityId, yaw, display.pitch, false), channel), false);
-            }
-        }
+        turnTo(display, yaw);
     }
 
     void dismount(DisplayState display, boolean stayHere) {
@@ -307,6 +304,13 @@ final class MotionEngine {
             return;
         }
         display.vehicle = -1;
+        // off the vehicle a turn packet works again, so the turn goes back into the entity yaw
+        display.yaw = wrap(display.yaw + display.turn);
+        display.turn = 0f;
+        composer.compose(display, true);
+        if (!display.removed && !display.fresh && !display.viewers.isEmpty()) {
+            sendChanges(display, Frames.STEP_TICKS);
+        }
         List<DisplayState> group = rideGroups.get(vehicle);
         if (group != null) {
             group.remove(display);

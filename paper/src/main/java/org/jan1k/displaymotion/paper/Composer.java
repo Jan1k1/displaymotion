@@ -12,6 +12,7 @@ final class Composer {
 
     private final Decomposer decomposer = new Decomposer();
     private final float[] root = new float[Affine.SIZE];
+    private final float[] turn = new float[Affine.SIZE];
     private final float[] frame = new float[Affine.SIZE];
     private final float[] local = new float[Affine.SIZE];
     private final float[] current = new float[Decomposer.SIZE];
@@ -24,6 +25,12 @@ final class Composer {
             whole.frames.copyTo(whole.frame, root, 0);
         } else {
             Affine.identity(root, 0);
+        }
+        if (display.turn != 0f) {
+            // same way round as the entity yaw, the client turns a display by minus its yaw
+            Affine.fromPose(0f, 0f, 0f, 0f, -display.turn, 0f, 1f, 1f, 1f, turn, 0);
+            Affine.multiply(turn, 0, root, 0, frame, 0);
+            System.arraycopy(frame, 0, root, 0, Affine.SIZE);
         }
 
         PartState[] parts = display.parts;

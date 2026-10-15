@@ -32,6 +32,9 @@ final class DisplayState {
     boolean visibleByDefault = true;
     // entity id of what it rides, -1 when it does not ride
     int vehicle = -1;
+    // extra turn around Y on top of the entity yaw, in the transform. a riding display turns with this
+    // because the client ignores turn packets for passengers
+    float turn;
 
     double range;
     int index;
