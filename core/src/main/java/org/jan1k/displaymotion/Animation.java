@@ -22,6 +22,21 @@ public interface Animation {
         return loopTicks() > 0;
     }
 
+    /** The events, with ticks from the start. Events in the loop part come again every loop. */
+    default List<AnimationEvent> events() {
+        return List.of();
+    }
+
+    /**
+     * Adds a named event at this tick. When a display reaches it, its {@code onEvent} handler runs.
+     * Use it to play a sound or spawn particles at the right moment.
+     * For a looping animation the event comes again every loop.
+     * @throws IllegalArgumentException if the tick is outside the animation
+     */
+    default Animation event(int tick, String name) {
+        return new EventAnimation(this, tick, name);
+    }
+
     /** Plays this, then {@code next}. {@code next} starts where this one ended. */
     default Animation then(Animation next) {
         return sequence(this, next);

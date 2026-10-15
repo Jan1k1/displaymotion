@@ -1,5 +1,6 @@
 package org.jan1k.displaymotion;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -10,6 +11,7 @@ final class SequenceAnimation implements Animation {
     private final Pose end;
     private final int introTicks;
     private final int loopTicks;
+    private final List<AnimationEvent> events;
 
     SequenceAnimation(List<Animation> parts) {
         if (parts.isEmpty()) {
@@ -36,6 +38,20 @@ final class SequenceAnimation implements Animation {
         this.end = base;
         this.introTicks = intro;
         this.loopTicks = loop;
+        List<AnimationEvent> events = new ArrayList<>();
+        int offset = 0;
+        for (Animation part : this.parts) {
+            for (AnimationEvent event : part.events()) {
+                events.add(new AnimationEvent(offset + event.tick(), event.name()));
+            }
+            offset += part.introTicks();
+        }
+        this.events = List.copyOf(events);
+    }
+
+    @Override
+    public List<AnimationEvent> events() {
+        return events;
     }
 
     @Override

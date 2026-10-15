@@ -1,5 +1,6 @@
 package org.jan1k.displaymotion;
 
+import java.util.ArrayList;
 import java.util.List;
 
 final class TogetherAnimation implements Animation {
@@ -9,6 +10,7 @@ final class TogetherAnimation implements Animation {
     private final Animation[] parts;
     private final int introTicks;
     private final int loopTicks;
+    private final List<AnimationEvent> events;
 
     TogetherAnimation(List<Animation> parts) {
         if (parts.isEmpty()) {
@@ -30,6 +32,27 @@ final class TogetherAnimation implements Animation {
         }
         this.introTicks = intro;
         this.loopTicks = (int) loop;
+        // a short loop next to a long one comes round more then once before the whole thing repeats,
+        // so its events get written out for every round up to the end of the shared loop
+        int end = introTicks + loopTicks;
+        List<AnimationEvent> events = new ArrayList<>();
+        for (Animation part : this.parts) {
+            for (AnimationEvent event : part.events()) {
+                if (!part.isEndless() || event.tick() < part.introTicks()) {
+                    events.add(event);
+                    continue;
+                }
+                for (int tick = event.tick(); tick < Math.max(end, event.tick() + 1); tick += part.loopTicks()) {
+                    events.add(new AnimationEvent(tick, event.name()));
+                }
+            }
+        }
+        this.events = List.copyOf(events);
+    }
+
+    @Override
+    public List<AnimationEvent> events() {
+        return events;
     }
 
     @Override

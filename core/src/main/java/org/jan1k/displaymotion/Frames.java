@@ -1,21 +1,27 @@
 package org.jan1k.displaymotion;
 
+import java.util.Arrays;
+
 /** Internal. A baked animation, one matrix every 2 ticks. Used by the sender modules. */
 public final class Frames {
 
     public static final int STEP_TICKS = 2;
     public static final int MAX_TICKS = 6000;
 
+    private static final String[] NO_EVENTS = new String[0];
+
     private final float[] data;
     private final int introFrames;
     private final int loopFrames;
     private final int count;
+    private final String[][] events;
 
-    private Frames(float[] data, int introFrames, int loopFrames, int count) {
+    private Frames(float[] data, int introFrames, int loopFrames, int count, String[][] events) {
         this.data = data;
         this.introFrames = introFrames;
         this.loopFrames = loopFrames;
         this.count = count;
+        this.events = events;
     }
 
     public static void check(Animation animation) {
@@ -55,7 +61,41 @@ public final class Frames {
                     : intro + (float) (i - introFrames) * loop / loopFrames;
             Affine.fromPose(animation.poseAt(tick), data, i * Affine.SIZE);
         }
-        return new Frames(data, introFrames, loopFrames, count);
+        return new Frames(data, introFrames, loopFrames, count, bakeEvents(animation, introFrames, loopFrames, count));
+    }
+
+    // same tick to frame mapping as the poses above, so an event lands on the frame that shows its tick
+    private static String[][] bakeEvents(Animation animation, int introFrames, int loopFrames, int count) {
+        if (animation.events().isEmpty()) {
+            return null;
+        }
+        int intro = animation.introTicks();
+        int loop = animation.loopTicks();
+        String[][] events = new String[count][];
+        for (AnimationEvent event : animation.events()) {
+            int tick = event.tick();
+            int frame;
+            if (loop > 0 && tick >= intro) {
+                frame = introFrames + Math.round((float) (tick - intro) * loopFrames / loop) % loopFrames;
+            } else if (intro == 0) {
+                frame = 0;
+            } else {
+                frame = Math.min(Math.round((float) tick * introFrames / intro), loop > 0 ? introFrames - 1 : count - 1);
+            }
+            String[] old = events[frame] == null ? NO_EVENTS : events[frame];
+            String[] grown = Arrays.copyOf(old, old.length + 1);
+            grown[old.length] = event.name();
+            events[frame] = grown;
+        }
+        return events;
+    }
+
+    /** Names of the events on this frame, empty when there are none. */
+    public String[] eventsAt(int frame) {
+        if (events == null || events[frame] == null) {
+            return NO_EVENTS;
+        }
+        return events[frame];
     }
 
     public int frameAt(long step) {

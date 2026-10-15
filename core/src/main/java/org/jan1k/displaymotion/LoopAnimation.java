@@ -1,5 +1,7 @@
 package org.jan1k.displaymotion;
 
+import java.util.List;
+
 final class LoopAnimation implements Animation {
 
     private final Animation inner;
@@ -22,6 +24,12 @@ final class LoopAnimation implements Animation {
     @Override
     public int introTicks() {
         return 0;
+    }
+
+    // an event on the very last tick is the same moment as tick 0 of the next round
+    @Override
+    public List<AnimationEvent> events() {
+        return inner.events().stream().map(e -> new AnimationEvent(e.tick() % length, e.name())).toList();
     }
 
     @Override
