@@ -12,6 +12,7 @@ import org.bukkit.inventory.ItemStack;
 import org.jan1k.displaymotion.Animation;
 import org.jan1k.displaymotion.Animations;
 import org.jan1k.displaymotion.Ease;
+import org.jan1k.displaymotion.KeyframeBuilder;
 import org.jan1k.displaymotion.Pose;
 
 import java.util.Objects;
@@ -26,7 +27,7 @@ public final class Effects {
     private static final Color TRANSPARENT = Color.fromARGB(0, 0, 0, 0);
     private static final int SHATTER_PIECES = 10;
     private static final int SHATTER_TICKS = 34;
-    private static final int SWORDS = 6;
+    static final int SWORDS = 6;
     private static final int SWORD_TICKS = 70;
 
     private final DisplayMotion motion;
@@ -108,25 +109,28 @@ public final class Effects {
             model.item("sword_" + i, sword, Pose.IDENTITY.withOffset(
                     (float) Math.cos(angle) * distance, 0.55f, (float) Math.sin(angle) * distance));
 
-            // rotation lives in the animation, not the part, so "up" stays up for the drop
-            float yaw = random.nextFloat() * 360f;
-            Pose high = Pose.IDENTITY.withOffset(0f, 7f, 0f).withRotation(0f, yaw, -135f);
-            Pose stuck = Pose.IDENTITY.withRotation(0f, yaw, -135f);
-            int start = i * 3;
-            falls[i] = Animation.keyframes()
-                    .at(0, high.withScale(0f))
-                    .at(start, high.withScale(0f))
-                    .at(start + 1, high)
-                    .at(start + 10, stuck, Ease.IN)
-                    .at(SWORD_TICKS - 10, stuck)
-                    .at(SWORD_TICKS, stuck.withScale(0f), Ease.IN)
-                    .build();
+            falls[i] = swordFall(i * 3, random.nextFloat() * 360f);
         }
         MotionDisplay display = model.spawn();
         for (int i = 0; i < SWORDS; i++) {
             display.play("sword_" + i, falls[i]);
         }
         return display.play(Animations.hold(SWORD_TICKS + 2), display::remove);
+    }
+
+    // rotation lives in the animation, not the part, so "up" stays up for the drop
+    static Animation swordFall(int start, float yaw) {
+        Pose high = Pose.IDENTITY.withOffset(0f, 7f, 0f).withRotation(0f, yaw, -135f);
+        Pose stuck = Pose.IDENTITY.withRotation(0f, yaw, -135f);
+        KeyframeBuilder fall = Animation.keyframes().at(0, high.withScale(0f));
+        if (start > 0) {
+            fall.at(start, high.withScale(0f));
+        }
+        return fall.at(start + 1, high)
+                .at(start + 10, stuck, Ease.IN)
+                .at(SWORD_TICKS - 10, stuck)
+                .at(SWORD_TICKS, stuck.withScale(0f), Ease.IN)
+                .build();
     }
 
     /** A glowing skull rises, spins and fades out. */
