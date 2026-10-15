@@ -1,6 +1,7 @@
 package org.jan1k.displaymotion.packetevents;
 
 import net.kyori.adventure.text.Component;
+import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.entity.Display;
@@ -12,7 +13,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 /**
  * A spawned display or model. It is not a real entity, only packets.
@@ -21,12 +25,19 @@ import java.util.UUID;
 public final class MotionDisplay {
 
     public static final int MAX_TELEPORT_TICKS = 59;
+    /** The biggest hitbox side, in blocks. */
+    public static final float MAX_HITBOX_SIZE = 16f;
+
+    // a bit more then survival reach, so a click on the far edge of a big box still counts
+    private static final double CLICK_REACH = 8.0;
 
     private final MotionEngine engine;
     private volatile Location location;
     private final DisplayState state;
     private final Map<String, Integer> partIndex = new HashMap<>();
     private final List<String> parts;
+    private final Set<String> hitboxes = ConcurrentHashMap.newKeySet();
+    private volatile Consumer<Click> onClick;
 
     volatile boolean playing;
     private volatile boolean visibleByDefault = true;
@@ -125,10 +136,6 @@ public final class MotionDisplay {
         return billboard(index(part), billboard);
     }
 
-    /**
-     * Changes the text of every text part.
-     * @throws IllegalArgumentException if the display has no text part or the text is too big
-     */
     /** Background behind every text part, alpha included. {@code null} is the vanilla dark box. Use alpha 0 for none. */
     public MotionDisplay background(Color color) {
         return background(MotionEngine.ALL_PARTS, color);
@@ -146,6 +153,10 @@ public final class MotionDisplay {
         return this;
     }
 
+    /**
+     * Changes the text of every text part.
+     * @throws IllegalArgumentException if the display has no text part or the text is too big
+     */
     public MotionDisplay text(Component text) {
         return text(MotionEngine.ALL_PARTS, text);
     }
@@ -274,6 +285,83 @@ public final class MotionDisplay {
         requireAlive();
         engine.submit(() -> engine.viewRange(state, blocks));
         return this;
+    }
+
+    /**
+     * Makes the display clickable with one box, {@code width} blocks wide and {@code height} blocks high.
+     * The bottom center of the box is the display location. Its name is {@code main}.
+     * Use {@link #onClick(Consumer)} to hear the clicks.
+     */
+    public MotionDisplay hitbox(float width, float height) {
+        return hitbox(DisplayMotion.MAIN_PART, width, height, 0, 0, 0);
+    }
+
+    /**
+     * Adds a named clickable box. Its bottom center sits at this offset from the display location,
+     * and the offset turns with the display. The box itself always stays upright, moves with
+     * {@link #teleport(Location)} and does not follow animations.
+     * @throws IllegalArgumentException if the name is taken or a size is not between 0 and {@link #MAX_HITBOX_SIZE}
+     */
+    public MotionDisplay hitbox(String name, float width, float height, double x, double y, double z) {
+        Objects.requireNonNull(name, "name");
+        checkSize("width", width);
+        checkSize("height", height);
+        requireAlive();
+        if (!hitboxes.add(name)) {
+            throw new IllegalArgumentException("there is already a hitbox named '" + name + "'");
+        }
+        Hitbox hitbox = new Hitbox(name, Bukkit.getUnsafe().nextEntityId(location.getWorld()), width, height, x, y, z, this);
+        engine.submit(() -> engine.addHitbox(state, hitbox));
+        return this;
+    }
+
+    /**
+     * Runs when a player left or right clicks one of the hitboxes. It runs on the main thread,
+     * so the Bukkit API is safe there. A new call replaces the old handler, {@code null} removes it.
+     */
+    public MotionDisplay onClick(Consumer<Click> handler) {
+        requireAlive();
+        onClick = handler;
+        return this;
+    }
+
+    /** The hitbox names, in no order. */
+    public Set<String> hitboxes() {
+        return Set.copyOf(hitboxes);
+    }
+
+    // main thread only
+    void click(UUID id, Hitbox hitbox, boolean left) {
+        Consumer<Click> handler = onClick;
+        if (handler == null || isRemoved()) {
+            return;
+        }
+        Player player = Bukkit.getPlayer(id);
+        if (player == null || !inReach(player, hitbox)) {
+            return;
+        }
+        handler.accept(new Click(player, this, hitbox.name, left));
+    }
+
+    // the client can send a click for any entity id, so check it could really reach the box
+    private boolean inReach(Player player, Hitbox hitbox) {
+        Location at = location;
+        Location eye = player.getEyeLocation();
+        if (eye.getWorld() == null || !eye.getWorld().equals(at.getWorld())) {
+            return false;
+        }
+        double[] offset = hitbox.offset(at.getYaw(), at.getPitch());
+        double dx = at.getX() + offset[0] - eye.getX();
+        double dy = at.getY() + offset[1] + hitbox.height / 2 - eye.getY();
+        double dz = at.getZ() + offset[2] - eye.getZ();
+        double reach = CLICK_REACH + Math.max(hitbox.width, hitbox.height);
+        return dx * dx + dy * dy + dz * dz <= reach * reach;
+    }
+
+    private static void checkSize(String what, float size) {
+        if (!(size > 0) || size > MAX_HITBOX_SIZE) {
+            throw new IllegalArgumentException(what + " must be more than 0 and at most " + MAX_HITBOX_SIZE + ", got " + size);
+        }
     }
 
     /** Removes the display for every player. Safe to call more than once. */

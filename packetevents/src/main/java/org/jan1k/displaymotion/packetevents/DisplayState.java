@@ -21,7 +21,8 @@ final class DisplayState {
     float pitch;
     int moveTicks;
     final PartState[] parts;
-    final int[] entityIds;
+    final List<Hitbox> hitboxes = new ArrayList<>();
+    int[] entityIds;
     final Track[] tracks;
     final long[] requests;
     final MotionDisplay handle;
@@ -56,6 +57,12 @@ final class DisplayState {
         this.requests = new long[parts.length + 1];
         this.range = range;
         this.handle = handle;
+    }
+
+    void addHitbox(Hitbox hitbox) {
+        hitboxes.add(hitbox);
+        entityIds = Arrays.copyOf(entityIds, entityIds.length + 1);
+        entityIds[entityIds.length - 1] = hitbox.entityId;
     }
 
     boolean canSee(Viewer viewer, boolean shown) {

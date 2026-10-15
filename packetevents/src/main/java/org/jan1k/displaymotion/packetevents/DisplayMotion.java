@@ -2,7 +2,14 @@ package org.jan1k.displaymotion.packetevents;
 
 import com.github.retrooper.packetevents.PacketEvents;
 import com.github.retrooper.packetevents.PacketEventsAPI;
+import com.github.retrooper.packetevents.event.PacketListener;
+import com.github.retrooper.packetevents.event.PacketListenerCommon;
+import com.github.retrooper.packetevents.event.PacketListenerPriority;
+import com.github.retrooper.packetevents.event.PacketReceiveEvent;
 import com.github.retrooper.packetevents.manager.player.PlayerManager;
+import com.github.retrooper.packetevents.protocol.packettype.PacketType;
+import com.github.retrooper.packetevents.protocol.player.InteractionHand;
+import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientInteractEntity;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -47,6 +54,7 @@ public final class DisplayMotion {
     private final Events events = new Events();
     private final Effects effects = new Effects(this);
     private final BukkitTask snapshotTask;
+    private final PacketListenerCommon clicks;
     private final Location scratch = new Location(null, 0, 0, 0);
     private long snapshots;
 
@@ -55,6 +63,7 @@ public final class DisplayMotion {
         this.engine = new MotionEngine(plugin);
         Bukkit.getPluginManager().registerEvents(events, plugin);
         this.snapshotTask = Bukkit.getScheduler().runTaskTimer(plugin, this::snapshot, 0L, VIEW_CHECK_TICKS);
+        this.clicks = PacketEvents.getAPI().getEventManager().registerListener(new Clicks(), PacketListenerPriority.NORMAL);
     }
 
     /**
@@ -111,6 +120,7 @@ public final class DisplayMotion {
         }
         snapshotTask.cancel();
         HandlerList.unregisterAll(events);
+        PacketEvents.getAPI().getEventManager().unregisterListener(clicks);
         engine.close();
     }
 
@@ -150,6 +160,34 @@ public final class DisplayMotion {
                     scratch.getX(), scratch.getY(), scratch.getZ(), channel);
         }
         engine.publish(new Snapshot(++snapshots, count == views.length ? views : Arrays.copyOf(views, count)));
+    }
+
+    private final class Clicks implements PacketListener {
+
+        @Override
+        public void onPacketReceive(PacketReceiveEvent event) {
+            if (event.getPacketType() != PacketType.Play.Client.INTERACT_ENTITY) {
+                return;
+            }
+            WrapperPlayClientInteractEntity packet = new WrapperPlayClientInteractEntity(event);
+            Hitbox hitbox = engine.hitbox(packet.getEntityId());
+            if (hitbox == null) {
+                return;
+            }
+            // the server does not know this entity, so dont let it even look at the packet
+            event.setCancelled(true);
+            boolean left = packet.getAction() == WrapperPlayClientInteractEntity.InteractAction.ATTACK;
+            // one right click sends interact_at and interact, and again for the off hand. only count one
+            if (!left && (packet.getAction() != WrapperPlayClientInteractEntity.InteractAction.INTERACT
+                    || packet.getHand() != InteractionHand.MAIN_HAND)) {
+                return;
+            }
+            UUID id = event.getUser().getUUID();
+            if (id == null || !plugin.isEnabled()) {
+                return;
+            }
+            Bukkit.getScheduler().runTask(plugin, () -> hitbox.handle.click(id, hitbox, left));
+        }
     }
 
     private final class Events implements Listener {

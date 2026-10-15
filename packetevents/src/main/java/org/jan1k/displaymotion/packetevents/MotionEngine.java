@@ -4,12 +4,15 @@ import com.github.retrooper.packetevents.PacketEvents;
 import com.github.retrooper.packetevents.manager.protocol.ProtocolManager;
 import com.github.retrooper.packetevents.netty.buffer.ByteBufHelper;
 import com.github.retrooper.packetevents.netty.channel.ChannelHelper;
+import com.github.retrooper.packetevents.protocol.entity.data.EntityData;
+import com.github.retrooper.packetevents.protocol.entity.data.EntityDataTypes;
 import com.github.retrooper.packetevents.protocol.entity.type.EntityType;
 import com.github.retrooper.packetevents.protocol.entity.type.EntityTypes;
 import com.github.retrooper.packetevents.protocol.world.Location;
 import com.github.retrooper.packetevents.wrapper.PacketWrapper;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerBundle;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDestroyEntities;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityMetadata;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityTeleport;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSpawnEntity;
 import io.netty.channel.Channel;
@@ -27,6 +30,7 @@ import java.util.Queue;
 import java.util.UUID;
 import java.util.WeakHashMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
@@ -46,6 +50,9 @@ final class MotionEngine {
     private static final int INLINE_BAKE_TICKS = 600; // bigger ones bake on a seperate thread
     private static final int LOUD_ERRORS = 10;
     private static final long QUIET_LOG_NANOS = TimeUnit.MINUTES.toNanos(1);
+    private static final int HITBOX_WIDTH_SLOT = 8;
+    private static final int HITBOX_HEIGHT_SLOT = 9;
+    private static final int HITBOX_RESPONSE_SLOT = 10;
 
     private final Plugin plugin;
     private final ProtocolManager protocol;
@@ -62,6 +69,8 @@ final class MotionEngine {
     private final List<Viewer> viewerList = new ArrayList<>();
     private final List<Viewer> dirty = new ArrayList<>();
     private final Map<Animation, Frames> baked = new WeakHashMap<>();
+    // read from netty threads when a click comes in, so it has to be concurrent
+    private final Map<Integer, Hitbox> clickable = new ConcurrentHashMap<>();
 
     private volatile Snapshot snapshot = new Snapshot(0L, new PlayerView[0]);
     private Snapshot seen;
@@ -112,6 +121,10 @@ final class MotionEngine {
         snapshot = views;
     }
 
+    Hitbox hitbox(int entityId) {
+        return clickable.get(entityId);
+    }
+
     void close() {
         if (!closed.compareAndSet(false, true)) {
             return;
@@ -150,6 +163,21 @@ final class MotionEngine {
         display.showAfter = tick + 1;
         displays.add(display);
         fresh.add(display);
+    }
+
+    void addHitbox(DisplayState display, Hitbox hitbox) {
+        if (display.removed) {
+            return;
+        }
+        display.addHitbox(hitbox);
+        clickable.put(hitbox.entityId, hitbox);
+        List<Viewer> targets = display.viewers;
+        if (display.fresh || targets.isEmpty()) {
+            return;
+        }
+        Object channel = targets.getFirst().channel;
+        sendToAll(targets, encode(spawnHitbox(display, hitbox), channel), false);
+        sendToAll(targets, encode(hitboxData(hitbox), channel), false);
     }
 
     void play(DisplayState display, int track, Animation animation, Runnable onEnd) {
@@ -287,6 +315,9 @@ final class MotionEngine {
             }
             sendToAll(kept, encode(new WrapperPlayServerEntityTeleport(part.entityId, to, false), channel), false);
         }
+        for (Hitbox hitbox : display.hitboxes) {
+            sendToAll(kept, encode(new WrapperPlayServerEntityTeleport(hitbox.entityId, hitboxSpot(display, hitbox), false), channel), false);
+        }
     }
 
     void visibility(DisplayState display, UUID player, boolean visible) {
@@ -341,6 +372,9 @@ final class MotionEngine {
         }
         display.removed = true;
         display.active = false;
+        for (Hitbox hitbox : display.hitboxes) {
+            clickable.remove(hitbox.entityId);
+        }
         display.handle.playing = false;
         for (int i = display.viewers.size() - 1; i >= 0; i--) {
             hide(display, display.viewers.get(i));
@@ -601,7 +635,8 @@ final class MotionEngine {
         if (display.spawnBuffers == null) {
             freshen(display);
             PartState[] parts = display.parts;
-            Object[] buffers = new Object[parts.length * 2];
+            List<Hitbox> hitboxes = display.hitboxes;
+            Object[] buffers = new Object[(parts.length + hitboxes.size()) * 2];
             display.spawnBuffers = buffers;
             markEncoded(display);
             for (int i = 0; i < parts.length; i++) {
@@ -614,6 +649,11 @@ final class MotionEngine {
                         new Location(display.x, display.y, display.z, display.yaw, display.pitch), display.yaw, 0, null);
                 buffers[i * 2] = encode(spawn, viewer.channel);
                 buffers[i * 2 + 1] = encode(packet.spawn(part, display.clientRange(), display.moveTicks), viewer.channel);
+            }
+            for (int i = 0; i < hitboxes.size(); i++) {
+                int slot = (parts.length + i) * 2;
+                buffers[slot] = encode(spawnHitbox(display, hitboxes.get(i)), viewer.channel);
+                buffers[slot + 1] = encode(hitboxData(hitboxes.get(i)), viewer.channel);
             }
         }
         for (Object buffer : display.spawnBuffers) {
@@ -710,6 +750,24 @@ final class MotionEngine {
             lastQuietLog = now;
             plugin.getLogger().log(Level.WARNING, message + " (" + errors + " errors so far)", error);
         }
+    }
+
+    private static WrapperPlayServerSpawnEntity spawnHitbox(DisplayState display, Hitbox hitbox) {
+        return new WrapperPlayServerSpawnEntity(hitbox.entityId, hitbox.uuid, EntityTypes.INTERACTION,
+                hitboxSpot(display, hitbox), 0f, 0, null);
+    }
+
+    // response true makes the hand swing on a right click, like a real entity
+    private static WrapperPlayServerEntityMetadata hitboxData(Hitbox hitbox) {
+        return new WrapperPlayServerEntityMetadata(hitbox.entityId, List.of(
+                new EntityData<>(HITBOX_WIDTH_SLOT, EntityDataTypes.FLOAT, hitbox.width),
+                new EntityData<>(HITBOX_HEIGHT_SLOT, EntityDataTypes.FLOAT, hitbox.height),
+                new EntityData<>(HITBOX_RESPONSE_SLOT, EntityDataTypes.BOOLEAN, true)));
+    }
+
+    private static Location hitboxSpot(DisplayState display, Hitbox hitbox) {
+        double[] offset = hitbox.offset(display.yaw, display.pitch);
+        return new Location(display.x + offset[0], display.y + offset[1], display.z + offset[2], 0f, 0f);
     }
 
     private static EntityType entityType(PartState part) {

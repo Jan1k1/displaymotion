@@ -26,6 +26,8 @@ import java.util.UUID;
 import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MotionEngineTest {
@@ -33,6 +35,7 @@ class MotionEngineTest {
     private static final UUID WORLD = UUID.randomUUID();
     private static final UUID PLAYER = UUID.randomUUID();
     private static final int ENTITY = 1000;
+    private static final int HITBOX = 4243;
 
     private MotionEngine engine;
     private EmbeddedChannel channel;
@@ -337,6 +340,63 @@ class MotionEngineTest {
         assertEquals(4, delimiters);
         assertEquals(Viewer.MAX_BUNDLE + 1 + 4, out.length);
         bundle.release();
+    }
+
+    @Test
+    void hitboxSpawnsWithTheDisplayAndGoesWithIt() {
+        MotionDisplay display = display();
+        engine.submit(() -> engine.addHitbox(display.state(), new Hitbox("main", HITBOX, 1f, 2f, 0, 0, 0, display)));
+
+        tick();
+        List<Packet> packets = tick();
+
+        assertEquals(List.of("bundle", "spawn", "meta", "spawn", "meta", "bundle"), kinds(packets));
+        assertEquals(HITBOX, packets.get(3).entity());
+        assertEquals(1f, value(packets.get(4), 8));
+        assertEquals(2f, value(packets.get(4), 9));
+        assertEquals(true, value(packets.get(4), 10));
+        assertNotNull(engine.hitbox(HITBOX));
+
+        display.remove();
+        tick();
+        assertNull(engine.hitbox(HITBOX));
+    }
+
+    @Test
+    void hitboxAddedLaterIsSentRightAway() {
+        MotionDisplay display = display();
+        tick();
+        tick();
+
+        engine.submit(() -> engine.addHitbox(display.state(), new Hitbox("button", HITBOX, 0.5f, 0.5f, 0, 1, 0, display)));
+        List<Packet> packets = tick();
+
+        assertEquals(List.of("bundle", "spawn", "meta", "bundle"), kinds(packets));
+        assertEquals(HITBOX, packets.get(1).entity());
+    }
+
+    @Test
+    void hitboxMovesWithTeleport() {
+        MotionDisplay display = display();
+        engine.submit(() -> engine.addHitbox(display.state(), new Hitbox("main", HITBOX, 1f, 1f, 0, 0, 0, display)));
+        tick();
+        tick();
+
+        display.teleport(new Location(world(), 2, 0, 0));
+        List<Packet> packets = tick();
+
+        assertTrue(packets.stream().anyMatch(packet -> packet.kind().equals("teleport") && packet.entity() == HITBOX));
+    }
+
+    @Test
+    void hitboxOffsetTurnsLikeTheDisplay() {
+        Hitbox hitbox = new Hitbox("front", HITBOX, 1f, 1f, 0, 0, 1, null);
+
+        double[] west = hitbox.offset(90f, 0f);
+
+        assertEquals(-1, west[0], 1e-9);
+        assertEquals(0, west[1], 1e-9);
+        assertEquals(0, west[2], 1e-9);
     }
 
     private static Player player() {
