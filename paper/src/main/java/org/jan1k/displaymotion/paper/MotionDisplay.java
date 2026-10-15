@@ -284,7 +284,7 @@ public final class MotionDisplay {
     /**
      * Makes the display ride an entity. The players' games move it with the entity every frame,
      * so walking costs the server nothing. Only a turn is sent, and only when it changes.
-     * The display location is where a passenger sits: on top of the head for a player. Move parts down
+     * The display location is where a passenger sits: the top of the hitbox, 1.8 above the feet of a player. Move parts down
      * with their pose for a backpack. Real passengers of the entity stay on it.
      * Call it on the main thread. {@link #teleport(Location)} or {@link #dismount()} stops riding.
      * @throws IllegalArgumentException if the entity is not in the world
@@ -320,7 +320,7 @@ public final class MotionDisplay {
 
     /**
      * Adds a place to sit at this offset from the display location. The offset turns with the display.
-     * {@code y} is the height of the seat surface, for a chair about 0.45.
+     * The hips of a sitting player end up about 0.1 above the seat point, so for a seat surface at 0.45 use 0.35.
      * Nothing happens until you call {@link #sit(Player, String)}, for example from {@link #onClick(Consumer)}.
      */
     public MotionDisplay seat(String name, double x, double y, double z) {
