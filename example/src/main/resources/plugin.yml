@@ -4,10 +4,7 @@ main: org.jan1k.displaymotion.example.ExamplePlugin
 api-version: "26.3"
 depend: [packetevents]
 
-commands:
-  displaymotion:
-    usage: /displaymotion [block|windmill|text|stop]
-    permission: displaymotion.use
+# /displaymotion is a brigadier command, registered in code so the client can tab complete it
 
 permissions:
   displaymotion.use:

@@ -1,12 +1,15 @@
 package org.jan1k.displaymotion.example;
 
+import com.mojang.brigadier.Command;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import io.papermc.paper.command.brigadier.CommandSourceStack;
+import io.papermc.paper.command.brigadier.Commands;
+import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.Player;
@@ -24,8 +27,10 @@ import org.jan1k.displaymotion.packetevents.ModelBuilder;
 import org.jan1k.displaymotion.packetevents.MotionDisplay;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
 
 public final class ExamplePlugin extends JavaPlugin implements Listener {
 
@@ -42,6 +47,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
     public void onEnable() {
         motion = DisplayMotion.create(this);
         getServer().getPluginManager().registerEvents(this, this);
+        registerCommand();
     }
 
     @Override
@@ -60,39 +66,61 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
         }
     }
 
-    @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (!(sender instanceof Player player)) {
-            sender.sendPlainMessage("players only");
-            return true;
-        }
+    private void registerCommand() {
+        LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("displaymotion")
+                .requires(source -> source.getSender().hasPermission("displaymotion.use"))
+                .executes(context -> show(context.getSource(), this::sword))
+                .then(Commands.literal("sword").executes(context -> show(context.getSource(), this::sword)))
+                .then(Commands.literal("block").executes(context -> show(context.getSource(), this::block)))
+                .then(Commands.literal("windmill").executes(context -> show(context.getSource(), player -> windmill(inFront(player, 6)))))
+                .then(Commands.literal("text").executes(context -> show(context.getSource(), this::text)))
+                .then(Commands.literal("stop").executes(context -> stop(context.getSource())));
 
-        MotionDisplay old = displays.remove(player.getUniqueId());
-        if (args.length > 0 && args[0].equalsIgnoreCase("stop")) {
-            if (old != null) {
-                old.play(HIDE, old::remove);
-            }
-            sender.sendPlainMessage("removed");
-            return true;
+        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
+                event.registrar().register(root.build(), "spawn an animated display", List.of("dm")));
+    }
+
+    private int show(CommandSourceStack source, Function<Player, MotionDisplay> spawn) {
+        if (!(source.getSender() instanceof Player player)) {
+            source.getSender().sendPlainMessage("players only");
+            return 0;
         }
+        MotionDisplay old = displays.remove(player.getUniqueId());
         if (old != null) {
             old.remove();
         }
+        displays.put(player.getUniqueId(), spawn.apply(player));
+        return Command.SINGLE_SUCCESS;
+    }
 
-        String kind = args.length > 0 ? args[0].toLowerCase() : "sword";
-        MotionDisplay display = switch (kind) {
-            case "block" -> motion.block(player.getLocation().add(0, 1.5, 0), Material.DIAMOND_BLOCK.createBlockData())
-                    .play(SHOW);
-            case "windmill" -> windmill(inFront(player, 6));
-            case "text" -> motion.text(player.getLocation().add(0, 2, 0),
-                            Component.text("displaymotion", NamedTextColor.GOLD))
-                    .billboard(Display.Billboard.CENTER)
-                    .play(SHOW_TEXT);
-            default -> motion.item(player.getLocation().add(0, 1.5, 0), ItemStack.of(Material.DIAMOND_SWORD),
-                    ItemDisplay.ItemDisplayTransform.GROUND).play(SHOW);
-        };
-        displays.put(player.getUniqueId(), display);
-        return true;
+    private int stop(CommandSourceStack source) {
+        if (!(source.getSender() instanceof Player player)) {
+            source.getSender().sendPlainMessage("players only");
+            return 0;
+        }
+        MotionDisplay old = displays.remove(player.getUniqueId());
+        if (old == null) {
+            player.sendPlainMessage("nothing to remove");
+            return 0;
+        }
+        old.play(HIDE, old::remove);
+        player.sendPlainMessage("removed");
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private MotionDisplay sword(Player player) {
+        return motion.item(player.getLocation().add(0, 1.5, 0), ItemStack.of(Material.DIAMOND_SWORD),
+                ItemDisplay.ItemDisplayTransform.GROUND).play(SHOW);
+    }
+
+    private MotionDisplay block(Player player) {
+        return motion.block(player.getLocation().add(0, 1.5, 0), Material.DIAMOND_BLOCK.createBlockData()).play(SHOW);
+    }
+
+    private MotionDisplay text(Player player) {
+        return motion.text(player.getLocation().add(0, 2, 0), Component.text("displaymotion", NamedTextColor.GOLD))
+                .billboard(Display.Billboard.CENTER)
+                .play(SHOW_TEXT);
     }
 
     // front of the model is +z, so turn it to look back at the player
