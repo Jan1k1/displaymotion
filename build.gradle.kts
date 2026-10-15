@@ -5,7 +5,7 @@ plugins {
 allprojects {
     // jitpack serves the modules as com.github.Jan1k1.displaymotion:<module>
     group = if (System.getenv("JITPACK") == "true") "com.github.Jan1k1.displaymotion" else "org.jan1k"
-    version = if (System.getenv("JITPACK") == "true") System.getenv("VERSION") ?: "0.1.0" else "0.1.0"
+    version = if (System.getenv("JITPACK") == "true") System.getenv("VERSION") ?: "0.2.0" else "0.2.0"
 }
 
 subprojects {
