@@ -31,6 +31,7 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
     private static final int GLOW_COLOR_SLOT = 22;
     private static final int CONTENT_SLOT = 23;
     private static final int ITEM_TRANSFORM_SLOT = 24;
+    private static final int BACKGROUND_SLOT = 25;
     private static final int END = 0xFF;
     private static final int GLOWING_FLAG = 0x40;
     private static final double BLOCKS_PER_VIEW_RANGE = 64.0;
@@ -195,6 +196,10 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
         writeVarInt(part.brightness);
         entry(GLOW_COLOR_SLOT, intType);
         writeVarInt(part.glowColor);
+        if (part.kind == PartState.TEXT) {
+            entry(BACKGROUND_SLOT, intType);
+            writeVarInt(part.background);
+        }
     }
 
     private void writeContent() {

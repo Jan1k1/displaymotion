@@ -13,6 +13,7 @@ final class PartState {
     static final int ITEM = 0;
     static final int BLOCK = 1;
     static final int TEXT = 2;
+    static final int DEFAULT_BACKGROUND = 0x40000000;
 
     final String name;
     final int entityId;
@@ -37,6 +38,7 @@ final class PartState {
     int glowColor = -1;
     int brightness = -1;
     int billboard;
+    int background = DEFAULT_BACKGROUND;
 
     private PartState(String name, int entityId, int parent, int kind, ItemStack item, int itemTransform,
                       int blockState, Component text, Pose pose) {

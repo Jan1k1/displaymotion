@@ -129,6 +129,23 @@ public final class MotionDisplay {
      * Changes the text of every text part.
      * @throws IllegalArgumentException if the display has no text part or the text is too big
      */
+    /** Background behind every text part, alpha included. {@code null} is the vanilla dark box. Use alpha 0 for none. */
+    public MotionDisplay background(Color color) {
+        return background(MotionEngine.ALL_PARTS, color);
+    }
+
+    /** Background behind one text part. */
+    public MotionDisplay background(String part, Color color) {
+        return background(index(part), color);
+    }
+
+    private MotionDisplay background(int part, Color color) {
+        requireAlive();
+        int argb = color == null ? PartState.DEFAULT_BACKGROUND : color.asARGB();
+        engine.submit(() -> engine.look(state, part, p -> p.background = argb));
+        return this;
+    }
+
     public MotionDisplay text(Component text) {
         return text(MotionEngine.ALL_PARTS, text);
     }

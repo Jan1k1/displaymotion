@@ -100,6 +100,17 @@ class DisplayPacketTest {
     }
 
     @Test
+    void textLookAlsoCarriesTheBackground() {
+        PartState part = PartState.text("label", 48, -1, Component.text("hi"), Pose.IDENTITY);
+        part.background = 0;
+
+        List<EntityData<?>> data = readBack(48, new DisplayPacket().look(part));
+
+        assertEquals(5, data.size());
+        assertEquals(0, value(data, 25));
+    }
+
+    @Test
     void textPartCarriesItsText() {
         PartState part = PartState.text("label", 47, -1, Component.text("hello"), Pose.IDENTITY);
 
