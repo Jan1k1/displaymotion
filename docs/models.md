@@ -118,6 +118,46 @@ chest.onClick(click -> {
 - The box stays upright and does not follow animations. It moves with `teleport`.
 - Only players who see the display can click it. Clicks from too far away are ignored.
 
+## Riding
+
+A display can ride a player or a mob, like a hat, a backpack or wings. It sticks to them while they walk.
+
+```java
+MotionDisplay crown = motion.model(player.getLocation())
+        .block("band", Material.GOLD_BLOCK.createBlockData(), Pose.IDENTITY.withScale(0.5f, 0.12f, 0.5f))
+        .spawn()
+        .ride(player, Follow.HEAD);             // turns where the player looks
+```
+
+- The display becomes a passenger of the entity, only on the players' side. Their game moves it every frame, so it never lags behind and walking costs the server nothing.
+- The server only checks the turn of the entity once per tick, and sends one small packet when it changes. That is cheap even with a thousand riders.
+- The display location is where a passenger sits: the top of the head for a player. Move parts with their pose, for example `withOffset(0f, -0.7f, -0.3f)` puts a backpack on the back.
+- `Follow.BODY` turns with the body (backpacks, wings). `Follow.HEAD` turns with where the entity looks, only left and right (hats). `Follow.NONE` keeps its turn.
+- Real passengers of the entity stay on it.
+- `dismount()` or `teleport(...)` stops riding. Call `ride` on the main thread.
+- When the player dies, the display waits and comes back with them. When a mob dies, the display stays where it was.
+
+## Seats
+
+Players can sit on a model. Mark the places with `seat`, then put the player there with `sit`, for example on a right click:
+
+```java
+MotionDisplay bench = model.spawn()
+        .hitbox(1.6f, 0.9f)
+        .seat("left", -0.4, 0.45, 0)            // x, height of the seat, z
+        .seat("right", 0.4, 0.45, 0);
+
+bench.onClick(click -> {
+    if (click.rightClick() && !bench.sit(click.player(), "left")) {
+        bench.sit(click.player(), "right");
+    }
+});
+```
+
+- A seat is a real invisible entity on the server, because a player can only ride something the server knows. It is made the first time someone sits.
+- `sit` returns false when someone sits there already. The player gets up with sneak, like from a horse.
+- Seats move with `teleport` and go away with `remove`. They are not saved with the world.
+
 ## Find the part names
 
 `display.parts()` gives the names of all parts, in the order you added them.
