@@ -19,6 +19,8 @@ sword.play(Animations.popOut(10), sword::remove); // later: shrink, then remove
 ## What it does
 
 - **Models** from many blocks, items and texts. Parts have parents and move as one.
+- **Import** models and animations from Blockbench (`.bbmodel`) and BDEngine (`.bdengine`).
+- **Effects** ready to use: shatter, tombstone, sword rain, soul. One line each.
 - **Animations** with easing, built from presets or keyframes, combined with `then`, `with` and `loop`.
 - **Looks:** glow color, brightness, billboard, live text.
 - **Move** whole models with a smooth glide. Show them to everyone or only to some players.
@@ -29,6 +31,8 @@ sword.play(Animations.popOut(10), sword::remove); // later: shrink, then remove
 - [Getting started](docs/getting-started.md): install with JitPack, first display.
 - [Animations](docs/animations.md)
 - [Models](docs/models.md)
+- [Effects](docs/effects.md)
+- [Importing](docs/importing.md)
 - [Cookbook](docs/cookbook.md)
 - [How it works](docs/how-it-works.md)
 - AI tools: [llms.txt](llms.txt)
@@ -41,7 +45,7 @@ Build the example plugin and put it next to PacketEvents on a Paper 26.3 server:
 ./gradlew build
 ```
 
-The jar is `example/build/libs/displaymotion-example-<version>.jar`. Commands: `/dm sword`, `/dm block`, `/dm windmill`, `/dm text`, `/dm pet`, `/dm stop`.
+The jar is `example/build/libs/displaymotion-example-<version>.jar`. Commands: `/dm sword`, `/dm block`, `/dm windmill`, `/dm text`, `/dm pet`, `/dm effect <name>`, `/dm killeffect <name>`, `/dm model <file> [animation]`, `/dm stop`.
 
 ## Modules
 

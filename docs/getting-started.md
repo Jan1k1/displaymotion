@@ -17,11 +17,11 @@ repositories {
 dependencies {
     compileOnly("io.papermc.paper:paper-api:26.3.build.180-stable")
     compileOnly("com.github.retrooper:packetevents-spigot:2.14.0")
-    implementation("com.github.Jan1k1.displaymotion:displaymotion-packetevents:main-SNAPSHOT")
+    implementation("com.github.Jan1k1.displaymotion:displaymotion-packetevents:v0.1.0")
 }
 ```
 
-`main-SNAPSHOT` is the newest commit. Use a commit hash or a tag instead to pin a version.
+`v0.1.0` is the first release. `main-SNAPSHOT` gives the newest commit instead.
 
 Shade it into your plugin jar and move it to your own package, so two plugins never clash:
 
@@ -74,4 +74,4 @@ That is all. The library removes every display when your plugin disables.
 - Call `play` right after spawning, in the same tick. Then the first frame is already the animation.
 - A display never moves by itself. Use `teleport` to move it, and animations to move parts.
 
-Next: [Animations](animations.md), [Models](models.md), [Cookbook](cookbook.md).
+Next: [Animations](animations.md), [Models](models.md), [Effects](effects.md), [Importing](importing.md), [Cookbook](cookbook.md).

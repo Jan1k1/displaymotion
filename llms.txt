@@ -6,14 +6,17 @@ Use these facts when you write code with this library:
 
 - Entry point: `DisplayMotion motion = DisplayMotion.create(plugin);` once in `onEnable`, on the main thread.
 - The plugin needs `depend: [packetevents]` in plugin.yml. Do not shade PacketEvents.
-- Gradle: `implementation("com.github.Jan1k1.displaymotion:displaymotion-packetevents:main-SNAPSHOT")` from `https://jitpack.io`, plus `compileOnly` Paper API and `com.github.retrooper:packetevents-spigot`.
+- Gradle: `implementation("com.github.Jan1k1.displaymotion:displaymotion-packetevents:v0.1.0")` from `https://jitpack.io`, plus `compileOnly` Paper API and `com.github.retrooper:packetevents-spigot`.
 - Spawn: `motion.item(location, itemStack)`, `motion.block(location, blockData)`, `motion.text(location, component)`, or `motion.model(location).block(name, blockData, pose[, parent]).item(...).text(...).spawn()`.
 - Every spawn returns a `MotionDisplay`. Its methods return the same object, so chain them. They are safe from any thread.
 - Animate: `display.play(animation)`, `display.play(animation, onEnd)`, `display.play("part", animation)`, `display.stop()`.
 - Animations: `Animations.popIn(ticks)`, `popOut(ticks)`, `spin(ticksPerTurn)`, `turn(pitch, yaw, roll, ticks)`, `bob(height, ticks)`, `slide(x, y, z, ticks, ease)`, `hold(ticks)`. Combine with `a.then(b)`, `a.with(b)`, `a.loop()`. Custom: `Animation.keyframes().at(tick, pose, ease).build()`.
 - Pose: `Pose.IDENTITY.withOffset(x, y, z).withRotation(pitch, yaw, roll).withScale(s)`. Degrees. Rotation order yaw, pitch, roll.
 - Ease: `Ease.LINEAR`, `Ease.IN`, `Ease.OUT`, `Ease.IN_OUT`.
-- Looks use Bukkit types: `display.glow(Color)`, `display.brightness(new Display.Brightness(block, sky))`, `display.billboard(Display.Billboard.CENTER)`, `display.text(Component)`. Each also takes a part name first.
+- Groups: `.group(name, pose[, parent])` is an invisible pivot. Matrix parts: `.block(name, blockData, float[16] rowMajorMatrix, parent)` (also item, text, group) work like vanilla, corner pivot, whole matrix inherited.
+- Effects: `motion.effects().shatter(location, blockData)`, `.tombstone(location, component)`, `.swordRain(location, itemStack)`, `.soul(location)`. Each removes itself.
+- Import: `ImportedModel model = ImportedModel.load(path)` for `.bbmodel` (Blockbench) or `.bdengine` (BDEngine), then `MotionDisplay d = model.spawn(motion, location[, scale])`, `model.play(d, "animationName")`, `model.animations()`, `model.parts()`.
+- Looks use Bukkit types: `display.glow(Color)`, `display.brightness(new Display.Brightness(block, sky))`, `display.billboard(Display.Billboard.CENTER)`, `display.text(Component)`, `display.background(Color)` (ARGB, behind text). Each also takes a part name first.
 - Move: `display.teleport(location)` or `display.teleport(location, glideTicks)` with 0 to 59 ticks.
 - Visibility: `display.hide(player)`, `display.show(player)`, `display.visibleByDefault(false)`, `display.viewRange(blocks)` (default 48).
 - Remove: `display.remove()`. `motion.close()` removes all, and happens by itself on plugin disable.
@@ -26,6 +29,8 @@ Use these facts when you write code with this library:
 - [Getting started](docs/getting-started.md)
 - [Animations](docs/animations.md)
 - [Models](docs/models.md)
+- [Effects](docs/effects.md)
+- [Importing](docs/importing.md)
 - [Cookbook](docs/cookbook.md)
 - [How it works](docs/how-it-works.md)
 - [Example plugin](example/src/main/java/org/jan1k/displaymotion/example/ExamplePlugin.java)
