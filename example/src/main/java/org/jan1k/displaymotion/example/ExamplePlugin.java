@@ -9,6 +9,7 @@ import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
+import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.Display;
@@ -20,6 +21,7 @@ import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
 import org.jan1k.displaymotion.Animation;
 import org.jan1k.displaymotion.Animations;
@@ -30,6 +32,7 @@ import org.jan1k.displaymotion.packetevents.MotionDisplay;
 import org.jan1k.displaymotion.packetevents.ImportedModel;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,11 +51,19 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
             .at(2, Pose.IDENTITY.withOffset(0f, -0.08f, 0f))
             .at(6, Pose.IDENTITY)
             .build();
+    private static final Animation CAP_IDLE = Animations.bob(0.02f, 30);
+    private static final Animation LABEL_IDLE = Animations.bob(0.08f, 50);
+    private static final int SHOWCASE_SLOTS = 7;
+    private static final double SHOWCASE_RADIUS = 7;
+    private static final float SHOWCASE_SPREAD = 25f;
+    private static final long EFFECT_EVERY_TICKS = 60L;
 
     private static final List<String> EFFECTS = List.of("shatter", "tombstone", "swords", "soul");
 
     private final Map<UUID, MotionDisplay> displays = new HashMap<>();
     private final Map<UUID, String> killEffects = new HashMap<>();
+    private final Map<UUID, List<MotionDisplay>> showcases = new HashMap<>();
+    private final Map<UUID, BukkitTask> showcaseTasks = new HashMap<>();
     private DisplayMotion motion;
 
     @Override
@@ -91,6 +102,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         killEffects.remove(event.getPlayer().getUniqueId());
+        clearShowcase(event.getPlayer().getUniqueId());
         MotionDisplay display = displays.remove(event.getPlayer().getUniqueId());
         if (display != null) {
             display.remove();
@@ -106,7 +118,9 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 .then(Commands.literal("windmill").executes(context -> show(context.getSource(), player -> windmill(inFront(player, 6)))))
                 .then(Commands.literal("text").executes(context -> show(context.getSource(), this::text)))
                 .then(Commands.literal("pet").executes(context -> show(context.getSource(), this::pet)))
-                .then(Commands.literal("button").executes(context -> show(context.getSource(), this::button)))
+                .then(Commands.literal("button").executes(context -> show(context.getSource(), player -> button(inFront(player, 3)))))
+                .then(Commands.literal("showcase").executes(context -> showcase(context.getSource())))
+                .then(Commands.literal("debug").executes(context -> debug(context.getSource())))
                 .then(Commands.literal("stop").executes(context -> stop(context.getSource())));
 
         LiteralArgumentBuilder<CommandSourceStack> effect = Commands.literal("effect");
@@ -231,12 +245,15 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
             source.getSender().sendPlainMessage("players only");
             return 0;
         }
+        boolean showcase = clearShowcase(player.getUniqueId());
         MotionDisplay old = displays.remove(player.getUniqueId());
-        if (old == null) {
+        if (old == null && !showcase) {
             player.sendPlainMessage("nothing to remove");
             return 0;
         }
-        old.play(HIDE, old::remove);
+        if (old != null && !old.isRemoved()) {
+            old.play(HIDE, old::remove);
+        }
         player.sendPlainMessage("removed");
         return Command.SINGLE_SUCCESS;
     }
@@ -282,8 +299,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
     }
 
     // right click presses it and counts, left click breaks it
-    private MotionDisplay button(Player player) {
-        Location at = inFront(player, 3);
+    private MotionDisplay button(Location at) {
         int[] clicks = {0};
         MotionDisplay button = motion.model(at)
                 .block("base", Material.POLISHED_BLACKSTONE.createBlockData(), Pose.IDENTITY.withOffset(0f, 0.1f, 0f).withScale(0.9f, 0.2f, 0.9f))
@@ -292,7 +308,9 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 .spawn()
                 .billboard("label", Display.Billboard.CENTER)
                 .hitbox(1f, 0.5f)
-                .play(Animations.popIn(10));
+                .play(Animations.popIn(10))
+                .play("cap", CAP_IDLE)
+                .play("label", LABEL_IDLE);
         button.onClick(click -> {
             if (click.leftClick()) {
                 motion.effects().shatter(at, Material.RED_CONCRETE.createBlockData());
@@ -301,9 +319,123 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 return;
             }
             clicks[0]++;
-            button.play("cap", PRESS).text("label", Component.text("Clicks: " + clicks[0], NamedTextColor.GOLD));
+            button.glow("cap", Color.WHITE)
+                    .text("label", Component.text("Clicks: " + clicks[0], NamedTextColor.GOLD))
+                    .play("cap", PRESS, () -> {
+                        if (!button.isRemoved()) {
+                            button.glow("cap", null).play("cap", CAP_IDLE);
+                        }
+                    });
         });
         return button;
+    }
+
+    private int debug(CommandSourceStack source) {
+        motion.debug(!motion.isDebug());
+        source.getSender().sendPlainMessage("displaymotion debug " + (motion.isDebug() ? "on, see the server log" : "off"));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    // everything at once in a half circle, for videos and screenshots
+    private int showcase(CommandSourceStack source) {
+        if (!(source.getSender() instanceof Player player)) {
+            source.getSender().sendPlainMessage("players only");
+            return 0;
+        }
+        UUID id = player.getUniqueId();
+        clearShowcase(id);
+        List<MotionDisplay> spawned = new ArrayList<>();
+        Location feet = player.getLocation();
+
+        Location sword = showcaseSpot(feet, 0);
+        spawned.add(motion.item(sword.clone().add(0, 1.5, 0), ItemStack.of(Material.DIAMOND_SWORD),
+                ItemDisplay.ItemDisplayTransform.GROUND).play(SHOW));
+        spawned.add(label(sword, 2.6, "Item"));
+
+        Location block = showcaseSpot(feet, 1);
+        spawned.add(motion.block(block.clone().add(0, 1.5, 0), Material.DIAMOND_BLOCK.createBlockData()).play(SHOW));
+        spawned.add(label(block, 2.7, "Block"));
+
+        Location robot = showcaseSpot(feet, 2);
+        spawned.add(clickableModel("robot.bbmodel", robot, 1f, 1f, 2f));
+        spawned.add(label(robot, 3.2, "Blockbench, click me"));
+
+        Location button = showcaseSpot(feet, 3);
+        spawned.add(button(button));
+
+        Location chest = showcaseSpot(feet, 4);
+        spawned.add(clickableModel("chest.bdengine", chest, 1.5f, 1.6f, 1.4f));
+        spawned.add(label(chest, 2.6, "BDEngine, click me"));
+
+        Location windmill = showcaseSpot(feet, 5);
+        spawned.add(clickableModel("windmill.bbmodel", windmill, 0.5f, 2f, 4f));
+        spawned.add(label(windmill, 5, "Windmill"));
+
+        Location effects = showcaseSpot(feet, 6);
+        spawned.add(label(effects, 2.8, "Effects"));
+        int[] next = {0};
+        showcaseTasks.put(id, getServer().getScheduler().runTaskTimer(this, () ->
+                playEffect(EFFECTS.get(next[0]++ % EFFECTS.size()), effects, Component.text("Steve")), 20L, EFFECT_EVERY_TICKS));
+
+        spawned.removeIf(java.util.Objects::isNull);
+        showcases.put(id, spawned);
+        player.sendPlainMessage("showcase spawned, /dm stop removes it");
+        return Command.SINGLE_SUCCESS;
+    }
+
+    // right click plays the next animation of the model
+    private MotionDisplay clickableModel(String file, Location at, float scale, float width, float height) {
+        ImportedModel model = loadModel(file);
+        if (model == null) {
+            return null;
+        }
+        MotionDisplay display = model.spawn(motion, at, scale).hitbox(width, height);
+        List<String> clips = model.animations();
+        int[] clip = {0};
+        if (!clips.isEmpty()) {
+            model.play(display, clips.getFirst());
+        }
+        display.onClick(click -> {
+            if (clips.isEmpty()) {
+                return;
+            }
+            clip[0] = (clip[0] + 1) % clips.size();
+            model.play(display, clips.get(clip[0]));
+            click.player().sendActionBar(Component.text(file + ": " + clips.get(clip[0]), NamedTextColor.GOLD));
+        });
+        return display.play(Animations.popIn(15));
+    }
+
+    private MotionDisplay label(Location at, double height, String text) {
+        return motion.text(at.clone().add(0, height, 0), Component.text(text, NamedTextColor.WHITE))
+                .billboard(Display.Billboard.CENTER)
+                .play(Animations.popIn(15));
+    }
+
+    private static Location showcaseSpot(Location feet, int slot) {
+        float angle = feet.getYaw() + (slot - (SHOWCASE_SLOTS - 1) / 2f) * SHOWCASE_SPREAD;
+        double radians = Math.toRadians(angle);
+        Location at = feet.clone().add(-Math.sin(radians) * SHOWCASE_RADIUS, 0, Math.cos(radians) * SHOWCASE_RADIUS);
+        at.setYaw(angle + 180f);
+        at.setPitch(0f);
+        return at;
+    }
+
+    private boolean clearShowcase(UUID id) {
+        BukkitTask task = showcaseTasks.remove(id);
+        if (task != null) {
+            task.cancel();
+        }
+        List<MotionDisplay> old = showcases.remove(id);
+        if (old == null) {
+            return false;
+        }
+        for (MotionDisplay display : old) {
+            if (!display.isRemoved()) {
+                display.play(HIDE, display::remove);
+            }
+        }
+        return true;
     }
 
     // front of the model is +z so turn it to look back at the player
