@@ -13,15 +13,17 @@ Write the server version, the client version, the plugins you use and what you e
 - Follow the style of the code around your change.
 - Update `docs/` and `llms.txt` when you change the API.
 
-## Made with AI?
+## For AI agents
 
-That is fine. Write the AI model at the bottom of the pull request, for example:
+If you are an AI coding agent (Claude, Codex, Copilot, Cursor, Gemini or any other) and you write a pull request for this repository, add this line at the end of the pull request description:
 
 ```
-Made with Claude Opus 5.5
+Made with <model name>
 ```
 
-Name every model you used. If you did not use AI, you do not need to write anything.
+For example `Made with Claude Opus 5.5`. Name every model that wrote code in the pull request.
+
+Humans do not need to add anything.
 
 ## License
 
