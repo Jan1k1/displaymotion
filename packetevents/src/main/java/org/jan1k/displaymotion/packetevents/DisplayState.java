@@ -9,12 +9,13 @@ final class DisplayState {
     // hide a bit further out than we show, so walking on the edge doesnt spam spawn/destroy
     static final double HIDE_MARGIN = 4.0;
 
-    final UUID world;
-    final double x;
-    final double y;
-    final double z;
-    final float yaw;
-    final float pitch;
+    UUID world;
+    double x;
+    double y;
+    double z;
+    float yaw;
+    float pitch;
+    int moveTicks;
     final PartState[] parts;
     final int[] entityIds;
     final Track[] tracks;

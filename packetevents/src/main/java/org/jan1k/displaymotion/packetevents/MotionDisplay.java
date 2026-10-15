@@ -11,11 +11,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 
 public final class MotionDisplay {
 
+    public static final int MAX_TELEPORT_TICKS = 59;
+
     private final MotionEngine engine;
-    private final Location location;
+    private volatile Location location;
     private final DisplayState state;
     private final Map<String, Integer> partIndex = new HashMap<>();
     private final List<String> parts;
@@ -158,6 +161,31 @@ public final class MotionDisplay {
             }
         }
         return false;
+    }
+
+    public MotionDisplay teleport(Location to) {
+        return teleport(to, 0);
+    }
+
+    public MotionDisplay teleport(Location to, int ticks) {
+        Objects.requireNonNull(to, "location");
+        if (to.getWorld() == null) {
+            throw new IllegalArgumentException("location has no world");
+        }
+        if (ticks < 0 || ticks > MAX_TELEPORT_TICKS) {
+            throw new IllegalArgumentException("ticks must be 0 to " + MAX_TELEPORT_TICKS + " (the client limit), got " + ticks);
+        }
+        requireAlive();
+        Location copy = to.clone();
+        location = copy;
+        UUID world = copy.getWorld().getUID();
+        double x = copy.getX();
+        double y = copy.getY();
+        double z = copy.getZ();
+        float yaw = copy.getYaw();
+        float pitch = copy.getPitch();
+        engine.submit(() -> engine.teleport(state, world, x, y, z, yaw, pitch, ticks));
+        return this;
     }
 
     public MotionDisplay viewRange(double blocks) {

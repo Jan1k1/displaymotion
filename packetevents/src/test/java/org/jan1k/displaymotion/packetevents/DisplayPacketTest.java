@@ -63,9 +63,10 @@ class DisplayPacketTest {
     void spawnAlsoCarriesTheBlockAndViewRange() {
         PartState part = block(44, 1234, Pose.IDENTITY);
 
-        List<EntityData<?>> data = readBack(44, new DisplayPacket().spawn(part, 48));
+        List<EntityData<?>> data = readBack(44, new DisplayPacket().spawn(part, 48, 0));
 
-        assertEquals(12, data.size());
+        assertEquals(13, data.size());
+        assertEquals(0, value(data, 10));
         assertEquals(1, value(data, 9));
         assertEquals(0.75f, value(data, 17));
         assertEquals(1234, value(data, 23));

@@ -139,6 +139,47 @@ class MotionEngineTest {
     }
 
     @Test
+    void teleportMovesEveryPartAndSetsTheGlideTime() {
+        MotionDisplay display = display();
+        tick();
+        tick();
+
+        display.teleport(new Location(world(), 5, 0, 0), 10);
+        List<Packet> packets = tick();
+
+        assertEquals(List.of("bundle", "meta", "teleport", "bundle"), kinds(packets));
+        assertEquals(10, value(packets.get(1), 10));
+        assertEquals(ENTITY, packets.get(2).entity());
+
+        display.teleport(new Location(world(), 6, 0, 0), 10);
+        assertEquals(List.of("teleport"), kinds(tick()));
+    }
+
+    @Test
+    void teleportOutOfRangeHidesIt() {
+        MotionDisplay display = display();
+        tick();
+        tick();
+
+        display.teleport(new Location(world(), 500, 0, 0));
+
+        assertEquals(List.of("destroy"), kinds(tick()));
+    }
+
+    @Test
+    void teleportToAnotherWorldHidesItWithoutAMove() {
+        MotionDisplay display = display();
+        tick();
+        tick();
+
+        UUID other = UUID.randomUUID();
+        World otherWorld = FakePacketEvents.proxy(World.class, (method, args) -> method.equals("getUID") ? other : null);
+        display.teleport(new Location(otherWorld, 0, 0, 0));
+
+        assertEquals(List.of("destroy"), kinds(tick()));
+    }
+
+    @Test
     void viewerAtTheEdgeDoesNotFlicker() {
         display();
         tick();
@@ -210,10 +251,13 @@ class MotionEngineTest {
         bundle.release();
     }
 
+    private static World world() {
+        return FakePacketEvents.proxy(World.class, (method, args) -> method.equals("getUID") ? WORLD : null);
+    }
+
     private MotionDisplay display() {
-        World world = FakePacketEvents.proxy(World.class, (method, args) -> method.equals("getUID") ? WORLD : null);
         PartState[] parts = {PartState.block("main", ENTITY, -1, 1, Pose.IDENTITY)};
-        MotionDisplay display = new MotionDisplay(engine, new Location(world, 0, 0, 0), parts, 48);
+        MotionDisplay display = new MotionDisplay(engine, new Location(world(), 0, 0, 0), parts, 48);
         engine.submit(() -> engine.add(display.state()));
         return display;
     }
@@ -243,6 +287,8 @@ class MotionEngineTest {
                 } else if (id == PacketType.Play.Server.ENTITY_METADATA.getId(version)) {
                     int entity = reader.readVarInt();
                     packets.add(new Packet("meta", entity, reader.readEntityMetadata()));
+                } else if (id == PacketType.Play.Server.ENTITY_TELEPORT.getId(version)) {
+                    packets.add(new Packet("teleport", reader.readVarInt(), List.of()));
                 } else if (id == PacketType.Play.Server.DESTROY_ENTITIES.getId(version)) {
                     reader.readVarInt();
                     packets.add(new Packet("destroy", reader.readVarInt(), List.of()));

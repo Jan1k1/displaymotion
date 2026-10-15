@@ -74,6 +74,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 .then(Commands.literal("block").executes(context -> show(context.getSource(), this::block)))
                 .then(Commands.literal("windmill").executes(context -> show(context.getSource(), player -> windmill(inFront(player, 6)))))
                 .then(Commands.literal("text").executes(context -> show(context.getSource(), this::text)))
+                .then(Commands.literal("pet").executes(context -> show(context.getSource(), this::pet)))
                 .then(Commands.literal("stop").executes(context -> stop(context.getSource())));
 
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
@@ -115,6 +116,31 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
 
     private MotionDisplay block(Player player) {
         return motion.block(player.getLocation().add(0, 1.5, 0), Material.DIAMOND_BLOCK.createBlockData()).play(SHOW);
+    }
+
+    private MotionDisplay pet(Player player) {
+        MotionDisplay pet = motion.item(petSpot(player), ItemStack.of(Material.DIAMOND_SWORD),
+                ItemDisplay.ItemDisplayTransform.GROUND).play(SHOW);
+        // move it every 2 ticks and let the client glide over 4, so it trails a bit behind like a pet
+        getServer().getScheduler().runTaskTimer(this, task -> {
+            if (pet.isRemoved() || !player.isOnline()) {
+                task.cancel();
+                return;
+            }
+            pet.teleport(petSpot(player), 4);
+        }, 2L, 2L);
+        return pet;
+    }
+
+    private static Location petSpot(Player player) {
+        Location spot = player.getLocation();
+        Vector back = spot.getDirection().setY(0);
+        if (back.lengthSquared() > 1e-6) {
+            spot.subtract(back.normalize().multiply(1.2));
+        }
+        spot.add(0, 1.6, 0);
+        spot.setPitch(0f);
+        return spot;
     }
 
     private MotionDisplay text(Player player) {

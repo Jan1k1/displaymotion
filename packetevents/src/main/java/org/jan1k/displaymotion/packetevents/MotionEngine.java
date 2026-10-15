@@ -10,6 +10,7 @@ import com.github.retrooper.packetevents.protocol.world.Location;
 import com.github.retrooper.packetevents.wrapper.PacketWrapper;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerBundle;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDestroyEntities;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityTeleport;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSpawnEntity;
 import io.netty.channel.Channel;
 import net.kyori.adventure.text.Component;
@@ -229,6 +230,47 @@ final class MotionEngine {
         sendToAll(targets, encode(update, targets.getFirst().channel), false);
     }
 
+    void teleport(DisplayState display, UUID world, double x, double y, double z, float yaw, float pitch, int ticks) {
+        if (display.removed) {
+            return;
+        }
+        if (!display.world.equals(world)) {
+            for (int i = display.viewers.size() - 1; i >= 0; i--) {
+                hide(display, display.viewers.get(i));
+            }
+        }
+        display.world = world;
+        display.x = x;
+        display.y = y;
+        display.z = z;
+        display.yaw = yaw;
+        display.pitch = pitch;
+        if (display.fresh) {
+            display.moveTicks = ticks;
+            return;
+        }
+        // viewers that just got it spawned already have the new spot, only the ones that kept it need the move
+        List<Viewer> kept = new ArrayList<>(display.viewers);
+        int oldTicks = display.moveTicks;
+        display.moveTicks = ticks;
+        updateViewers(display);
+        kept.retainAll(display.viewers);
+        if (kept.isEmpty()) {
+            return;
+        }
+        Object channel = kept.getFirst().channel;
+        // the smoothing time has to be set before the move, same bundle so the client sees both at once
+        if (ticks != oldTicks) {
+            for (PartState part : display.parts) {
+                sendToAll(kept, encode(packet.move(part, ticks), channel), false);
+            }
+        }
+        Location to = new Location(x, y, z, yaw, pitch);
+        for (PartState part : display.parts) {
+            sendToAll(kept, encode(new WrapperPlayServerEntityTeleport(part.entityId, to, false), channel), false);
+        }
+    }
+
     void viewRange(DisplayState display, double range) {
         if (display.removed) {
             return;
@@ -395,7 +437,7 @@ final class MotionEngine {
         for (DisplayState display : viewer.visible) {
             freshen(display);
             for (PartState part : display.parts) {
-                queue(viewer, encode(packet.spawn(part, display.clientRange()), viewer.channel));
+                queue(viewer, encode(packet.spawn(part, display.clientRange(), display.moveTicks), viewer.channel));
             }
         }
     }
@@ -512,7 +554,7 @@ final class MotionEngine {
                         entityType(part),
                         new Location(display.x, display.y, display.z, display.yaw, display.pitch), display.yaw, 0, null);
                 buffers[i * 2] = encode(spawn, viewer.channel);
-                buffers[i * 2 + 1] = encode(packet.spawn(part, display.clientRange()), viewer.channel);
+                buffers[i * 2 + 1] = encode(packet.spawn(part, display.clientRange(), display.moveTicks), viewer.channel);
             }
         }
         for (Object buffer : display.spawnBuffers) {

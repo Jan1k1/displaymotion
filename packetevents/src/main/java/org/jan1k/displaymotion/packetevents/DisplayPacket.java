@@ -17,6 +17,7 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
     private static final int FLAGS_SLOT = 0;
     private static final int START_DELAY_SLOT = 8;
     private static final int DURATION_SLOT = 9;
+    private static final int MOVE_DURATION_SLOT = 10;
     private static final int TRANSLATION_SLOT = 11;
     private static final int SCALE_SLOT = 12;
     private static final int LEFT_ROTATION_SLOT = 13;
@@ -36,6 +37,7 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
     private static final int RANGE = 2;
     private static final int LOOK = 3;
     private static final int CONTENT = 4;
+    private static final int MOVE = 5;
 
     private final int intType;
     private final int byteType;
@@ -50,6 +52,7 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
     private int changes;
     private int duration;
     private double range;
+    private int moveTicks;
     private int mode;
 
     DisplayPacket() {
@@ -69,8 +72,14 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
         return set(part, FRAME, changes, duration, 0);
     }
 
-    DisplayPacket spawn(PartState part, double range) {
+    DisplayPacket spawn(PartState part, double range, int moveTicks) {
+        this.moveTicks = moveTicks;
         return set(part, SPAWN, ALL, 1, range);
+    }
+
+    DisplayPacket move(PartState part, int moveTicks) {
+        this.moveTicks = moveTicks;
+        return set(part, MOVE, 0, 0, 0);
     }
 
     DisplayPacket range(PartState part, double range) {
@@ -101,9 +110,11 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
             case RANGE -> writeViewRange();
             case LOOK -> writeLook();
             case CONTENT -> writeContent();
+            case MOVE -> writeMoveDuration();
             default -> {
                 writeTransform();
                 if (mode == SPAWN) {
+                    writeMoveDuration();
                     writeViewRange();
                     writeLook();
                     writeContent();
@@ -146,6 +157,11 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
             writeFloat(s[Decomposer.RZ]);
             writeFloat(s[Decomposer.RW]);
         }
+    }
+
+    private void writeMoveDuration() {
+        entry(MOVE_DURATION_SLOT, intType);
+        writeVarInt(moveTicks);
     }
 
     private void writeViewRange() {
