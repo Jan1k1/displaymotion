@@ -74,19 +74,63 @@ public final class BdengineModel implements ImportedModel {
 
     /** Reads a {@code .bdengine} file. Safe on any thread. */
     public static BdengineModel load(Path file) throws IOException {
-        return parse(Files.readString(file, StandardCharsets.UTF_8));
+        return read(Files.readAllBytes(file));
     }
 
     /** Reads the content of a {@code .bdengine} file, or the plain json inside it. */
     public static BdengineModel parse(String content) throws IOException {
-        String text = content.trim();
-        // the file is base64 of gzip of json, but take plain json too
-        if (!text.startsWith("[") && !text.startsWith("{")) {
-            byte[] packed = Base64.getDecoder().decode(text);
-            try (GZIPInputStream in = new GZIPInputStream(new ByteArrayInputStream(packed))) {
-                text = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        return read(content.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** Reads the bytes of a {@code .bdengine} file, any of the formats the editor saved over time. */
+    public static BdengineModel read(byte[] bytes) throws IOException {
+        return fromJson(unpack(bytes, 0));
+    }
+
+    // older files are base64 text of gzip of json. the editor now saves raw gzip around a small
+    // "PRJ2" container with scene.json in it. this peels whatever layer it finds until json shows up
+    static String unpack(byte[] bytes, int depth) throws IOException {
+        if (depth > 4) {
+            throw new IOException("not a bdengine file, too many layers");
+        }
+        if (bytes.length > 2 && (bytes[0] & 0xFF) == 0x1F && (bytes[1] & 0xFF) == 0x8B) {
+            try (GZIPInputStream in = new GZIPInputStream(new ByteArrayInputStream(bytes))) {
+                return unpack(in.readAllBytes(), depth + 1);
             }
         }
+        if (bytes.length > 4 && bytes[0] == 'P' && bytes[1] == 'R' && bytes[2] == 'J') {
+            return unpack(sceneFromContainer(bytes), depth + 1);
+        }
+        String text = new String(bytes, StandardCharsets.UTF_8).trim();
+        if (text.startsWith("[") || text.startsWith("{")) {
+            return text;
+        }
+        try {
+            return unpack(Base64.getDecoder().decode(text), depth + 1);
+        } catch (IllegalArgumentException e) {
+            throw new IOException("not a bdengine file");
+        }
+    }
+
+    // PRJ2 layout: magic (4) + version (1) + entry count (int) then per entry: name length (short),
+    // name, data length (int), data. all little endian
+    private static byte[] sceneFromContainer(byte[] bytes) throws IOException {
+        java.nio.ByteBuffer buffer = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        buffer.position(5);
+        int entries = buffer.getInt();
+        for (int i = 0; i < entries; i++) {
+            byte[] name = new byte[Short.toUnsignedInt(buffer.getShort())];
+            buffer.get(name);
+            byte[] data = new byte[buffer.getInt()];
+            buffer.get(data);
+            if (new String(name, StandardCharsets.UTF_8).equals("scene.json")) {
+                return data;
+            }
+        }
+        throw new IOException("bdengine project has no scene.json inside");
+    }
+
+    private static BdengineModel fromJson(String text) {
         JsonElement parsed = JsonParser.parseString(text);
         JsonObject root = parsed.isJsonArray() ? parsed.getAsJsonArray().get(0).getAsJsonObject() : parsed.getAsJsonObject();
 

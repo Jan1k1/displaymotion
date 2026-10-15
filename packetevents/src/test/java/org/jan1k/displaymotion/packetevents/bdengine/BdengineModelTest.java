@@ -57,6 +57,24 @@ class BdengineModelTest {
     }
 
     @Test
+    void readsTheNewProjectFormat() throws IOException {
+        byte[] scene = JSON.getBytes(StandardCharsets.UTF_8);
+        byte[] name = "scene.json".getBytes(StandardCharsets.UTF_8);
+        java.nio.ByteBuffer container = java.nio.ByteBuffer.allocate(4 + 1 + 4 + 2 + name.length + 4 + scene.length)
+                .order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        container.put("PRJ2".getBytes(StandardCharsets.US_ASCII)).put((byte) 1).putInt(1)
+                .putShort((short) name.length).put(name).putInt(scene.length).put(scene);
+        ByteArrayOutputStream gzipped = new ByteArrayOutputStream();
+        try (GZIPOutputStream gzip = new GZIPOutputStream(gzipped)) {
+            gzip.write(container.array());
+        }
+
+        BdengineModel model = BdengineModel.read(gzipped.toByteArray());
+
+        assertEquals(List.of("body_group", "oak_stairs", "player_head"), model.parts());
+    }
+
+    @Test
     void fixedPartTimesTheFirstFrameIsTheOriginalMatrix() throws IOException {
         BdengineModel.Node head = BdengineModel.parse(JSON).node("player_head");
         float[] fixed = new float[Affine.SIZE];
