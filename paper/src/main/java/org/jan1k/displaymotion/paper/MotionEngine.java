@@ -58,7 +58,7 @@ final class MotionEngine {
     private static final int HITBOX_RESPONSE_SLOT = 10;
     private static final int[] NO_IDS = new int[0];
     // the client blends a turn over this many ticks, so a riding display turns smooth and not in steps
-    private static final int RIDE_TURN_TICKS = 2;
+    private static final int RIDE_TURN_TICKS = 1;
 
     private final Plugin plugin;
     private final ProtocolManager protocol;
@@ -83,6 +83,8 @@ final class MotionEngine {
     private final Map<Integer, int[]> serverPassengers = new ConcurrentHashMap<>();
     private final Map<Integer, List<DisplayState>> rideGroups = new HashMap<>();
     final Set<MotionDisplay> riding = ConcurrentHashMap.newKeySet();
+    // main thread only
+    final Bodies bodies = new Bodies();
     // real server entities players sit on, removed when the library closes
     final Set<org.bukkit.entity.Entity> seats = ConcurrentHashMap.newKeySet();
 
@@ -244,6 +246,10 @@ final class MotionEngine {
     }
 
     void ride(DisplayState display, int vehicle, int[] passengers, UUID world, double x, double y, double z, float yaw) {
+        ride(display, vehicle, passengers, world, x, y, z, RidePose.turn(yaw));
+    }
+
+    void ride(DisplayState display, int vehicle, int[] passengers, UUID world, double x, double y, double z, RidePose pose) {
         if (display.removed) {
             return;
         }
@@ -255,7 +261,7 @@ final class MotionEngine {
         display.vehicle = vehicle;
         rideGroups.computeIfAbsent(vehicle, id -> new ArrayList<>()).add(display);
         updateRiders(vehicle);
-        turnTo(display, yaw);
+        poseTo(display, pose);
         if (display.fresh) {
             return;
         }
@@ -267,12 +273,15 @@ final class MotionEngine {
     }
 
     // the entity keeps the yaw it spawned with, the rest of the turn goes in the transform and blends
-    private void turnTo(DisplayState display, float yaw) {
-        float turn = wrap(yaw - display.yaw);
-        if (turn == display.turn) {
+    private void poseTo(DisplayState display, RidePose pose) {
+        float turn = wrap(pose.yaw() - display.yaw);
+        if (turn == display.turn && pose.tilt() == display.tilt && pose.pivot() == display.pivot && pose.drop() == display.drop) {
             return;
         }
         display.turn = turn;
+        display.tilt = pose.tilt();
+        display.pivot = pose.pivot();
+        display.drop = pose.drop();
         composer.compose(display, true);
         if (!display.fresh && !display.viewers.isEmpty()) {
             sendChanges(display, RIDE_TURN_TICKS);
@@ -291,11 +300,15 @@ final class MotionEngine {
 
     // the client moves a passenger by itself every frame, so here only the numbers change and a turn goes out
     void follow(DisplayState display, UUID world, double x, double y, double z, float yaw) {
+        follow(display, world, x, y, z, RidePose.turn(yaw));
+    }
+
+    void follow(DisplayState display, UUID world, double x, double y, double z, RidePose pose) {
         if (display.removed || display.vehicle < 0) {
             return;
         }
         moveTo(display, world, x, y, z);
-        turnTo(display, yaw);
+        poseTo(display, pose);
     }
 
     void dismount(DisplayState display, boolean stayHere) {
@@ -307,6 +320,9 @@ final class MotionEngine {
         // off the vehicle a turn packet works again, so the turn goes back into the entity yaw
         display.yaw = wrap(display.yaw + display.turn);
         display.turn = 0f;
+        display.tilt = 0f;
+        display.pivot = 0f;
+        display.drop = 0f;
         composer.compose(display, true);
         if (!display.removed && !display.fresh && !display.viewers.isEmpty()) {
             sendChanges(display, Frames.STEP_TICKS);

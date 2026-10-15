@@ -26,9 +26,14 @@ final class Composer {
         } else {
             Affine.identity(root, 0);
         }
-        if (display.turn != 0f) {
-            // same way round as the entity yaw, the client turns a display by minus its yaw
-            Affine.fromPose(0f, 0f, 0f, 0f, -display.turn, 0f, 1f, 1f, 1f, turn, 0);
+        if (display.turn != 0f || display.tilt != 0f || display.drop != 0f) {
+            // same way round as the entity yaw, the client turns a display by minus its yaw. the tilt
+            // turns around the pivot height and not the origin, so move the pivot there and back again
+            Affine.fromPose(0f, 0f, 0f, display.tilt, -display.turn, 0f, 1f, 1f, 1f, turn, 0);
+            float pivot = display.pivot;
+            turn[9] = -turn[3] * pivot;
+            turn[10] = pivot + display.drop - turn[4] * pivot;
+            turn[11] = -turn[5] * pivot;
             Affine.multiply(turn, 0, root, 0, frame, 0);
             System.arraycopy(frame, 0, root, 0, Affine.SIZE);
         }

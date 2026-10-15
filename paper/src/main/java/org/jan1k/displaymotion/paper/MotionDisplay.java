@@ -5,7 +5,6 @@ import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.entity.Display;
-import io.papermc.paper.entity.TeleportFlag;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.LivingEntity;
@@ -35,11 +34,17 @@ public final class MotionDisplay {
     // a bit more then survival reach, so a click on the far edge of a big box still counts
     private static final double CLICK_REACH = 8.0;
     // less then this is not worth a packet, the client cant even show a turn of under a degree
-    private static final float RIDE_TURN = 1f;
+    private static final float RIDE_TURN = 0.5f;
     private static final double RIDE_MOVE = 0.5;
-    private static final double BODY_WALK_SQUARED = 0.0025;
-    private static final float BODY_FOLLOW = 0.3f;
-    private static final float BODY_MAX_HEAD = 50f;
+    // where a player head and body turn, from the 1.21.11 player model (scale 0.9375), in blocks
+    // from the passenger point. it sits 1.8 up standing and 1.5 sneaking, but the model does not
+    // move the same amount, so a sneaking hat has to come down a bit and the body leans forward
+    private static final float HEAD_PIVOT = -0.3928f;
+    private static final float HEAD_PIVOT_SNEAKING = -0.4639f;
+    private static final float HEAD_DROP_SNEAKING = -0.071f;
+    private static final float BODY_PIVOT_SNEAKING = -0.4053f;
+    private static final float BODY_DROP_SNEAKING = -0.0125f;
+    private static final float BODY_LEAN_SNEAKING = 28.65f;
 
     private final MotionEngine engine;
     private volatile Location location;
@@ -58,11 +63,7 @@ public final class MotionDisplay {
     private double lastX;
     private double lastY;
     private double lastZ;
-    private float lastYaw;
-    // the server keeps no real body turn for players, so it is worked out here like the client does
-    private float bodyYaw;
-    private double previousX;
-    private double previousZ;
+    private RidePose lastPose = RidePose.turn(0f);
 
     volatile boolean playing;
     private volatile boolean visibleByDefault = true;
@@ -307,16 +308,14 @@ public final class MotionDisplay {
             throw new IllegalArgumentException("the vehicle is not in the world");
         }
         Location at = vehicle.getLocation();
-        bodyYaw = vehicle instanceof LivingEntity living && !(vehicle instanceof Player) ? living.getBodyYaw() : at.getYaw();
-        previousX = at.getX();
-        previousZ = at.getZ();
-        float yaw = follow == Follow.NONE ? at.getYaw() : yawOf(vehicle, follow, at);
-        at.setYaw(yaw);
-        at.setPitch(0f);
         this.vehicle = vehicle;
         this.follow = follow;
+        lastPose = RidePose.turn(at.getYaw());
+        RidePose pose = poseOf(vehicle, at);
+        at.setYaw(pose.yaw());
+        at.setPitch(0f);
         location = at.clone();
-        remember(at, yaw);
+        remember(at, pose);
         int id = vehicle.getEntityId();
         int[] passengers = vehicle.getPassengers().stream().mapToInt(Entity::getEntityId).toArray();
         UUID world = at.getWorld().getUID();
@@ -324,7 +323,7 @@ public final class MotionDisplay {
         double y = at.getY();
         double z = at.getZ();
         engine.riding.add(this);
-        engine.submit(() -> engine.ride(state, id, passengers, world, x, y, z, yaw));
+        engine.submit(() -> engine.ride(state, id, passengers, world, x, y, z, pose));
         return this;
     }
 
@@ -383,7 +382,7 @@ public final class MotionDisplay {
         for (Map.Entry<String, Entity> seat : seatEntities.entrySet()) {
             double[] offset = seats.get(seat.getKey());
             if (offset != null && seat.getValue().isValid()) {
-                seat.getValue().teleport(seatSpot(offset), TeleportFlag.EntityState.RETAIN_PASSENGERS);
+                seat.getValue().teleport(seatSpot(offset));
             }
         }
     }
@@ -432,82 +431,58 @@ public final class MotionDisplay {
             return;
         }
         ridden.getLocation(scratch);
-        float yaw = follow == Follow.NONE ? lastYaw : yawOf(ridden, follow, scratch);
-        if (follow == Follow.BODY && ridden instanceof Player) {
-            yaw = turnBody(scratch);
-        }
+        RidePose pose = poseOf(ridden, scratch);
         UUID world = scratch.getWorld().getUID();
         double dx = scratch.getX() - lastX;
         double dy = scratch.getY() - lastY;
         double dz = scratch.getZ() - lastZ;
         boolean moved = dx * dx + dy * dy + dz * dz > RIDE_MOVE * RIDE_MOVE || !world.equals(lastWorld);
-        boolean turned = Math.abs(wrap(yaw - lastYaw)) >= RIDE_TURN;
+        boolean turned = Math.abs(Bodies.wrap(pose.yaw() - lastPose.yaw())) >= RIDE_TURN
+                || Math.abs(pose.tilt() - lastPose.tilt()) >= RIDE_TURN
+                || pose.pivot() != lastPose.pivot() || pose.drop() != lastPose.drop();
         if (!moved && !turned) {
             return;
         }
+        RidePose send = turned ? pose : lastPose;
         Location at = scratch.clone();
-        at.setYaw(turned ? yaw : lastYaw);
+        at.setYaw(send.yaw());
         at.setPitch(0f);
         location = at;
-        float sendYaw = turned ? yaw : lastYaw;
-        remember(at, sendYaw);
+        remember(at, send);
         double x = at.getX();
         double y = at.getY();
         double z = at.getZ();
-        engine.submitQuietly(() -> engine.follow(state, world, x, y, z, sendYaw));
+        engine.submitQuietly(() -> engine.follow(state, world, x, y, z, send));
     }
 
-    private void remember(Location at, float yaw) {
+    private void remember(Location at, RidePose pose) {
         lastWorld = at.getWorld().getUID();
         lastX = at.getX();
         lastY = at.getY();
         lastZ = at.getZ();
-        lastYaw = yaw;
+        lastPose = pose;
     }
 
-    private float yawOf(Entity entity, Follow follow, Location at) {
-        if (follow == Follow.BODY && entity instanceof Player) {
-            return bodyYaw;
+    // a player is done like the model: the head turns and tilts around the neck, the body
+    // follows our copy of the client body turn and leans when sneaking. other entities only turn
+    private RidePose poseOf(Entity entity, Location at) {
+        if (follow == Follow.NONE) {
+            return RidePose.turn(lastPose.yaw());
+        }
+        if (entity instanceof Player player) {
+            boolean sneaking = player.isSneaking();
+            if (follow == Follow.HEAD) {
+                return new RidePose(at.getYaw(), at.getPitch(), sneaking ? HEAD_PIVOT_SNEAKING : HEAD_PIVOT,
+                        sneaking ? HEAD_DROP_SNEAKING : 0f);
+            }
+            return sneaking
+                    ? new RidePose(engine.bodies.yaw(player), BODY_LEAN_SNEAKING, BODY_PIVOT_SNEAKING, BODY_DROP_SNEAKING)
+                    : RidePose.turn(engine.bodies.yaw(player));
         }
         if (follow == Follow.BODY && entity instanceof LivingEntity living) {
-            return living.getBodyYaw();
+            return RidePose.turn(living.getBodyYaw());
         }
-        return at.getYaw();
-    }
-
-    // same steps as vanilla LivingEntity: walking pulls the body to the walk direction (backwards keeps it
-    // facing forward), and the head can only turn 50 degrees away from the body before it drags the body along
-    private float turnBody(Location at) {
-        double dx = at.getX() - previousX;
-        double dz = at.getZ() - previousZ;
-        previousX = at.getX();
-        previousZ = at.getZ();
-        float head = at.getYaw();
-        float target = bodyYaw;
-        if (dx * dx + dz * dz > BODY_WALK_SQUARED) {
-            target = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90f;
-            float away = Math.abs(wrap(head) - target);
-            if (away > 95f && away < 265f) {
-                target -= 180f;
-            }
-        }
-        bodyYaw += wrap(target - bodyYaw) * BODY_FOLLOW;
-        float headAway = wrap(head - bodyYaw);
-        if (Math.abs(headAway) > BODY_MAX_HEAD) {
-            bodyYaw += headAway - Math.signum(headAway) * BODY_MAX_HEAD;
-        }
-        bodyYaw = wrap(bodyYaw);
-        return bodyYaw;
-    }
-
-    private static float wrap(float degrees) {
-        float d = degrees % 360f;
-        if (d >= 180f) {
-            d -= 360f;
-        } else if (d < -180f) {
-            d += 360f;
-        }
-        return d;
+        return RidePose.turn(at.getYaw());
     }
 
     /** Lets this player see the display, even when it is not visible by default. */

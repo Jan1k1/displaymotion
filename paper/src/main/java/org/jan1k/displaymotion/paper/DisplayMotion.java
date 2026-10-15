@@ -27,6 +27,8 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerAnimationEvent;
+import org.bukkit.event.player.PlayerAnimationType;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
@@ -208,6 +210,7 @@ public final class DisplayMotion {
     }
 
     private void followVehicles() {
+        engine.bodies.tick(Bukkit.getOnlinePlayers(), rideScratch);
         for (MotionDisplay display : engine.riding) {
             display.followVehicle(rideScratch);
         }
@@ -295,17 +298,27 @@ public final class DisplayMotion {
         @EventHandler(priority = EventPriority.MONITOR)
         public void onQuit(PlayerQuitEvent event) {
             UUID id = event.getPlayer().getUniqueId();
+            engine.bodies.forget(id);
             engine.submitQuietly(() -> engine.viewerGone(id));
         }
 
         @EventHandler(priority = EventPriority.MONITOR)
         public void onWorldChange(PlayerChangedWorldEvent event) {
+            engine.bodies.reset(event.getPlayer());
             reset(event.getPlayer());
         }
 
         @EventHandler(priority = EventPriority.MONITOR)
         public void onRespawn(PlayerRespawnEvent event) {
+            engine.bodies.reset(event.getPlayer());
             reset(event.getPlayer());
+        }
+
+        @EventHandler(priority = EventPriority.MONITOR)
+        public void onSwing(PlayerAnimationEvent event) {
+            if (event.getAnimationType() == PlayerAnimationType.ARM_SWING) {
+                engine.bodies.swing(event.getPlayer());
+            }
         }
 
         @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)

@@ -438,6 +438,23 @@ class MotionEngineTest {
     }
 
     @Test
+    void tiltTurnsAroundThePivotLikeAHeadOnItsNeck() {
+        MotionDisplay display = display();
+        tick();
+        tick();
+
+        // looking straight down, the neck 0.4 under the passenger point is the pivot
+        engine.submit(() -> engine.ride(display.state(), VEHICLE, new int[0], WORLD, 0, 0, 0, new RidePose(0f, 90f, -0.4f, 0f)));
+        List<Packet> packets = tick();
+
+        // block center goes from (0, 0, 0) to (0, -0.4, 0.4), forward and down, the cube corner follows
+        Vector3f translation = (Vector3f) value(packets.stream().filter(p -> p.kind().equals("meta")).findFirst().orElseThrow(), 11);
+        assertEquals(-0.5f, translation.x, 1e-5f);
+        assertEquals(0.1f, translation.y, 1e-5f);
+        assertEquals(-0.1f, translation.z, 1e-5f);
+    }
+
+    @Test
     void newViewerGetsThePassengersRightAfterTheSpawn() {
         MotionDisplay display = display();
         engine.submit(() -> engine.ride(display.state(), VEHICLE, new int[0], WORLD, 0, 0, 0, 0f));

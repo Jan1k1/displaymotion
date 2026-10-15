@@ -35,6 +35,10 @@ final class DisplayState {
     // extra turn around Y on top of the entity yaw, in the transform. a riding display turns with this
     // because the client ignores turn packets for passengers
     float turn;
+    // tilt around X at the pivot height, then moved down by drop. for hats on a head and leaning backpacks
+    float tilt;
+    float pivot;
+    float drop;
 
     double range;
     int index;
