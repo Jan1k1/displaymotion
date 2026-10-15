@@ -1,6 +1,11 @@
 package org.jan1k.displaymotion.packetevents;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
+import org.bukkit.Color;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.block.data.BlockData;
 import org.jan1k.displaymotion.Animation;
 import org.jan1k.displaymotion.Animations;
@@ -16,6 +21,7 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 public final class Effects {
 
+    private static final Color TRANSPARENT = Color.fromARGB(0, 0, 0, 0);
     private static final int SHATTER_PIECES = 10;
     private static final int SHATTER_TICKS = 34;
 
@@ -58,6 +64,32 @@ public final class Effects {
             display.play("piece_" + i, paths[i]);
         }
         return display.play(Animations.hold(SHATTER_TICKS + 2), display::remove);
+    }
+
+    /** A gravestone with this name rises out of the ground, stays 3 seconds and sinks back. */
+    public MotionDisplay tombstone(Location at, Component name) {
+        Objects.requireNonNull(name, "name");
+        BlockData stone = Material.POLISHED_ANDESITE.createBlockData();
+        MotionDisplay display = motion.model(at)
+                .block("base", stone, Pose.IDENTITY.withOffset(0f, 0.08f, 0f).withScale(0.9f, 0.16f, 0.55f))
+                .block("stone", stone, Pose.IDENTITY.withOffset(0f, 0.62f, 0f).withScale(0.62f, 0.95f, 0.16f))
+                .block("cap", stone, Pose.IDENTITY.withOffset(0f, 1.12f, 0f).withScale(0.72f, 0.1f, 0.2f))
+                .block("moss", Material.MOSS_BLOCK.createBlockData(), Pose.IDENTITY
+                        .withOffset(-0.2f, 0.22f, 0.02f).withScale(0.26f, 0.12f, 0.18f))
+                .text("rip", Component.text("RIP", NamedTextColor.DARK_GRAY, TextDecoration.BOLD), Pose.IDENTITY
+                        .withOffset(0f, 0.8f, 0.085f).withScale(0.7f))
+                .text("name", name, Pose.IDENTITY.withOffset(0f, 0.5f, 0.085f).withScale(0.4f))
+                .spawn()
+                .background(TRANSPARENT);
+
+        // starts under the ground, so the ground hides it while it comes up
+        Animation rise = Animation.keyframes()
+                .at(0, Pose.IDENTITY.withOffset(0f, -1.3f, 0f).withRotation(0f, 0f, 6f))
+                .at(14, Pose.IDENTITY, Ease.OUT)
+                .at(74, Pose.IDENTITY)
+                .at(90, Pose.IDENTITY.withOffset(0f, -1.3f, 0f), Ease.IN)
+                .build();
+        return display.play(rise, display::remove);
     }
 
     private static float spread(ThreadLocalRandom random, float amount) {
