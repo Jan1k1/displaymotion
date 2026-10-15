@@ -1,8 +1,10 @@
 # Cookbook
 
-Short recipes. Each one is complete code you can copy.
+Short recipes. Each one is code you can copy. They use `motion` for your `DisplayMotion` and `location` for a `Location`. See [Getting started](getting-started.md) for how to make them.
 
 ## Floating item that spins
+
+Good for a reward, a drop or a shop item. It grows in, then spins and floats.
 
 ```java
 static final Animation FLOAT = Animations.popIn(20).then(Animations.spin(80).with(Animations.bob(0.3f, 80)));
@@ -12,11 +14,15 @@ motion.item(location, ItemStack.of(Material.NETHER_STAR)).play(FLOAT);
 
 ## Remove with an animation
 
+A display that just disappears looks cheap. Shrink it first. The code after the comma runs when the animation ends.
+
 ```java
 display.play(Animations.popOut(10), display::remove);
 ```
 
 ## Follow a player like a pet
+
+A task moves the display every 2 ticks. The `4` makes the client glide over 4 ticks, so the pet trails a bit behind the player.
 
 ```java
 MotionDisplay pet = motion.item(spot(player), ItemStack.of(Material.DIAMOND_SWORD)).play(FLOAT);
@@ -29,7 +35,24 @@ Bukkit.getScheduler().runTaskTimer(plugin, task -> {
 }, 2L, 2L);
 ```
 
+`spot` is a small helper that picks a place behind the player:
+
+```java
+static Location spot(Player player) {
+    Location spot = player.getLocation();
+    Vector back = spot.getDirection().setY(0);
+    if (back.lengthSquared() > 1e-6) {
+        spot.subtract(back.normalize().multiply(1.2));
+    }
+    spot.add(0, 1.6, 0);
+    spot.setPitch(0f);
+    return spot;
+}
+```
+
 ## Only one player sees it
+
+Use this for quest markers or private hints. Nobody sees the display until you call `show`.
 
 ```java
 motion.item(location, ItemStack.of(Material.EMERALD))
@@ -46,10 +69,18 @@ display.show(player);   // back again
 
 ## Label that faces the player
 
+A billboard text turns to look at every player, so it is always readable.
+
 ```java
 motion.text(location, Component.text("Spawn", NamedTextColor.GOLD))
         .billboard(Display.Billboard.CENTER)
         .play(Animations.popIn(15));
+```
+
+## Change a text later
+
+```java
+label.text(Component.text("Open now", NamedTextColor.AQUA));   // label is a text display you spawned before
 ```
 
 ## Glowing outline
@@ -60,11 +91,15 @@ display.glow(Color.AQUA);   // null turns it off
 
 ## Always bright, even in a cave
 
+By default a display is lit by the world, so it is dark in a cave. A fixed light level fixes this.
+
 ```java
 display.brightness(new Display.Brightness(15, 15));
 ```
 
 ## Mirror a part
+
+A negative scale flips a part on that axis.
 
 ```java
 Pose.IDENTITY.withScale(-1f, 1f, 1f)
@@ -78,3 +113,51 @@ static final Animation HOP = Animations.slide(0f, 1f, 0f, 6, Ease.OUT)
 ```
 
 `then` starts each part where the last ended, so the second slide brings it back down.
+
+## A button you can click
+
+Right click presses it and counts. Left click breaks it.
+
+```java
+static final Animation PRESS = Animation.keyframes()
+        .at(0, Pose.IDENTITY)
+        .at(2, Pose.IDENTITY.withOffset(0f, -0.08f, 0f))
+        .at(6, Pose.IDENTITY)
+        .build();
+
+int[] clicks = {0};
+MotionDisplay button = motion.model(location)
+        .block("base", Material.POLISHED_BLACKSTONE.createBlockData(), Pose.IDENTITY.withOffset(0f, 0.1f, 0f).withScale(0.9f, 0.2f, 0.9f))
+        .block("cap", Material.RED_CONCRETE.createBlockData(), Pose.IDENTITY.withOffset(0f, 0.27f, 0f).withScale(0.6f, 0.14f, 0.6f))
+        .text("label", Component.text("Click me"), Pose.IDENTITY.withOffset(0f, 0.8f, 0f))
+        .spawn()
+        .billboard("label", Display.Billboard.CENTER)
+        .hitbox(1f, 0.5f);
+
+button.onClick(click -> {
+    if (click.leftClick()) {
+        motion.effects().shatter(location, Material.RED_CONCRETE.createBlockData());
+        button.remove();
+        return;
+    }
+    clicks[0]++;
+    button.play("cap", PRESS).text("label", Component.text("Clicks: " + clicks[0]));
+});
+```
+
+Try it in game with `/dm button` from the example plugin.
+
+## Spawn an imported model
+
+Load the file once. Spawn it every time you need it. See [Importing](importing.md) for the full steps.
+
+```java
+ImportedModel robot = ImportedModel.load(getDataFolder().toPath().resolve("models/robot.bbmodel"));
+
+MotionDisplay display = robot.spawn(motion, location, 0.5f);
+robot.play(display, "walk");
+```
+
+## Remove everything when the plugin stops
+
+You do not need to do anything. The library removes all displays when your plugin disables. To do it by hand, call `motion.close()`.

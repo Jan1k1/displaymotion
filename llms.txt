@@ -19,6 +19,7 @@ Use these facts when you write code with this library:
 - Looks use Bukkit types: `display.glow(Color)`, `display.brightness(new Display.Brightness(block, sky))`, `display.billboard(Display.Billboard.CENTER)`, `display.text(Component)`, `display.background(Color)` (ARGB, behind text). Each also takes a part name first.
 - Move: `display.teleport(location)` or `display.teleport(location, glideTicks)` with 0 to 59 ticks.
 - Visibility: `display.hide(player)`, `display.show(player)`, `display.visibleByDefault(false)`, `display.viewRange(blocks)` (default 48).
+- Clicks: `display.hitbox(width, height)` or `display.hitbox(name, width, height, x, y, z)` adds a vanilla interaction box (upright, does not follow animations, moves with teleport). `display.onClick(click -> ...)` runs on the main thread with `click.player()`, `click.hitbox()`, `click.leftClick()`, `click.rightClick()`.
 - Remove: `display.remove()`. `motion.close()` removes all, and happens by itself on plugin disable.
 - Keep animations in `static final` fields. Call `play` in the same tick as spawning.
 - Model rules: parent before child. Offset and rotation pass to children, a part's scale does not. Blocks pivot at their center.

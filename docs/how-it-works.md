@@ -1,5 +1,7 @@
 # How it works
 
+You do not need this page to use the library. Read it if you want to know why it is fast, or why something has a limit.
+
 ## Threads
 
 - **Main thread:** every 10 ticks it copies the online players (position, world, connection). Events for quit, teleport, respawn and world change only queue a note. Nothing else runs there.

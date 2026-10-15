@@ -1,6 +1,12 @@
 # Models
 
-A model is many displays that move as one. Parts can be blocks, items or text.
+A model is many displays that move as one. Use a model when one block or item is not enough: a lamp, a windmill, a pet with a body and a head.
+
+Parts can be blocks, items or texts. Every part has a **name**. You use the name later to move or change that part.
+
+If you draw your model in an editor, read [Importing](importing.md) instead. This page is for building models in code.
+
+## Your first model
 
 ```java
 MotionDisplay lamp = motion.model(location)
@@ -11,9 +17,21 @@ MotionDisplay lamp = motion.model(location)
         .play(Animations.popIn(20));
 ```
 
+How to read it:
+
+- `motion.model(location)` starts a model. The location is the point where it stands.
+- `.block("post", ...)` adds a block part named `post`. Its offset is `(0, 1, 0)` and its scale is `(1, 2, 1)`. So it is a post that is one block wide and two blocks tall, and it stands on the location.
+- `.item("light", ...)` adds a lantern. The last text `"post"` is the **parent**. The lantern moves with the post.
+- `.text("sign", ...)` adds a text part, also under the post.
+- `.spawn()` makes the model. It returns a `MotionDisplay`.
+- `.play(...)` plays an animation on the whole model.
+
+For a block part, the **offset is where its center goes** and the **scale is its size in blocks**. A block with scale `(1, 2, 1)` is a post two blocks tall. To make it stand on the floor, put its center one block up.
+
 ## Rules
 
 - A parent must be added before its children.
+- Names must be different. Two parts with the same name give an error.
 - Offset and rotation of a part pass to its children.
 - Scale of a part is its own size. Children do not get it.
 - Animations pass everything to the children, scale too.
@@ -21,18 +39,22 @@ MotionDisplay lamp = motion.model(location)
 - The model faces the yaw and pitch of the spawn location.
 - At most 256 parts.
 
-## Animate one part
+## Parents
+
+A parent is a part that other parts follow. When the parent moves or turns, the children go with it. This is how you make arms, doors and wheels.
 
 ```java
 windmill.play(Animations.popIn(25));                                  // the whole model
 windmill.play("axle", Animations.turn(0f, 0f, -360f, 120).loop());   // the axle and everything on it
 ```
 
-Tip: when many parts turn around one point, put them under one parent and turn the parent.
+Tip: when many parts turn around one point, put them under one parent and turn the parent. This is easier than turning every part.
 
 ## Groups
 
-A group is an invisible pivot. Nothing is spawned for it, it only holds children.
+A group is an invisible pivot. Nothing is shown for it. It only holds children, and you can turn or move it.
+
+Use a group when the point you want to turn around is not a block. A door turns around its hinge. A lid turns around its back edge.
 
 ```java
 motion.model(location)
@@ -41,6 +63,8 @@ motion.model(location)
         .spawn()
         .play("hinge", Animations.turn(-70f, 0f, 0f, 10));   // the lid opens around the hinge
 ```
+
+The hinge is the pivot. The lid sits 0.4 blocks away from the hinge. When the hinge turns, the lid swings up like a real lid.
 
 ## Matrix parts
 
@@ -56,6 +80,8 @@ There are matrix versions of `block`, `item`, `text` and `group`. The importers 
 
 ## Looks per part
 
+These calls change how one part looks. Leave the part name out to change every part.
+
 ```java
 lamp.glow("light", Color.ORANGE);
 lamp.brightness("sign", new Display.Brightness(15, 15));
@@ -63,6 +89,38 @@ lamp.billboard("sign", Display.Billboard.CENTER);
 lamp.text("sign", Component.text("Open"));
 lamp.background("sign", Color.fromARGB(0, 0, 0, 0));   // no dark box behind the text
 ```
+
+- `glow` draws a colored outline. Use `null` to turn it off. Text parts do not glow.
+- `brightness` sets a fixed light level (block light, sky light). The part is bright even in a cave.
+- `billboard` makes the part turn to the player. `CENTER` turns in every direction.
+- `text` changes the text of a text part while it is shown.
+- `background` changes the box behind a text. Alpha 0 means no box.
+
+## Clicks
+
+A display has no hitbox, so players click through it. Give it one with `hitbox`, then listen with `onClick`:
+
+```java
+MotionDisplay chest = model.spawn(motion, location)
+        .hitbox(1f, 1f);                           // 1 block wide, 1 block high
+
+chest.onClick(click -> {
+    if (click.rightClick()) {
+        model.play(chest, "open");
+    }
+});
+```
+
+- The box is a vanilla Interaction entity, sent with packets like the display. Players need no mod.
+- `hitbox(width, height)` puts the bottom center of the box at the display location. Its name is `main`.
+- For more boxes, give each one a name and an offset: `hitbox("lid", 0.8f, 0.3f, 0, 0.6, 0)`. The offset turns with the display.
+- `onClick` runs on the main thread, so you can use the Bukkit API there. `click.player()` is who clicked, `click.hitbox()` is the name of the box, `click.leftClick()` is true for a left click.
+- The box stays upright and does not follow animations. It moves with `teleport`.
+- Only players who see the display can click it. Clicks from too far away are ignored.
+
+## Find the part names
+
+`display.parts()` gives the names of all parts, in the order you added them.
 
 ## Example
 
