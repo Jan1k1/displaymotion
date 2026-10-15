@@ -316,13 +316,15 @@ final class MotionEngine {
         float turn = wrap(pose.yaw() - display.yaw);
         float ownTurn = display.wearer == null ? turn : wrap(pose.own() - display.yaw);
         float ownTilt = display.wearer == null ? pose.tilt() : pose.ownTilt();
-        if (turn == display.turn && ownTurn == display.ownTurn && ownTilt == display.ownTilt && pose.tilt() == display.tilt
+        boolean ownHidden = display.wearer != null && pose.ownHidden();
+        if (turn == display.turn && ownTurn == display.ownTurn && ownTilt == display.ownTilt && ownHidden == display.ownHidden && pose.tilt() == display.tilt
                 && pose.pivot() == display.pivot && pose.drop() == display.drop) {
             return;
         }
         display.turn = turn;
         display.ownTurn = ownTurn;
         display.ownTilt = ownTilt;
+        display.ownHidden = ownHidden;
         display.tilt = pose.tilt();
         display.pivot = pose.pivot();
         display.drop = pose.drop();
@@ -366,6 +368,7 @@ final class MotionEngine {
         display.turn = 0f;
         display.ownTurn = 0f;
         display.ownTilt = 0f;
+        display.ownHidden = false;
         display.tilt = 0f;
         display.pivot = 0f;
         display.drop = 0f;

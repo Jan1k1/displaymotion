@@ -41,6 +41,7 @@ final class DisplayState {
     // tilt around X at the pivot height, then moved down by drop. for hats on a head and leaning backpacks
     float tilt;
     float ownTilt;
+    boolean ownHidden;
     float pivot;
     float drop;
 

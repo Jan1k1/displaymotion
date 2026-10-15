@@ -85,10 +85,12 @@ final class Composer {
             if (ownTilted) {
                 Affine.multiply(toOwn, 0, local, 0, ownLocal, 0);
                 decomposer.decompose(ownLocal, 0, ownCurrent, 0);
+                hideIf(display.ownHidden, ownCurrent);
                 part.ownChanges = changes(part.own, ownCurrent) | part.changes & DisplayPacket.BOX;
                 System.arraycopy(ownCurrent, 0, part.own, 0, Decomposer.SIZE);
             } else if (display.wearer != null) {
                 turnAround(current, display.ownTurn - display.turn, ownCurrent);
+                hideIf(display.ownHidden, ownCurrent);
                 part.ownChanges = changes(part.own, ownCurrent) | part.changes & DisplayPacket.BOX;
                 System.arraycopy(ownCurrent, 0, part.own, 0, Decomposer.SIZE);
             }
@@ -110,6 +112,15 @@ final class Composer {
         out[9] = -out[3] * above;
         out[10] = pivot - out[4] * above;
         out[11] = -out[5] * above;
+    }
+
+    // a backpack the wearer would see in first person when it looks down shrinks to nothing, only for it
+    private static void hideIf(boolean hidden, float[] values) {
+        if (hidden) {
+            values[Decomposer.SX] = 0f;
+            values[Decomposer.SY] = 0f;
+            values[Decomposer.SZ] = 0f;
+        }
     }
 
     // turn plus move only, so the inverse is the transposed turn and the move turned back

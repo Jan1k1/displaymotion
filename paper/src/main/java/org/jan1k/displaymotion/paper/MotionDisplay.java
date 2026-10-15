@@ -47,6 +47,8 @@ public final class MotionDisplay {
     private static final float LEAD_EXTRA_TICKS = 1.5f;
     private static final float MAX_LEAD_DEGREES = 60f;
     private static final float HEAD_SPEED_SMOOTHING = 0.5f;
+    // from 35 degrees down the top of a backpack comes into the first person view
+    private static final float LOOK_DOWN_HIDE = 35f;
     static final float HEAD_PIVOT_SNEAKING = -0.46390625f;
     static final float HEAD_DROP_SNEAKING = -0.07109375f;
     static final float BODY_PIVOT_SNEAKING = -0.4053125f;
@@ -66,7 +68,8 @@ public final class MotionDisplay {
     private final Map<String, Entity> seatEntities = new ConcurrentHashMap<>();
     private volatile Entity vehicle;
     private volatile Follow follow = Follow.BODY;
-    private volatile boolean wearerSees = true;
+    // null is the default for the follow, see effectiveSelfView
+    private volatile SelfView selfView;
     // main thread only, what the last ride update sent
     private UUID lastWorld;
     private double lastX;
@@ -325,7 +328,7 @@ public final class MotionDisplay {
         this.vehicle = vehicle;
         this.follow = follow;
         lastPose = RidePose.turn(at.getYaw());
-        RidePose pose = poseOf(vehicle, at);
+        RidePose pose = selfPose(vehicle, at, poseOf(vehicle, at));
         at.setYaw(pose.yaw());
         at.setPitch(0f);
         location = at.clone();
@@ -337,7 +340,7 @@ public final class MotionDisplay {
         double y = at.getY();
         double z = at.getZ();
         engine.riding.add(this);
-        if (!wearerSees && vehicle instanceof Player player) {
+        if (effectiveSelfView() == SelfView.HIDE && vehicle instanceof Player player) {
             hide(player);
         }
         UUID wearer = vehicle instanceof Player player ? player.getUniqueId() : null;
@@ -419,7 +422,7 @@ public final class MotionDisplay {
         if (vehicle == null || isRemoved()) {
             return this;
         }
-        if (!wearerSees && vehicle instanceof Player player) {
+        if (effectiveSelfView() == SelfView.HIDE && vehicle instanceof Player player) {
             show(player);
         }
         vehicle = null;
@@ -429,26 +432,43 @@ public final class MotionDisplay {
     }
 
     /**
-     * False hides the display from the player it rides, other players still see it. Good for a backpack
-     * that the wearer should not see when they look down. The server cannot tell first person from F5,
-     * so the wearer does not see it in F5 either. True by default.
+     * What the player that wears this display sees of it, other players always see it.
+     * {@code null} goes back to the default: {@link SelfView#HIDE_LOOKING_DOWN} for {@link Follow#BODY},
+     * {@link SelfView#SHOW} otherwise.
      */
-    public MotionDisplay wearerSees(boolean sees) {
+    public MotionDisplay selfView(SelfView view) {
         requireAlive();
-        wearerSees = sees;
-        if (vehicle instanceof Player player) {
-            if (sees) {
-                show(player);
-            } else {
+        SelfView before = effectiveSelfView();
+        selfView = view;
+        SelfView after = effectiveSelfView();
+        if (before != after && vehicle instanceof Player player) {
+            if (after == SelfView.HIDE) {
                 hide(player);
+            } else if (before == SelfView.HIDE) {
+                show(player);
             }
         }
         return this;
     }
 
-    /** False after {@link #wearerSees(boolean)} was set to false. */
-    public boolean isSeenByWearer() {
-        return wearerSees;
+    /** What the wearer sees now, the default for the follow when nothing was set. */
+    public SelfView selfView() {
+        return effectiveSelfView();
+    }
+
+    private SelfView effectiveSelfView() {
+        SelfView view = selfView;
+        if (view != null) {
+            return view;
+        }
+        return follow == Follow.BODY ? SelfView.HIDE_LOOKING_DOWN : SelfView.SHOW;
+    }
+
+    private RidePose selfPose(Entity entity, Location at, RidePose pose) {
+        if (entity instanceof Player && effectiveSelfView() == SelfView.HIDE_LOOKING_DOWN) {
+            return pose.hiddenForWearer(at.getPitch() > LOOK_DOWN_HIDE);
+        }
+        return pose;
     }
 
     /** What the display rides, or {@code null}. */
@@ -475,7 +495,7 @@ public final class MotionDisplay {
             return;
         }
         ridden.getLocation(scratch);
-        RidePose pose = poseOf(ridden, scratch);
+        RidePose pose = selfPose(ridden, scratch, poseOf(ridden, scratch));
         UUID world = scratch.getWorld().getUID();
         double dx = scratch.getX() - lastX;
         double dy = scratch.getY() - lastY;
@@ -485,6 +505,7 @@ public final class MotionDisplay {
                 || Math.abs(Bodies.wrap(pose.own() - lastPose.own())) >= RIDE_TURN
                 || Math.abs(pose.tilt() - lastPose.tilt()) >= RIDE_TURN
                 || Math.abs(pose.ownTilt() - lastPose.ownTilt()) >= RIDE_TURN
+                || pose.ownHidden() != lastPose.ownHidden()
                 || pose.pivot() != lastPose.pivot() || pose.drop() != lastPose.drop();
         if (!moved && !turned) {
             return;

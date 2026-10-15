@@ -472,6 +472,22 @@ class MotionEngineTest {
     }
 
     @Test
+    void wearerLookingDownGetsItShrunkToNothing() {
+        MotionDisplay display = display();
+        tick();
+        tick();
+
+        engine.submit(() -> engine.ride(display.state(), VEHICLE, new int[0], WORLD, 0, 0, 0,
+                RidePose.turn(0f).hiddenForWearer(true), PLAYER));
+        List<Packet> packets = tick();
+
+        Vector3f scale = (Vector3f) value(packets.stream().filter(p -> p.kind().equals("meta")).reduce((a, b) -> b).orElseThrow(), 12);
+        assertEquals(0f, scale.x);
+        assertEquals(0f, scale.y);
+        assertEquals(0f, scale.z);
+    }
+
+    @Test
     void newViewerGetsThePassengersRightAfterTheSpawn() {
         MotionDisplay display = display();
         engine.submit(() -> engine.ride(display.state(), VEHICLE, new int[0], WORLD, 0, 0, 0, 0f));
