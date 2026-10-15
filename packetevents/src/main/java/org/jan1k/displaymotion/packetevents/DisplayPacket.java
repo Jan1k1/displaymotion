@@ -131,7 +131,7 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
 
     private void writeTransform() {
         float[] s = part.sent;
-        // a box only update must not restart the transform blend
+        // box only update, dont restart the transform blend or it stutters
         if ((changes & ALL) != 0) {
             entry(START_DELAY_SLOT, intType);
             writeVarInt(0);

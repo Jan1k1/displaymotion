@@ -49,7 +49,7 @@ public final class Decomposer {
                 v[i * 3 + j] = i == j ? 1 : 0;
             }
         }
-        // no shear means the columns are already the answer, skip svd so the right rotation stays still
+        // if theres no shear the colums are already the answer, skip svd so right rotation stays still
         if (!orthogonal()) {
             jacobi();
         }

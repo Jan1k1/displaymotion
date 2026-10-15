@@ -172,7 +172,7 @@ public final class MotionDisplay {
 
     private MotionDisplay brightness(int part, Display.Brightness brightness) {
         requireAlive();
-        // packed the same way vanilla does it, -1 means use the world light
+        // packed same way vanilla does it, -1 means use the world light
         int packed = brightness == null ? -1
                 : brightness.getBlockLight() << 4 | brightness.getSkyLight() << 20;
         engine.submit(() -> engine.look(state, part, p -> p.brightness = packed));

@@ -64,8 +64,8 @@ final class Composer {
         }
     }
 
-    // the client only culls a display when width and height are not 0, and its box goes from the feet up,
-    // so a part gets a box only while all of it stays above the spawn point. the box never shrinks
+    // client only culls a display when width and height arent 0 and the box goes from the feet up
+    // so a part only gets a box while all of it is above the spawn point. box never shrinks
     private boolean cullBox(PartState part, boolean upright) {
         if (!upright || part.kind == PartState.TEXT || part.billboard != 0) {
             return noBox(part);

@@ -82,14 +82,14 @@ public final class ModelBuilder {
         Objects.requireNonNull(item, "item");
         Objects.requireNonNull(transform, "transform");
         var converted = SpigotConversionUtil.fromBukkitItemStack(item);
-        // bukkit's enum is in the same order as the network ids (it just lacks ON_SHELF)
+        // bukkits enum is in the same order as the network ids, it just doesnt have ON_SHELF
         int itemTransform = transform.ordinal();
         return add(name, pose, parent, (id, parentIndex) -> PartState.item(name, id, parentIndex, converted, itemTransform, pose));
     }
 
     static void checkText(Component text) {
         Objects.requireNonNull(text, "text");
-        // viaversion kicks old clients on huge text displays, so keep it sane
+        // viaversion kicks old clients on huge text displays so keep it sane
         int length = GsonComponentSerializer.gson().serialize(text).length();
         if (length > MAX_TEXT_LENGTH) {
             throw new IllegalArgumentException("text is too big, " + length + " chars of json, the limit is " + MAX_TEXT_LENGTH);

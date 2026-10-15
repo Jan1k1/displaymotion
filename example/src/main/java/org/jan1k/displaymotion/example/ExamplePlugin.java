@@ -38,7 +38,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
     private static final Animation IDLE = Animations.spin(80).with(Animations.bob(0.3f, 80));
     private static final Animation SHOW = Animations.popIn(20).then(IDLE);
     private static final Animation HIDE = Animations.popOut(10);
-    // text spinning would be unreadable, so it only bobs
+    // spinning text is unreadable so it only bobs
     private static final Animation SHOW_TEXT = Animations.popIn(20).then(Animations.bob(0.15f, 60));
 
     private static final List<String> EFFECTS = List.of("shatter", "tombstone", "swords", "soul");
@@ -69,7 +69,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
         if (effect == null) {
             return;
         }
-        // turn it so the front looks at the killer, the tombstone text has to be readable
+        // turn it so the front looks at the killer, tombstone text has to be readable
         Location at = event.getEntity().getLocation();
         at.setDirection(killer.getLocation().toVector().subtract(at.toVector()));
         at.setPitch(0f);
@@ -182,7 +182,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
     private MotionDisplay pet(Player player) {
         MotionDisplay pet = motion.item(petSpot(player), ItemStack.of(Material.DIAMOND_SWORD),
                 ItemDisplay.ItemDisplayTransform.GROUND).play(SHOW);
-        // move it every 2 ticks and let the client glide over 4, so it trails a bit behind like a pet
+        // move it every 2 ticks and let the client glide over 4 so it trails a bit behind like a pet
         getServer().getScheduler().runTaskTimer(this, task -> {
             if (pet.isRemoved() || !player.isOnline()) {
                 task.cancel();
@@ -210,7 +210,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 .play(SHOW_TEXT);
     }
 
-    // front of the model is +z, so turn it to look back at the player
+    // front of the model is +z so turn it to look back at the player
     private static Location inFront(Player player, double distance) {
         Location feet = player.getLocation();
         Vector forward = feet.getDirection().setY(0);
@@ -229,7 +229,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
         box(model, "foundation", Material.COBBLESTONE, 0, 0.2f, 0, 2.4f, 0.4f, 2.4f);
         box(model, "foundation_top", Material.POLISHED_ANDESITE, 0, 0.45f, 0, 2.2f, 0.1f, 2.2f);
 
-        // two tiers, the top one thinner, that's how the old dutch ones look
+        // two tiers, top one thinner, thats how the old dutch ones look
         tier(model, "lower", 1.4f, 1.8f, 1.8f);
         box(model, "band_lower", Material.DARK_OAK_PLANKS, 0, 2.3f, 0, 1.92f, 0.12f, 1.92f);
         tier(model, "upper", 3.11f, 1.5f, 1.5f);
@@ -285,7 +285,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
         float angle = index * 90f;
         double radians = Math.toRadians(angle);
         String arm = "arm_" + index;
-        // the arm sits in front of the axle, everything else hangs off the arm so it can use local offsets
+        // arm sits in front of the axle, everything else hangs of the arm so it can use local offsets
         model.block(arm, Material.STRIPPED_SPRUCE_LOG.createBlockData(), Pose.IDENTITY
                 .withOffset((float) (-Math.sin(radians) * 1.15), (float) (Math.cos(radians) * 1.15), 0.38f)
                 .withRotation(0f, 0f, angle)

@@ -140,12 +140,12 @@ final class MotionEngine {
         }
     }
 
-    // everything from here on runs on the motion thread only
+    // everything below here runs on the motion thread only
 
     void add(DisplayState display) {
         composer.compose(display, true);
         display.index = displays.size();
-        // wait one tick so a play() called right after spawn is already in, otherwise you see a full size flash
+        // wait one tick so a play() right after spawn is already in, otherwise you get a full size flash
         display.showAfter = tick + 1;
         displays.add(display);
         fresh.add(display);
@@ -207,7 +207,7 @@ final class MotionEngine {
                 sendPart(display, state, packet.look(state));
             }
         }
-        // billboard decides if a part can have a culling box, so check the boxes again
+        // billboard decides if a part can have a culling box so check boxes again
         composer.compose(display, true);
         if (!display.fresh && !display.viewers.isEmpty()) {
             sendChanges(display, Frames.STEP_TICKS);
@@ -254,7 +254,7 @@ final class MotionEngine {
             display.moveTicks = ticks;
             return;
         }
-        // viewers that just got it spawned already have the new spot, only the ones that kept it need the move
+        // viewers that just got it spawned already have the new spot, only the ones who kept it need the move
         List<Viewer> kept = new ArrayList<>(display.viewers);
         int oldTicks = display.moveTicks;
         display.moveTicks = ticks;
@@ -270,7 +270,7 @@ final class MotionEngine {
             return;
         }
         Object channel = kept.getFirst().channel;
-        // the smoothing time has to be set before the move, same bundle so the client sees both at once
+        // smoothing time has to be set before the move, same bundle so client sees both at once
         if (ticks != oldTicks) {
             for (PartState part : display.parts) {
                 sendToAll(kept, encode(packet.move(part, ticks), channel), false);

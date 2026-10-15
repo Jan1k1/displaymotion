@@ -1,4 +1,4 @@
-# gradle runs on 17 here and downloads java 25 for the build by itself (foojay toolchain)
+# gradle runs on 17 here and downloads java 25 by itself for the build (foojay toolchain)
 jdk:
   - openjdk17
 install:

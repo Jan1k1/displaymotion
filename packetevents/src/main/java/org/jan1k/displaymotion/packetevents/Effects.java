@@ -49,7 +49,7 @@ public final class Effects {
                     .withRotation(random.nextFloat() * 90f, random.nextFloat() * 90f, 0f)
                     .withScale(size));
 
-            // fly up and out fast, then drop, then shrink where it landed
+            // fly up and out fast then drop, then shrink where it landed
             double angle = random.nextDouble() * Math.PI * 2;
             float distance = 0.8f + random.nextFloat() * 0.9f;
             float x = (float) Math.cos(angle) * distance;
@@ -87,7 +87,7 @@ public final class Effects {
                 .spawn()
                 .background(TRANSPARENT);
 
-        // starts under the ground, so the ground hides it while it comes up
+        // starts under the ground so the ground hides it while it comes up
         Animation rise = Animation.keyframes()
                 .at(0, Pose.IDENTITY.withOffset(0f, -1.3f, 0f).withRotation(0f, 0f, 6f))
                 .at(14, Pose.IDENTITY, Ease.OUT)
@@ -118,8 +118,8 @@ public final class Effects {
         return display.play(Animations.hold(SWORD_TICKS + 2), display::remove);
     }
 
-    // rotation lives in the animation, not the part, so "up" stays up for the drop.
-    // +135 because the client turns every item display 180 on y first, so the blade ends up pointing down
+    // rotation is in the animation not the part, so up stays up for the drop
+    // +135 bc the client turns every item display 180 on y first, so the the blade points down
     static Animation swordFall(int start, float yaw) {
         Pose high = Pose.IDENTITY.withOffset(0f, 7f, 0f).withRotation(0f, yaw, 135f);
         Pose stuck = Pose.IDENTITY.withRotation(0f, yaw, 135f);
