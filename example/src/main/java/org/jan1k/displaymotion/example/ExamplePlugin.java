@@ -12,6 +12,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.Sound;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.Player;
@@ -50,7 +51,8 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
             .at(0, Pose.IDENTITY)
             .at(2, Pose.IDENTITY.withOffset(0f, -0.08f, 0f))
             .at(6, Pose.IDENTITY)
-            .build();
+            .build()
+            .event(2, "click");
     private static final Animation CAP_IDLE = Animations.bob(0.02f, 30);
     private static final Animation LABEL_IDLE = Animations.bob(0.08f, 50);
     private static final int SHOWCASE_SLOTS = 7;
@@ -310,7 +312,8 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 .hitbox(1f, 0.5f)
                 .play(Animations.popIn(10))
                 .play("cap", CAP_IDLE)
-                .play("label", LABEL_IDLE);
+                .play("label", LABEL_IDLE)
+                .onEvent(event -> at.getWorld().playSound(at, Sound.BLOCK_STONE_BUTTON_CLICK_ON, 1f, 1f));
         button.onClick(click -> {
             if (click.leftClick()) {
                 motion.effects().shatter(at, Material.RED_CONCRETE.createBlockData());
