@@ -118,10 +118,11 @@ public final class Effects {
         return display.play(Animations.hold(SWORD_TICKS + 2), display::remove);
     }
 
-    // rotation lives in the animation, not the part, so "up" stays up for the drop
+    // rotation lives in the animation, not the part, so "up" stays up for the drop.
+    // +135 because the client turns every item display 180 on y first, so the blade ends up pointing down
     static Animation swordFall(int start, float yaw) {
-        Pose high = Pose.IDENTITY.withOffset(0f, 7f, 0f).withRotation(0f, yaw, -135f);
-        Pose stuck = Pose.IDENTITY.withRotation(0f, yaw, -135f);
+        Pose high = Pose.IDENTITY.withOffset(0f, 7f, 0f).withRotation(0f, yaw, 135f);
+        Pose stuck = Pose.IDENTITY.withRotation(0f, yaw, 135f);
         KeyframeBuilder fall = Animation.keyframes().at(0, high.withScale(0f));
         if (start > 0) {
             fall.at(start, high.withScale(0f));
