@@ -74,6 +74,8 @@ final class MotionEngine {
 
     private volatile Snapshot snapshot = new Snapshot(0L, new PlayerView[0]);
     volatile boolean debug;
+    // tests swap this for Runnable::run, there is no server to schedule on
+    Consumer<Runnable> mainThread;
     private Snapshot seen;
     private Object bundle;
     private long tick;
@@ -89,6 +91,11 @@ final class MotionEngine {
         this.plugin = plugin;
         this.protocol = PacketEvents.getAPI().getProtocolManager();
         this.packet = new DisplayPacket();
+        this.mainThread = task -> {
+            if (plugin.isEnabled()) {
+                Bukkit.getScheduler().runTask(plugin, task);
+            }
+        };
         if (scheduled) {
             this.thread = Executors.newSingleThreadScheduledExecutor(task -> {
                 Thread t = new Thread(task, "displaymotion-" + plugin.getName());
@@ -570,10 +577,15 @@ final class MotionEngine {
                 if (t == 0) {
                     display.handle.playing = false;
                 }
-                if (track.onEnd != null && plugin.isEnabled()) {
-                    Bukkit.getScheduler().runTask(plugin, track.onEnd);
+                if (track.onEnd != null) {
+                    mainThread.accept(track.onEnd);
                 }
                 continue;
+            }
+            String[] events = track.frames.eventsAt(next);
+            if (events.length > 0 && display.handle.hearsEvents()) {
+                String part = t == 0 ? null : display.parts[t - 1].name;
+                mainThread.accept(() -> display.handle.reached(part, events));
             }
             track.moved |= next != track.frame;
             track.frame = next;

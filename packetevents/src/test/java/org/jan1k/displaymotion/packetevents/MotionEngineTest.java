@@ -399,6 +399,21 @@ class MotionEngineTest {
         assertEquals(0, west[2], 1e-9);
     }
 
+    @Test
+    void eventsReachTheHandlerWithTheirPart() {
+        engine.mainThread = Runnable::run;
+        List<String> heard = new ArrayList<>();
+        MotionDisplay display = display().onEvent(event -> heard.add(event.name() + "@" + event.part()));
+
+        display.play(Animations.popIn(10).event(4, "whole"));
+        display.play("main", Animations.hold(10).event(6, "part"));
+        for (int i = 0; i < 14; i++) {
+            tick();
+        }
+
+        assertEquals(List.of("whole@null", "part@main"), heard);
+    }
+
     private static Player player() {
         return FakePacketEvents.proxy(Player.class, (method, args) -> method.equals("getUniqueId") ? PLAYER : null);
     }

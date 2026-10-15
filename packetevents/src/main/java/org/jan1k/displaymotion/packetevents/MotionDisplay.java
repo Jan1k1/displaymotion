@@ -38,6 +38,7 @@ public final class MotionDisplay {
     private final List<String> parts;
     private final Set<String> hitboxes = ConcurrentHashMap.newKeySet();
     private volatile Consumer<Click> onClick;
+    private volatile Consumer<DisplayEvent> onEvent;
 
     volatile boolean playing;
     private volatile boolean visibleByDefault = true;
@@ -323,6 +324,31 @@ public final class MotionDisplay {
         requireAlive();
         onClick = handler;
         return this;
+    }
+
+    /**
+     * Runs when a playing animation reaches an event added with {@link Animation#event(int, String)}.
+     * It runs on the main thread. A new call replaces the old handler, {@code null} removes it.
+     */
+    public MotionDisplay onEvent(Consumer<DisplayEvent> handler) {
+        requireAlive();
+        onEvent = handler;
+        return this;
+    }
+
+    boolean hearsEvents() {
+        return onEvent != null;
+    }
+
+    // main thread only
+    void reached(String part, String[] names) {
+        Consumer<DisplayEvent> handler = onEvent;
+        if (handler == null || isRemoved()) {
+            return;
+        }
+        for (String name : names) {
+            handler.accept(new DisplayEvent(this, name, part));
+        }
     }
 
     /** The hitbox names, in no order. */
