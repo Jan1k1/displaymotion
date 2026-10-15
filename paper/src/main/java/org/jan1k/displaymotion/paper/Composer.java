@@ -13,6 +13,9 @@ final class Composer {
     private final Decomposer decomposer = new Decomposer();
     private final float[] root = new float[Affine.SIZE];
     private final float[] turn = new float[Affine.SIZE];
+    private final float[] ownTurn = new float[Affine.SIZE];
+    private final float[] toOwn = new float[Affine.SIZE];
+    private final float[] ownLocal = new float[Affine.SIZE];
     private final float[] frame = new float[Affine.SIZE];
     private final float[] local = new float[Affine.SIZE];
     private final float[] current = new float[Decomposer.SIZE];
@@ -27,18 +30,21 @@ final class Composer {
         } else {
             Affine.identity(root, 0);
         }
-        if (display.turn != 0f || display.tilt != 0f || display.drop != 0f) {
-            // same way round as the entity yaw, the client turns a display by minus its yaw. the tilt
-            // turns around the pivot height and not the origin, so move the pivot there and back again.
-            // the drop goes in before the turn, so a sneaking hat stays as far from the neck as a standing one
-            Affine.fromPose(0f, 0f, 0f, display.tilt, -display.turn, 0f, 1f, 1f, 1f, turn, 0);
-            float pivot = display.pivot;
-            float above = pivot - display.drop;
-            turn[9] = -turn[3] * above;
-            turn[10] = pivot - turn[4] * above;
-            turn[11] = -turn[5] * above;
+        boolean posed = display.turn != 0f || display.tilt != 0f || display.drop != 0f;
+        if (posed) {
+            posed(display, display.turn, display.tilt, turn);
             Affine.multiply(turn, 0, root, 0, frame, 0);
             System.arraycopy(frame, 0, root, 0, Affine.SIZE);
+        }
+        // a wearer with another tilt (its hat runs ahead of the server) gets the whole difference, not only a turn
+        boolean ownTilted = display.wearer != null && display.ownTilt != display.tilt;
+        if (ownTilted) {
+            if (!posed) {
+                Affine.identity(turn, 0);
+            }
+            posed(display, display.ownTurn, display.ownTilt, ownTurn);
+            invertRigid(turn, frame);
+            Affine.multiply(ownTurn, 0, frame, 0, toOwn, 0);
         }
 
         PartState[] parts = display.parts;
@@ -76,7 +82,12 @@ final class Composer {
             if (cullBox(part, display.pitch == 0f)) {
                 part.changes |= DisplayPacket.BOX;
             }
-            if (display.wearer != null) {
+            if (ownTilted) {
+                Affine.multiply(toOwn, 0, local, 0, ownLocal, 0);
+                decomposer.decompose(ownLocal, 0, ownCurrent, 0);
+                part.ownChanges = changes(part.own, ownCurrent) | part.changes & DisplayPacket.BOX;
+                System.arraycopy(ownCurrent, 0, part.own, 0, Decomposer.SIZE);
+            } else if (display.wearer != null) {
                 turnAround(current, display.ownTurn - display.turn, ownCurrent);
                 part.ownChanges = changes(part.own, ownCurrent) | part.changes & DisplayPacket.BOX;
                 System.arraycopy(ownCurrent, 0, part.own, 0, Decomposer.SIZE);
@@ -87,6 +98,34 @@ final class Composer {
                 track.moved = false;
             }
         }
+    }
+
+    // same way round as the entity yaw, the client turns a display by minus its yaw. the tilt
+    // turns around the pivot height and not the origin, so move the pivot there and back again.
+    // the drop goes in before the turn, so a sneaking hat stays as far from the neck as a standing one
+    private static void posed(DisplayState display, float turnDegrees, float tiltDegrees, float[] out) {
+        Affine.fromPose(0f, 0f, 0f, tiltDegrees, -turnDegrees, 0f, 1f, 1f, 1f, out, 0);
+        float pivot = display.pivot;
+        float above = pivot - display.drop;
+        out[9] = -out[3] * above;
+        out[10] = pivot - out[4] * above;
+        out[11] = -out[5] * above;
+    }
+
+    // turn plus move only, so the inverse is the transposed turn and the move turned back
+    private static void invertRigid(float[] m, float[] out) {
+        out[0] = m[0];
+        out[1] = m[3];
+        out[2] = m[6];
+        out[3] = m[1];
+        out[4] = m[4];
+        out[5] = m[7];
+        out[6] = m[2];
+        out[7] = m[5];
+        out[8] = m[8];
+        out[9] = -(m[0] * m[9] + m[1] * m[10] + m[2] * m[11]);
+        out[10] = -(m[3] * m[9] + m[4] * m[10] + m[5] * m[11]);
+        out[11] = -(m[6] * m[9] + m[7] * m[10] + m[8] * m[11]);
     }
 
     // the wearer only sees the body turned by a bit more around Y. that turn sits in front of the whole

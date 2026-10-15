@@ -305,6 +305,7 @@ final class MotionEngine {
     private void wear(DisplayState display, UUID wearer) {
         display.wearer = wearer;
         display.ownTurn = display.turn;
+        display.ownTilt = display.tilt;
         for (PartState part : display.parts) {
             System.arraycopy(part.sent, 0, part.own, 0, Decomposer.SIZE);
         }
@@ -314,12 +315,14 @@ final class MotionEngine {
     private void poseTo(DisplayState display, RidePose pose) {
         float turn = wrap(pose.yaw() - display.yaw);
         float ownTurn = display.wearer == null ? turn : wrap(pose.own() - display.yaw);
-        if (turn == display.turn && ownTurn == display.ownTurn && pose.tilt() == display.tilt
+        float ownTilt = display.wearer == null ? pose.tilt() : pose.ownTilt();
+        if (turn == display.turn && ownTurn == display.ownTurn && ownTilt == display.ownTilt && pose.tilt() == display.tilt
                 && pose.pivot() == display.pivot && pose.drop() == display.drop) {
             return;
         }
         display.turn = turn;
         display.ownTurn = ownTurn;
+        display.ownTilt = ownTilt;
         display.tilt = pose.tilt();
         display.pivot = pose.pivot();
         display.drop = pose.drop();
@@ -362,6 +365,7 @@ final class MotionEngine {
         display.yaw = wrap(display.yaw + display.turn);
         display.turn = 0f;
         display.ownTurn = 0f;
+        display.ownTilt = 0f;
         display.tilt = 0f;
         display.pivot = 0f;
         display.drop = 0f;

@@ -41,6 +41,12 @@ public final class MotionDisplay {
     // move the same amount, so a sneaking hat has to come down a bit and the body leans forward.
     // the drop is the sneaking pivot minus the standing one (-0.3928)
     static final float HEAD_PIVOT = -0.3928125f;
+    // a hat for its own wearer runs ahead by the head turn speed times this many ticks, at most
+    private static final float MAX_LEAD_TICKS = 10f;
+    // half a tick for the server tick and one for the client blend, on top of the ping
+    private static final float LEAD_EXTRA_TICKS = 1.5f;
+    private static final float MAX_LEAD_DEGREES = 60f;
+    private static final float HEAD_SPEED_SMOOTHING = 0.5f;
     static final float HEAD_PIVOT_SNEAKING = -0.46390625f;
     static final float HEAD_DROP_SNEAKING = -0.07109375f;
     static final float BODY_PIVOT_SNEAKING = -0.4053125f;
@@ -67,6 +73,11 @@ public final class MotionDisplay {
     private double lastY;
     private double lastZ;
     private RidePose lastPose = RidePose.turn(0f);
+    // how fast the head turns, in degrees per tick, smoothed. main thread only
+    private float headSpeedYaw;
+    private float headSpeedPitch;
+    private float lastHeadYaw = Float.NaN;
+    private float lastHeadPitch;
 
     volatile boolean playing;
     private volatile boolean visibleByDefault = true;
@@ -473,6 +484,7 @@ public final class MotionDisplay {
         boolean turned = Math.abs(Bodies.wrap(pose.yaw() - lastPose.yaw())) >= RIDE_TURN
                 || Math.abs(Bodies.wrap(pose.own() - lastPose.own())) >= RIDE_TURN
                 || Math.abs(pose.tilt() - lastPose.tilt()) >= RIDE_TURN
+                || Math.abs(pose.ownTilt() - lastPose.ownTilt()) >= RIDE_TURN
                 || pose.pivot() != lastPose.pivot() || pose.drop() != lastPose.drop();
         if (!moved && !turned) {
             return;
@@ -506,8 +518,7 @@ public final class MotionDisplay {
         if (entity instanceof Player player) {
             boolean sneaking = player.isSneaking();
             if (follow == Follow.HEAD) {
-                return new RidePose(at.getYaw(), at.getPitch(), sneaking ? HEAD_PIVOT_SNEAKING : HEAD_PIVOT,
-                        sneaking ? HEAD_DROP_SNEAKING : 0f);
+                return headPose(player, at, sneaking);
             }
             float body = engine.bodies.yaw(player);
             float own = engine.bodies.own(player);
@@ -519,6 +530,29 @@ public final class MotionDisplay {
             return RidePose.turn(living.getBodyYaw());
         }
         return RidePose.turn(at.getYaw());
+    }
+
+    // the wearer moves its head first and the server hears about it a ping later, so its own hat is
+    // put where the head will be by the time the packet lands: the turn speed times ping plus a tick and
+    // a half. the speed is smoothed and dies down fast when the head stops, so it does not swing past
+    private RidePose headPose(Player player, Location at, boolean sneaking) {
+        float yaw = at.getYaw();
+        float pitch = at.getPitch();
+        if (!Float.isNaN(lastHeadYaw)) {
+            headSpeedYaw += (Bodies.wrap(yaw - lastHeadYaw) - headSpeedYaw) * HEAD_SPEED_SMOOTHING;
+            headSpeedPitch += (pitch - lastHeadPitch - headSpeedPitch) * HEAD_SPEED_SMOOTHING;
+        }
+        lastHeadYaw = yaw;
+        lastHeadPitch = pitch;
+        float lead = Math.min(MAX_LEAD_TICKS, player.getPing() / 50f + LEAD_EXTRA_TICKS);
+        float ownYaw = yaw + clamp(headSpeedYaw * lead, MAX_LEAD_DEGREES);
+        float ownPitch = Math.max(-90f, Math.min(90f, pitch + clamp(headSpeedPitch * lead, MAX_LEAD_DEGREES)));
+        return new RidePose(yaw, pitch, sneaking ? HEAD_PIVOT_SNEAKING : HEAD_PIVOT,
+                sneaking ? HEAD_DROP_SNEAKING : 0f, ownYaw, ownPitch);
+    }
+
+    private static float clamp(float value, float limit) {
+        return Math.max(-limit, Math.min(limit, value));
     }
 
     /** Lets this player see the display, even when it is not visible by default. */
