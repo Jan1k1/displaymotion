@@ -45,7 +45,7 @@ Build the example plugin and put it next to PacketEvents on a Paper 26.3 server:
 ./gradlew build
 ```
 
-The jar is `example/build/libs/displaymotion-example-<version>.jar`. Commands: `/dm showcase` (everything at once), `/dm sword`, `/dm block`, `/dm windmill`, `/dm text`, `/dm pet`, `/dm hat`, `/dm backpack`, `/dm bench`, `/dm button`, `/dm effect <name>`, `/dm killeffect <name>`, `/dm model <file> [animation]`, `/dm debug`, `/dm stop`.
+The jar is `example/build/libs/displaymotion-example-<version>.jar`. Commands: `/dm showcase` (everything at once), `/dm sword`, `/dm block`, `/dm windmill`, `/dm text`, `/dm pet`, `/dm hat`, `/dm backpack`, `/dm selfview`, `/dm bench`, `/dm button`, `/dm effect <name>`, `/dm killeffect <name>`, `/dm model <file> [animation]`, `/dm debug`, `/dm stop`.
 
 ## Modules
 

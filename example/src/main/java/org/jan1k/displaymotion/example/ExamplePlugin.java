@@ -123,6 +123,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 .then(Commands.literal("pet").executes(context -> show(context.getSource(), this::pet)))
                 .then(Commands.literal("hat").executes(context -> show(context.getSource(), this::hat)))
                 .then(Commands.literal("backpack").executes(context -> show(context.getSource(), this::backpack)))
+                .then(Commands.literal("selfview").executes(context -> selfView(context.getSource())))
                 .then(Commands.literal("bench").executes(context -> show(context.getSource(), player -> bench(inFront(player, 3)))))
                 .then(Commands.literal("button").executes(context -> show(context.getSource(), player -> button(inFront(player, 3)))))
                 .then(Commands.literal("showcase").executes(context -> showcase(context.getSource())))
@@ -244,6 +245,22 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
             case "swords" -> motion.effects().swordRain(at, ItemStack.of(Material.IRON_SWORD));
             default -> motion.effects().soul(at);
         }
+    }
+
+    // hat or backpack on you: switch if you see it yourself, others always do
+    private int selfView(CommandSourceStack source) {
+        if (!(source.getSender() instanceof Player player)) {
+            source.getSender().sendPlainMessage("players only");
+            return 0;
+        }
+        MotionDisplay display = displays.get(player.getUniqueId());
+        if (display == null || display.isRemoved() || display.vehicle() == null) {
+            player.sendPlainMessage("wear something first, /dm hat or /dm backpack");
+            return 0;
+        }
+        display.wearerSees(!display.isSeenByWearer());
+        player.sendPlainMessage(display.isSeenByWearer() ? "you see it on you now" : "only others see it now");
+        return Command.SINGLE_SUCCESS;
     }
 
     private int stop(CommandSourceStack source) {
