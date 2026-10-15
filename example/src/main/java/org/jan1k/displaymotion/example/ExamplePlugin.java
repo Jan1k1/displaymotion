@@ -28,6 +28,7 @@ import org.jan1k.displaymotion.Animation;
 import org.jan1k.displaymotion.Animations;
 import org.jan1k.displaymotion.Pose;
 import org.jan1k.displaymotion.paper.DisplayMotion;
+import org.jan1k.displaymotion.paper.Follow;
 import org.jan1k.displaymotion.paper.ModelBuilder;
 import org.jan1k.displaymotion.paper.MotionDisplay;
 import org.jan1k.displaymotion.paper.ImportedModel;
@@ -120,6 +121,9 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 .then(Commands.literal("windmill").executes(context -> show(context.getSource(), player -> windmill(inFront(player, 6)))))
                 .then(Commands.literal("text").executes(context -> show(context.getSource(), this::text)))
                 .then(Commands.literal("pet").executes(context -> show(context.getSource(), this::pet)))
+                .then(Commands.literal("hat").executes(context -> show(context.getSource(), this::hat)))
+                .then(Commands.literal("backpack").executes(context -> show(context.getSource(), this::backpack)))
+                .then(Commands.literal("bench").executes(context -> show(context.getSource(), player -> bench(inFront(player, 3)))))
                 .then(Commands.literal("button").executes(context -> show(context.getSource(), player -> button(inFront(player, 3)))))
                 .then(Commands.literal("showcase").executes(context -> showcase(context.getSource())))
                 .then(Commands.literal("debug").executes(context -> debug(context.getSource())))
@@ -281,6 +285,54 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
             pet.teleport(petSpot(player), 4);
         }, 2L, 2L);
         return pet;
+    }
+
+    // a crown on the head, it turns where the player looks. 0 is the top of the head
+    private MotionDisplay hat(Player player) {
+        ModelBuilder crown = motion.model(player.getLocation())
+                .block("band", Material.GOLD_BLOCK.createBlockData(), Pose.IDENTITY.withScale(0.5f, 0.12f, 0.5f));
+        int spike = 0;
+        for (float x : new float[]{-0.2f, 0.2f}) {
+            for (float z : new float[]{-0.2f, 0.2f}) {
+                crown.block("spike_" + spike++, Material.GOLD_BLOCK.createBlockData(),
+                        Pose.IDENTITY.withOffset(x, 0.13f, z).withScale(0.1f, 0.14f, 0.1f));
+            }
+        }
+        return crown.item("gem", ItemStack.of(Material.DIAMOND), Pose.IDENTITY.withOffset(0f, 0.28f, 0f).withScale(0.35f))
+                .spawn()
+                .ride(player, Follow.HEAD)
+                .play(Animations.popIn(10))
+                .play("gem", Animations.spin(40).with(Animations.bob(0.04f, 40)));
+    }
+
+    // sits on the back and turns with the body, not with the head
+    private MotionDisplay backpack(Player player) {
+        return motion.model(player.getLocation())
+                .block("bag", Material.BARREL.createBlockData(), Pose.IDENTITY.withOffset(0f, -0.72f, -0.3f).withScale(0.45f, 0.55f, 0.25f))
+                .block("flap", Material.BROWN_WOOL.createBlockData(), Pose.IDENTITY.withOffset(0f, -0.5f, -0.43f).withScale(0.4f, 0.2f, 0.02f))
+                .spawn()
+                .ride(player, Follow.BODY)
+                .play(Animations.popIn(10));
+    }
+
+    // right click to sit, two people fit. sneak to get up
+    private MotionDisplay bench(Location at) {
+        MotionDisplay bench = motion.model(at)
+                .block("seat", Material.SPRUCE_PLANKS.createBlockData(), Pose.IDENTITY.withOffset(0f, 0.4f, 0f).withScale(1.6f, 0.1f, 0.5f))
+                .block("back", Material.SPRUCE_PLANKS.createBlockData(), Pose.IDENTITY.withOffset(0f, 0.75f, -0.22f).withScale(1.6f, 0.4f, 0.06f))
+                .block("leg_left", Material.DARK_OAK_LOG.createBlockData(), Pose.IDENTITY.withOffset(-0.7f, 0.18f, 0f).withScale(0.1f, 0.36f, 0.45f))
+                .block("leg_right", Material.DARK_OAK_LOG.createBlockData(), Pose.IDENTITY.withOffset(0.7f, 0.18f, 0f).withScale(0.1f, 0.36f, 0.45f))
+                .spawn()
+                .hitbox(1.6f, 0.9f)
+                .seat("left", -0.4, 0.45, 0)
+                .seat("right", 0.4, 0.45, 0)
+                .play(Animations.popIn(10));
+        bench.onClick(click -> {
+            if (click.rightClick() && !bench.sit(click.player(), "left") && !bench.sit(click.player(), "right")) {
+                click.player().sendActionBar(Component.text("the bench is full", NamedTextColor.RED));
+            }
+        });
+        return bench;
     }
 
     private static Location petSpot(Player player) {
