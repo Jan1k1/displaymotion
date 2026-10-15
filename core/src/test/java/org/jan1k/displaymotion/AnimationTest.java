@@ -64,6 +64,26 @@ class AnimationTest {
     }
 
     @Test
+    void thenStartsWhereTheLastPartEnded() {
+        Animation shrinkAndStay = Animations.popOut(10).then(Animations.hold(20));
+        assertEquals(0f, shrinkAndStay.poseAt(15f).scaleX());
+        assertEquals(0f, shrinkAndStay.poseAt(99f).scaleX());
+
+        Animation twoSteps = Animations.slide(1f, 0f, 0f, 10, Ease.LINEAR).then(Animations.slide(1f, 0f, 0f, 10, Ease.LINEAR));
+        assertEquals(1f, twoSteps.poseAt(10f).x(), 1e-6f);
+        assertEquals(1.5f, twoSteps.poseAt(15f).x(), 1e-6f);
+        assertEquals(2f, twoSteps.poseAt(99f).x(), 1e-6f);
+    }
+
+    @Test
+    void framesRefuseTooLongOrTooShortAnimations() {
+        assertThrows(IllegalArgumentException.class, () -> Frames.check(Animations.hold(Integer.MAX_VALUE)));
+        assertThrows(IllegalArgumentException.class, () -> Frames.check(Animations.turn(0f, 90f, 0f, 2).loop()));
+        assertThrows(IllegalArgumentException.class, () -> Animations.spin(4));
+        Frames.check(Animations.spin(Animations.MIN_TICKS_PER_TURN));
+    }
+
+    @Test
     void togetherAddsOffsetsAndRotationsAndMultipliesScale() {
         Animation idle = Animations.spin(80).with(Animations.bob(0.4f, 40));
 

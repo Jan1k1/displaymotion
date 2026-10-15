@@ -1,0 +1,247 @@
+package org.jan1k.displaymotion.packetevents;
+
+import com.github.retrooper.packetevents.protocol.entity.data.EntityData;
+import com.github.retrooper.packetevents.protocol.packettype.PacketType;
+import com.github.retrooper.packetevents.protocol.player.ClientVersion;
+import com.github.retrooper.packetevents.util.Vector3f;
+import com.github.retrooper.packetevents.wrapper.PacketWrapper;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import io.netty.channel.embedded.EmbeddedChannel;
+import org.bukkit.Location;
+import org.bukkit.World;
+import org.bukkit.plugin.Plugin;
+import org.jan1k.displaymotion.Animations;
+import org.jan1k.displaymotion.Pose;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import java.util.logging.Logger;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class MotionEngineTest {
+
+    private static final UUID WORLD = UUID.randomUUID();
+    private static final UUID PLAYER = UUID.randomUUID();
+    private static final int ENTITY = 1000;
+
+    private MotionEngine engine;
+    private EmbeddedChannel channel;
+    private long sequence;
+
+    record Packet(String kind, int entity, List<EntityData<?>> data) {
+    }
+
+    @BeforeAll
+    static void fakePacketEvents() {
+        FakePacketEvents.install();
+    }
+
+    @BeforeEach
+    void setUp() {
+        FakePacketEvents.WRITTEN.clear();
+        Plugin plugin = FakePacketEvents.proxy(Plugin.class, (method, args) -> switch (method) {
+            case "getName" -> "test";
+            case "getLogger" -> Logger.getLogger("displaymotion-test");
+            case "isEnabled" -> false;
+            default -> null;
+        });
+        engine = new MotionEngine(plugin, false);
+        channel = new EmbeddedChannel();
+        viewerAt(0);
+    }
+
+    @AfterEach
+    void everyBufferIsReleased() {
+        engine.close();
+        channel.runPendingTasks();
+        drain();
+        for (ByteBuf buffer : FakePacketEvents.WRITTEN) {
+            assertEquals(0, buffer.refCnt(), "a buffer leaked");
+        }
+        channel.finishAndReleaseAll();
+    }
+
+    @Test
+    void spawnWaitsOneTickAndStartsAtTheFirstFrame() {
+        display().play(Animations.popIn(20));
+
+        assertEquals(List.of(), tick());
+        List<Packet> packets = tick();
+
+        assertEquals(List.of("bundle", "spawn", "meta", "bundle"), kinds(packets));
+        assertEquals(0f, ((Vector3f) value(packets.get(2), 12)).x);
+    }
+
+    @Test
+    void framesGrowAndThenStop() {
+        display().play(Animations.popIn(20));
+        tick();
+        tick();
+
+        List<Float> scales = new ArrayList<>();
+        for (int i = 0; i < 40; i++) {
+            for (Packet packet : tick()) {
+                assertEquals("meta", packet.kind());
+                scales.add(((Vector3f) value(packet, 12)).x);
+            }
+        }
+
+        assertEquals(10, scales.size());
+        for (int i = 1; i < scales.size(); i++) {
+            assertTrue(scales.get(i) > scales.get(i - 1));
+        }
+        assertEquals(1f, scales.getLast(), 1e-6f);
+    }
+
+    @Test
+    void removeSendsOneDestroy() {
+        MotionDisplay display = display();
+        tick();
+        tick();
+
+        display.remove();
+        List<Packet> packets = tick();
+
+        assertEquals(List.of("destroy"), kinds(packets));
+        assertEquals(ENTITY, packets.getFirst().entity());
+    }
+
+    @Test
+    void viewerAtTheEdgeDoesNotFlicker() {
+        display();
+        tick();
+        tick();
+
+        viewerAt(50);
+        assertEquals(List.of(), tick());
+        viewerAt(53);
+        assertEquals(List.of("destroy"), kinds(tick()));
+        viewerAt(50);
+        assertEquals(List.of(), tick());
+        viewerAt(47);
+        assertEquals(List.of("bundle", "spawn", "meta", "bundle"), kinds(tick()));
+    }
+
+    @Test
+    void resetWaitsForAPositionTakenAfterTheMove() {
+        display();
+        tick();
+        tick();
+
+        long now = sequence;
+        engine.submit(() -> engine.viewerReset(PLAYER, now));
+        assertEquals(List.of("destroy"), kinds(tick()));
+        engine.publish(new Snapshot(now, new PlayerView[]{new PlayerView(PLAYER, WORLD, 0, 0, 0, channel)}));
+        assertEquals(List.of(), tick());
+        viewerAt(0);
+        assertEquals(List.of("bundle", "spawn", "meta", "bundle"), kinds(tick()));
+    }
+
+    @Test
+    void stalledViewerSkipsFramesAndGetsTheFullStateBack() {
+        display().play(Animations.spin(20));
+        tick();
+        tick();
+
+        channel.unsafe().outboundBuffer().setUserDefinedWritability(1, false);
+        for (int i = 0; i < 6; i++) {
+            assertEquals(List.of(), tick());
+        }
+        channel.unsafe().outboundBuffer().setUserDefinedWritability(1, true);
+        List<Packet> packets = tick();
+
+        assertTrue(kinds(packets).contains("meta"));
+        Packet full = packets.stream().filter(p -> p.kind().equals("meta") && p.data().size() > 6).findFirst().orElseThrow();
+        assertEquals(1, value(full, 23));
+    }
+
+    @Test
+    void bigQueuesAreSplitIntoBundles() {
+        Viewer viewer = new Viewer(PLAYER);
+        for (int i = 0; i < Viewer.MAX_BUNDLE + 1; i++) {
+            viewer.queue(Unpooled.buffer(1));
+        }
+        ByteBuf bundle = Unpooled.buffer(1);
+
+        Object[] out = viewer.drain(bundle);
+
+        int delimiters = 0;
+        for (Object buffer : out) {
+            ByteBuf b = (ByteBuf) buffer;
+            if (b.unwrap() == bundle) {
+                delimiters++;
+            }
+            b.release();
+        }
+        assertEquals(4, delimiters);
+        assertEquals(Viewer.MAX_BUNDLE + 1 + 4, out.length);
+        bundle.release();
+    }
+
+    private MotionDisplay display() {
+        World world = FakePacketEvents.proxy(World.class, (method, args) -> method.equals("getUID") ? WORLD : null);
+        PartState[] parts = {new PartState("main", ENTITY, -1, null, 0, 1, Pose.IDENTITY)};
+        MotionDisplay display = new MotionDisplay(engine, new Location(world, 0, 0, 0), parts, 48);
+        engine.submit(() -> engine.add(display.state()));
+        return display;
+    }
+
+    private void viewerAt(double x) {
+        engine.publish(new Snapshot(++sequence, new PlayerView[]{new PlayerView(PLAYER, WORLD, x, 0, 0, channel)}));
+    }
+
+    private List<Packet> tick() {
+        engine.runTick();
+        channel.runPendingTasks();
+        return drain();
+    }
+
+    private List<Packet> drain() {
+        ClientVersion version = FakePacketEvents.VERSION.toClientVersion();
+        List<Packet> packets = new ArrayList<>();
+        ByteBuf buffer;
+        while ((buffer = channel.readOutbound()) != null) {
+            try {
+                PacketWrapper<?> reader = PacketWrapper.createUniversalPacketWrapper(buffer.duplicate(), FakePacketEvents.VERSION);
+                int id = reader.readVarInt();
+                if (id == PacketType.Play.Server.BUNDLE.getId(version)) {
+                    packets.add(new Packet("bundle", -1, List.of()));
+                } else if (id == PacketType.Play.Server.SPAWN_ENTITY.getId(version)) {
+                    packets.add(new Packet("spawn", reader.readVarInt(), List.of()));
+                } else if (id == PacketType.Play.Server.ENTITY_METADATA.getId(version)) {
+                    int entity = reader.readVarInt();
+                    packets.add(new Packet("meta", entity, reader.readEntityMetadata()));
+                } else if (id == PacketType.Play.Server.DESTROY_ENTITIES.getId(version)) {
+                    reader.readVarInt();
+                    packets.add(new Packet("destroy", reader.readVarInt(), List.of()));
+                } else {
+                    packets.add(new Packet("other " + id, -1, List.of()));
+                }
+            } finally {
+                buffer.release();
+            }
+        }
+        return packets;
+    }
+
+    private static List<String> kinds(List<Packet> packets) {
+        return packets.stream().map(Packet::kind).toList();
+    }
+
+    private static Object value(Packet packet, int slot) {
+        for (EntityData<?> entry : packet.data()) {
+            if (entry.getIndex() == slot) {
+                return entry.getValue();
+            }
+        }
+        throw new AssertionError("no slot " + slot + " in " + packet);
+    }
+}

@@ -3,7 +3,6 @@ package org.jan1k.displaymotion.packetevents;
 import com.github.retrooper.packetevents.PacketEvents;
 import com.github.retrooper.packetevents.PacketEventsAPI;
 import com.github.retrooper.packetevents.manager.player.PlayerManager;
-import io.github.retrooper.packetevents.util.SpigotConversionUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -22,6 +21,7 @@ import org.bukkit.event.server.PluginDisableEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
+import org.jan1k.displaymotion.Pose;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -31,6 +31,7 @@ import java.util.UUID;
 public final class DisplayMotion {
 
     public static final double DEFAULT_VIEW_RANGE = 48.0;
+    public static final String MAIN_PART = "main";
 
     private static final long VIEW_CHECK_TICKS = 10L;
     private static final double TELEPORT_RESET_DISTANCE = 32.0;
@@ -66,17 +67,16 @@ public final class DisplayMotion {
     }
 
     public MotionDisplay item(Location location, ItemStack item, ItemDisplay.ItemDisplayTransform transform) {
-        Objects.requireNonNull(item, "item");
-        Objects.requireNonNull(transform, "transform");
-        World world = requireWorld(location);
-        // enum order matches the network id
-        return spawn(location, world, SpigotConversionUtil.fromBukkitItemStack(item), transform.ordinal(), 0);
+        return model(location).item(MAIN_PART, item, transform, Pose.IDENTITY).spawn();
     }
 
     public MotionDisplay block(Location location, BlockData block) {
-        Objects.requireNonNull(block, "block");
+        return model(location).block(MAIN_PART, block, Pose.IDENTITY).spawn();
+    }
+
+    public ModelBuilder model(Location location) {
         World world = requireWorld(location);
-        return spawn(location, world, null, 0, SpigotConversionUtil.fromBukkitBlockData(block).getGlobalId());
+        return new ModelBuilder(this, location.clone(), world);
     }
 
     public void close() {
@@ -92,12 +92,8 @@ public final class DisplayMotion {
         return engine.isClosed();
     }
 
-    private MotionDisplay spawn(Location location, World world,
-                                com.github.retrooper.packetevents.protocol.item.ItemStack item,
-                                int itemTransform, int blockState) {
-        int entityId = Bukkit.getUnsafe().nextEntityId(world);
-        MotionDisplay display = new MotionDisplay(engine, location.clone(), entityId,
-                item, itemTransform, blockState, DEFAULT_VIEW_RANGE);
+    MotionDisplay spawn(Location location, PartState[] parts) {
+        MotionDisplay display = new MotionDisplay(engine, location, parts, DEFAULT_VIEW_RANGE);
         engine.submit(() -> engine.add(display.state()));
         return display;
     }
@@ -132,7 +128,8 @@ public final class DisplayMotion {
 
         @EventHandler(priority = EventPriority.MONITOR)
         public void onQuit(PlayerQuitEvent event) {
-            engine.submit(() -> engine.viewerGone(event.getPlayer().getUniqueId()));
+            UUID id = event.getPlayer().getUniqueId();
+            engine.submitQuietly(() -> engine.viewerGone(id));
         }
 
         @EventHandler(priority = EventPriority.MONITOR)
@@ -165,7 +162,7 @@ public final class DisplayMotion {
         private void reset(Player player) {
             UUID id = player.getUniqueId();
             long after = snapshots;
-            engine.submit(() -> engine.viewerReset(id, after));
+            engine.submitQuietly(() -> engine.viewerReset(id, after));
         }
     }
 }

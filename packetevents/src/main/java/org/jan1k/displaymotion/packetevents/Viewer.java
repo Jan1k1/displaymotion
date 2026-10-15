@@ -10,8 +10,7 @@ import java.util.UUID;
 
 final class Viewer {
 
-    // vanilla allows 4096 packets in one bundle
-    private static final int MAX_BUNDLE = 4000;
+    static final int MAX_BUNDLE = 4000;
 
     final UUID id;
     final Set<DisplayState> visible = new HashSet<>();
@@ -25,6 +24,8 @@ final class Viewer {
     long seen;
     long waitFor;
     boolean waiting;
+    boolean stalled;
+    boolean resync;
 
     Viewer(UUID id) {
         this.id = id;

@@ -4,7 +4,7 @@ import java.util.List;
 
 final class TogetherAnimation implements Animation {
 
-    static final int MAX_LOOP_TICKS = 12_000;
+    static final int MAX_LOOP_TICKS = Frames.MAX_TICKS;
 
     private final Animation[] parts;
     private final int introTicks;

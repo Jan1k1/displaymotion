@@ -10,11 +10,11 @@ import com.github.retrooper.packetevents.wrapper.PacketWrapper;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerBundle;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDestroyEntities;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSpawnEntity;
+import io.netty.channel.Channel;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.Plugin;
 import org.jan1k.displaymotion.Animation;
 import org.jan1k.displaymotion.Frames;
-import org.jan1k.displaymotion.Pose;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -23,22 +23,32 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.UUID;
 import java.util.WeakHashMap;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 
 final class MotionEngine {
 
+    static final int ALL_TRACKS = -1;
+
     private static final long TICK_MILLIS = 50L;
-    private static final int MAX_LOGGED_ERRORS = 10;
+    private static final long MIN_TICK_GAP_NANOS = TimeUnit.MILLISECONDS.toNanos(25);
+    private static final int INLINE_BAKE_TICKS = 600;
+    private static final int LOUD_ERRORS = 10;
+    private static final long QUIET_LOG_NANOS = TimeUnit.MINUTES.toNanos(1);
 
     private final Plugin plugin;
     private final ProtocolManager protocol;
     private final DisplayPacket packet;
+    private final Composer composer = new Composer();
     private final ScheduledExecutorService thread;
     private final Queue<Runnable> commands = new ConcurrentLinkedQueue<>();
+    private final AtomicBoolean closed = new AtomicBoolean();
 
     private final List<DisplayState> displays = new ArrayList<>();
     private final List<DisplayState> fresh = new ArrayList<>();
@@ -46,42 +56,51 @@ final class MotionEngine {
     private final Map<UUID, Viewer> viewers = new HashMap<>();
     private final List<Viewer> viewerList = new ArrayList<>();
     private final List<Viewer> dirty = new ArrayList<>();
-    private final Map<Animation, Frames> itemFrames = new WeakHashMap<>();
-    private final Map<Animation, Frames> blockFrames = new WeakHashMap<>();
-    private final Frames stillItem;
-    private final Frames stillBlock;
+    private final Map<Animation, Frames> baked = new WeakHashMap<>();
 
     private volatile Snapshot snapshot = new Snapshot(0L, new PlayerView[0]);
-    private volatile boolean closed;
     private Snapshot seen;
     private Object bundle;
     private long tick;
+    private long lastRun;
     private int errors;
+    private long lastQuietLog;
 
     MotionEngine(Plugin plugin) {
+        this(plugin, true);
+    }
+
+    MotionEngine(Plugin plugin, boolean scheduled) {
         this.plugin = plugin;
         this.protocol = PacketEvents.getAPI().getProtocolManager();
         this.packet = new DisplayPacket();
-        Animation still = Animation.keyframes().at(0, Pose.IDENTITY).build();
-        this.stillItem = Frames.bake(still, false);
-        this.stillBlock = Frames.bake(still, true);
-        this.thread = Executors.newSingleThreadScheduledExecutor(task -> {
-            Thread t = new Thread(task, "displaymotion-" + plugin.getName());
-            t.setDaemon(true);
-            return t;
-        });
-        thread.scheduleAtFixedRate(this::run, TICK_MILLIS, TICK_MILLIS, TimeUnit.MILLISECONDS);
+        if (scheduled) {
+            this.thread = Executors.newSingleThreadScheduledExecutor(task -> {
+                Thread t = new Thread(task, "displaymotion-" + plugin.getName());
+                t.setDaemon(true);
+                return t;
+            });
+            thread.scheduleAtFixedRate(this::run, TICK_MILLIS, TICK_MILLIS, TimeUnit.MILLISECONDS);
+        } else {
+            this.thread = null;
+        }
     }
 
     boolean isClosed() {
-        return closed;
+        return closed.get();
     }
 
     void submit(Runnable command) {
-        if (closed) {
+        if (closed.get()) {
             throw new IllegalStateException("this DisplayMotion is closed");
         }
         commands.add(command);
+    }
+
+    void submitQuietly(Runnable command) {
+        if (!closed.get()) {
+            commands.add(command);
+        }
     }
 
     void publish(Snapshot views) {
@@ -89,10 +108,13 @@ final class MotionEngine {
     }
 
     void close() {
-        if (closed) {
+        if (!closed.compareAndSet(false, true)) {
             return;
         }
-        closed = true;
+        if (thread == null) {
+            shutdown();
+            return;
+        }
         thread.execute(this::shutdown);
         thread.shutdown();
         try {
@@ -105,35 +127,67 @@ final class MotionEngine {
         }
     }
 
+    void runTick() {
+        try {
+            tick();
+        } catch (Throwable t) {
+            warn("displaymotion tick failed", t);
+        }
+    }
+
     // everything below runs on the motion thread only
 
     void add(DisplayState display) {
-        display.frames = display.isBlock() ? stillBlock : stillItem;
-        display.step = -1;
+        composer.compose(display, true);
         display.index = displays.size();
+        display.showAfter = tick + 1;
         displays.add(display);
         fresh.add(display);
     }
 
-    void play(DisplayState display, Animation animation) {
+    void play(DisplayState display, int track, Animation animation, Runnable onEnd) {
         if (display.removed) {
             return;
         }
-        display.frames = bake(animation, display.isBlock());
-        display.frame = 0;
-        display.playing = true;
-        display.handle.playing = true;
-        if (display.fresh) {
-            display.step = -1;
+        long request = ++display.requests[track];
+        Frames frames = baked.get(animation);
+        if (frames != null || animation.introTicks() + animation.loopTicks() <= INLINE_BAKE_TICKS) {
+            if (frames == null) {
+                frames = Frames.bake(animation);
+                baked.put(animation, frames);
+            }
+            start(display, track, frames, onEnd);
             return;
         }
-        display.step = 0;
-        sendFrame(display, 0, 1);
+        CompletableFuture.supplyAsync(() -> Frames.bake(animation), ForkJoinPool.commonPool())
+                .whenComplete((result, error) -> {
+                    if (error != null) {
+                        submitQuietly(() -> warn("displaymotion could not bake an animation", error));
+                        return;
+                    }
+                    submitQuietly(() -> {
+                        baked.put(animation, result);
+                        if (display.requests[track] == request && !display.removed) {
+                            start(display, track, result, onEnd);
+                        }
+                    });
+                });
     }
 
-    void stop(DisplayState display) {
-        display.playing = false;
-        display.handle.playing = false;
+    void stop(DisplayState display, int track) {
+        Track[] tracks = display.tracks;
+        for (int i = 0; i < tracks.length; i++) {
+            if (track == ALL_TRACKS || track == i) {
+                display.requests[i]++;
+                if (tracks[i] != null) {
+                    tracks[i].running = false;
+                }
+            }
+        }
+        if (track == ALL_TRACKS || track == 0) {
+            display.handle.playing = false;
+        }
+        display.active = anyRunning(display);
     }
 
     void viewRange(DisplayState display, double range) {
@@ -141,17 +195,14 @@ final class MotionEngine {
             return;
         }
         display.range = range;
-        display.rangeSquared = range * range;
         if (display.fresh) {
             return;
         }
         List<Viewer> targets = display.viewers;
         if (!targets.isEmpty()) {
-            Object buffer = encode(packet.range(display), targets.getFirst().channel);
-            for (int i = 0; i < targets.size(); i++) {
-                queue(targets.get(i), ByteBufHelper.retainedDuplicate(buffer));
+            for (PartState part : display.parts) {
+                sendToAll(targets, encode(packet.range(part, display.clientRange()), targets.getFirst().channel), false);
             }
-            ByteBufHelper.release(buffer);
         }
         updateViewers(display);
     }
@@ -161,7 +212,7 @@ final class MotionEngine {
             return;
         }
         display.removed = true;
-        display.playing = false;
+        display.active = false;
         display.handle.playing = false;
         for (int i = display.viewers.size() - 1; i >= 0; i--) {
             hide(display, display.viewers.get(i));
@@ -196,19 +247,17 @@ final class MotionEngine {
         for (DisplayState display : new ArrayList<>(viewer.visible)) {
             hide(display, viewer);
         }
-        // wait for a position copy taken after the move
         viewer.waitFor = Math.max(viewer.waitFor, sequence + 1);
         viewer.waiting = true;
     }
 
     private void run() {
-        try {
-            tick();
-        } catch (Throwable t) {
-            if (errors++ < MAX_LOGGED_ERRORS) {
-                plugin.getLogger().log(Level.WARNING, "displaymotion tick failed", t);
-            }
+        long now = System.nanoTime();
+        if (now - lastRun < MIN_TICK_GAP_NANOS) {
+            return;
         }
+        lastRun = now;
+        runTick();
     }
 
     private void tick() {
@@ -220,10 +269,14 @@ final class MotionEngine {
             seen = latest;
             refreshViewers(latest);
         }
-        for (int i = 0; i < fresh.size(); i++) {
-            updateViewers(fresh.get(i));
+        for (int i = fresh.size() - 1; i >= 0; i--) {
+            DisplayState display = fresh.get(i);
+            if (display.showAfter < tick) {
+                fresh.remove(i);
+                updateViewers(display);
+            }
         }
-        fresh.clear();
+        checkBackpressure();
 
         if (tick % Frames.STEP_TICKS == 0) {
             step();
@@ -234,7 +287,11 @@ final class MotionEngine {
     private void drainCommands() {
         Runnable command;
         while ((command = commands.poll()) != null) {
-            command.run();
+            try {
+                command.run();
+            } catch (Throwable t) {
+                warn("displaymotion command failed", t);
+            }
         }
     }
 
@@ -255,7 +312,10 @@ final class MotionEngine {
             }
         }
         for (int i = 0; i < displays.size(); i++) {
-            updateViewers(displays.get(i));
+            DisplayState display = displays.get(i);
+            if (!display.fresh) {
+                updateViewers(display);
+            }
         }
     }
 
@@ -266,8 +326,8 @@ final class MotionEngine {
             if (viewer.waiting) {
                 continue;
             }
-            boolean see = display.canSee(viewer);
             boolean shown = viewer.visible.contains(display);
+            boolean see = display.canSee(viewer, shown);
             if (see && !shown) {
                 show(display, viewer);
             } else if (!see && shown) {
@@ -276,64 +336,157 @@ final class MotionEngine {
         }
     }
 
+    private void checkBackpressure() {
+        for (int i = 0; i < viewerList.size(); i++) {
+            Viewer viewer = viewerList.get(i);
+            boolean writable = !(viewer.channel instanceof Channel channel) || channel.isWritable();
+            if (!writable) {
+                viewer.stalled = true;
+            } else if (viewer.stalled) {
+                viewer.stalled = false;
+                if (viewer.resync) {
+                    viewer.resync = false;
+                    resync(viewer);
+                }
+            }
+        }
+    }
+
+    private void resync(Viewer viewer) {
+        for (DisplayState display : viewer.visible) {
+            freshen(display);
+            for (PartState part : display.parts) {
+                queue(viewer, encode(packet.spawn(part, display.clientRange()), viewer.channel));
+            }
+        }
+    }
+
     private void step() {
         for (int i = 0; i < displays.size(); i++) {
             DisplayState display = displays.get(i);
-            if (!display.playing) {
+            if (!display.active) {
                 continue;
             }
-            int frame = display.frames.frameAt(++display.step);
-            if (frame < 0) {
-                finish(display);
-                continue;
-            }
-            display.frame = frame;
-            if (display.frames.changed(frame)) {
-                sendFrame(display, frame, Frames.STEP_TICKS);
+            try {
+                stepDisplay(display);
+            } catch (Throwable t) {
+                warn("displaymotion removed a display that failed", t);
+                remove(display);
+                if (i < displays.size() && displays.get(i) != display) {
+                    i--;
+                }
             }
         }
     }
 
-    private void finish(DisplayState display) {
-        display.playing = false;
-        display.handle.playing = false;
-        Runnable onEnd = display.onEnd;
-        if (onEnd != null && plugin.isEnabled()) {
-            Bukkit.getScheduler().runTask(plugin, onEnd);
+    private void stepDisplay(DisplayState display) {
+        Track[] tracks = display.tracks;
+        boolean running = false;
+        for (int t = 0; t < tracks.length; t++) {
+            Track track = tracks[t];
+            if (track == null || !track.running) {
+                continue;
+            }
+            int next = track.frames.frameAt(++track.step);
+            if (next < 0) {
+                track.running = false;
+                if (t == 0) {
+                    display.handle.playing = false;
+                }
+                if (track.onEnd != null && plugin.isEnabled()) {
+                    Bukkit.getScheduler().runTask(plugin, track.onEnd);
+                }
+                continue;
+            }
+            track.moved |= next != track.frame;
+            track.frame = next;
+            running = true;
         }
-    }
+        display.active = running;
 
-    private void sendFrame(DisplayState display, int frame, int duration) {
-        List<Viewer> targets = display.viewers;
-        if (targets.isEmpty()) {
+        if (display.viewers.isEmpty()) {
+            display.stale = true;
+            for (Track track : tracks) {
+                if (track != null) {
+                    track.moved = false;
+                }
+            }
             return;
         }
-        Object buffer = encode(packet.frame(display, frame, duration), targets.getFirst().channel);
-        for (int i = 0; i < targets.size(); i++) {
-            queue(targets.get(i), ByteBufHelper.retainedDuplicate(buffer));
+        composer.compose(display, display.stale);
+        display.stale = false;
+        sendChanges(display, Frames.STEP_TICKS);
+    }
+
+    private void start(DisplayState display, int track, Frames frames, Runnable onEnd) {
+        display.tracks[track] = new Track(frames, onEnd);
+        display.active = true;
+        if (track == 0) {
+            display.handle.playing = true;
         }
-        ByteBufHelper.release(buffer);
+        if (display.fresh) {
+            composer.compose(display, true);
+        }
+    }
+
+    private void freshen(DisplayState display) {
+        if (display.stale) {
+            composer.compose(display, true);
+            display.stale = false;
+        }
+    }
+
+    private void sendChanges(DisplayState display, int duration) {
+        List<Viewer> targets = display.viewers;
+        for (PartState part : display.parts) {
+            if (part.changes != 0) {
+                sendToAll(targets, encode(packet.frame(part, part.changes, duration), targets.getFirst().channel), true);
+            }
+        }
+    }
+
+    private void sendToAll(List<Viewer> targets, Object buffer, boolean droppable) {
+        try {
+            for (int i = 0; i < targets.size(); i++) {
+                Viewer viewer = targets.get(i);
+                if (droppable && viewer.stalled) {
+                    viewer.resync = true;
+                    continue;
+                }
+                queue(viewer, ByteBufHelper.retainedDuplicate(buffer));
+            }
+        } finally {
+            ByteBufHelper.release(buffer);
+        }
     }
 
     private void show(DisplayState display, Viewer viewer) {
-        if (display.spawnBuffer == null) {
-            WrapperPlayServerSpawnEntity spawn = new WrapperPlayServerSpawnEntity(display.entityId, display.uuid,
-                    display.isBlock() ? EntityTypes.BLOCK_DISPLAY : EntityTypes.ITEM_DISPLAY,
-                    new Location(display.x, display.y, display.z, 0f, 0f), 0f, 0, null);
-            display.spawnBuffer = encode(spawn, viewer.channel);
-            display.metadataBuffer = encode(packet.spawn(display), viewer.channel);
+        if (display.spawnBuffers == null) {
+            freshen(display);
+            PartState[] parts = display.parts;
+            Object[] buffers = new Object[parts.length * 2];
+            display.spawnBuffers = buffers;
             markEncoded(display);
+            for (int i = 0; i < parts.length; i++) {
+                PartState part = parts[i];
+                WrapperPlayServerSpawnEntity spawn = new WrapperPlayServerSpawnEntity(part.entityId, part.uuid,
+                        part.isBlock() ? EntityTypes.BLOCK_DISPLAY : EntityTypes.ITEM_DISPLAY,
+                        new Location(display.x, display.y, display.z, display.yaw, display.pitch), display.yaw, 0, null);
+                buffers[i * 2] = encode(spawn, viewer.channel);
+                buffers[i * 2 + 1] = encode(packet.spawn(part, display.clientRange()), viewer.channel);
+            }
         }
-        queue(viewer, ByteBufHelper.retainedDuplicate(display.spawnBuffer));
-        queue(viewer, ByteBufHelper.retainedDuplicate(display.metadataBuffer));
+        for (Object buffer : display.spawnBuffers) {
+            queue(viewer, ByteBufHelper.retainedDuplicate(buffer));
+        }
         viewer.visible.add(display);
         display.viewers.add(viewer);
     }
 
     private void hide(DisplayState display, Viewer viewer) {
         if (display.destroyBuffer == null) {
-            display.destroyBuffer = encode(new WrapperPlayServerDestroyEntities(display.entityId), viewer.channel);
             markEncoded(display);
+            display.destroyBuffer = encode(new WrapperPlayServerDestroyEntities(display.entityIds), viewer.channel);
         }
         queue(viewer, ByteBufHelper.retainedDuplicate(display.destroyBuffer));
         viewer.visible.remove(display);
@@ -363,11 +516,13 @@ final class MotionEngine {
 
         for (int i = 0; i < encoded.size(); i++) {
             DisplayState display = encoded.get(i);
-            release(display.spawnBuffer);
-            release(display.metadataBuffer);
+            if (display.spawnBuffers != null) {
+                for (Object buffer : display.spawnBuffers) {
+                    release(buffer);
+                }
+                display.spawnBuffers = null;
+            }
             release(display.destroyBuffer);
-            display.spawnBuffer = null;
-            display.metadataBuffer = null;
             display.destroyBuffer = null;
             display.encoded = false;
         }
@@ -388,11 +543,6 @@ final class MotionEngine {
         }
     }
 
-    private Frames bake(Animation animation, boolean block) {
-        Map<Animation, Frames> cache = block ? blockFrames : itemFrames;
-        return cache.computeIfAbsent(animation, key -> Frames.bake(key, block));
-    }
-
     private void shutdown() {
         try {
             drainCommands();
@@ -403,19 +553,46 @@ final class MotionEngine {
             release(bundle);
             bundle = null;
         } catch (Throwable t) {
-            plugin.getLogger().log(Level.WARNING, "displaymotion could not clean up", t);
+            warn("displaymotion could not clean up", t);
         }
     }
 
+    private void warn(String message, Throwable error) {
+        errors++;
+        if (errors <= LOUD_ERRORS) {
+            plugin.getLogger().log(Level.WARNING, message, error);
+            return;
+        }
+        long now = System.nanoTime();
+        if (now - lastQuietLog >= QUIET_LOG_NANOS) {
+            lastQuietLog = now;
+            plugin.getLogger().log(Level.WARNING, message + " (" + errors + " errors so far)", error);
+        }
+    }
+
+    private static boolean anyRunning(DisplayState display) {
+        for (Track track : display.tracks) {
+            if (track != null && track.running) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static Object encode(PacketWrapper<?> wrapper, Object channel) {
-        wrapper.prepareForSend(channel, true);
-        Object buffer = wrapper.getBuffer();
-        wrapper.setBuffer(null);
-        return buffer;
+        try {
+            wrapper.prepareForSend(channel, true);
+            return wrapper.getBuffer();
+        } catch (Throwable t) {
+            release(wrapper.getBuffer());
+            throw t;
+        } finally {
+            wrapper.setBuffer(null);
+        }
     }
 
     private static void release(Object buffer) {
-        if (buffer != null) {
+        if (buffer != null && ByteBufHelper.refCnt(buffer) > 0) {
             ByteBufHelper.release(buffer);
         }
     }

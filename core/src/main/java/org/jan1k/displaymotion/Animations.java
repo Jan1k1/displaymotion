@@ -2,6 +2,8 @@ package org.jan1k.displaymotion;
 
 public final class Animations {
 
+    public static final int MIN_TICKS_PER_TURN = 6;
+
     private Animations() {
     }
 
@@ -22,12 +24,19 @@ public final class Animations {
     }
 
     public static Animation spin(int ticksPerTurn) {
-        requirePositive(ticksPerTurn);
+        if (ticksPerTurn < MIN_TICKS_PER_TURN) {
+            throw new IllegalArgumentException("a spin needs at least " + MIN_TICKS_PER_TURN
+                    + " ticks per turn, or the client cannot tell the direction, got " + ticksPerTurn);
+        }
+        return turn(0f, 360f, 0f, ticksPerTurn).loop();
+    }
+
+    public static Animation turn(float pitch, float yaw, float roll, int ticks) {
+        requirePositive(ticks);
         return Animation.keyframes()
                 .at(0, Pose.IDENTITY)
-                .at(ticksPerTurn, Pose.IDENTITY.withRotation(0f, 360f, 0f))
-                .build()
-                .loop();
+                .at(ticks, Pose.IDENTITY.withRotation(pitch, yaw, roll))
+                .build();
     }
 
     public static Animation bob(float height, int ticks) {

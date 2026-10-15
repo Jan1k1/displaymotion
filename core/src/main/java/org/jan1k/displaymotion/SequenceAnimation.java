@@ -1,10 +1,13 @@
 package org.jan1k.displaymotion;
 
+import java.util.Arrays;
 import java.util.List;
 
 final class SequenceAnimation implements Animation {
 
     private final Animation[] parts;
+    private final Pose[] starts;
+    private final Pose end;
     private final int introTicks;
     private final int loopTicks;
 
@@ -12,30 +15,37 @@ final class SequenceAnimation implements Animation {
         if (parts.isEmpty()) {
             throw new IllegalArgumentException("a sequence needs at least one animation");
         }
-        this.parts = parts.toArray(Animation[]::new);
+        int count = 0;
         int intro = 0;
         int loop = 0;
-        for (Animation part : this.parts) {
+        Pose base = Pose.IDENTITY;
+        Pose[] starts = new Pose[parts.size()];
+        for (Animation part : parts) {
+            starts[count++] = base;
             intro += part.introTicks();
             if (part.isEndless()) {
                 loop = part.loopTicks();
                 break;
             }
+            base = base.combine(part.poseAt(part.introTicks()));
         }
+        this.parts = parts.subList(0, count).toArray(Animation[]::new);
+        this.starts = Arrays.copyOf(starts, count);
+        this.end = base;
         this.introTicks = intro;
         this.loopTicks = loop;
     }
 
     @Override
     public Pose poseAt(float tick) {
-        for (Animation part : parts) {
+        for (int i = 0; i < parts.length; i++) {
+            Animation part = parts[i];
             if (part.isEndless() || tick < part.introTicks()) {
-                return part.poseAt(tick);
+                return starts[i].combine(part.poseAt(tick));
             }
             tick -= part.introTicks();
         }
-        Animation last = parts[parts.length - 1];
-        return last.poseAt(last.introTicks());
+        return end;
     }
 
     @Override

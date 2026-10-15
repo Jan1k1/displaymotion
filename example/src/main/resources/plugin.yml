@@ -6,7 +6,7 @@ depend: [packetevents]
 
 commands:
   displaymotion:
-    usage: /displaymotion [block|stop]
+    usage: /displaymotion [block|windmill|stop]
     permission: displaymotion.use
 
 permissions:

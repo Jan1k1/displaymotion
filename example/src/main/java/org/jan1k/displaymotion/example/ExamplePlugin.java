@@ -13,7 +13,9 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jan1k.displaymotion.Animation;
 import org.jan1k.displaymotion.Animations;
+import org.jan1k.displaymotion.Pose;
 import org.jan1k.displaymotion.packetevents.DisplayMotion;
+import org.jan1k.displaymotion.packetevents.ModelBuilder;
 import org.jan1k.displaymotion.packetevents.MotionDisplay;
 
 import java.util.HashMap;
@@ -37,7 +39,9 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
-        motion.close();
+        if (motion != null) {
+            motion.close();
+        }
         displays.clear();
     }
 
@@ -59,7 +63,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
         MotionDisplay old = displays.remove(player.getUniqueId());
         if (args.length > 0 && args[0].equalsIgnoreCase("stop")) {
             if (old != null) {
-                old.play(HIDE).onEnd(old::remove);
+                old.play(HIDE, old::remove);
             }
             sender.sendPlainMessage("removed");
             return true;
@@ -68,12 +72,38 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
             old.remove();
         }
 
-        Location at = player.getLocation().add(0, 1.5, 0);
-        MotionDisplay display = args.length > 0 && args[0].equalsIgnoreCase("block")
-                ? motion.block(at, Material.DIAMOND_BLOCK.createBlockData())
-                : motion.item(at, ItemStack.of(Material.DIAMOND_SWORD), ItemDisplay.ItemDisplayTransform.GROUND);
-        display.play(SHOW);
+        String kind = args.length > 0 ? args[0].toLowerCase() : "sword";
+        MotionDisplay display = switch (kind) {
+            case "block" -> motion.block(player.getLocation().add(0, 1.5, 0), Material.DIAMOND_BLOCK.createBlockData())
+                    .play(SHOW);
+            case "windmill" -> windmill(player.getLocation().add(2, 0, 0));
+            default -> motion.item(player.getLocation().add(0, 1.5, 0), ItemStack.of(Material.DIAMOND_SWORD),
+                    ItemDisplay.ItemDisplayTransform.GROUND).play(SHOW);
+        };
         displays.put(player.getUniqueId(), display);
         return true;
+    }
+
+    private MotionDisplay windmill(Location at) {
+        ModelBuilder model = motion.model(at)
+                .block("base", Material.STONE_BRICKS.createBlockData(), Pose.IDENTITY
+                        .withOffset(0f, 0.15f, 0f).withScale(1.2f, 0.3f, 1.2f))
+                .block("tower", Material.OAK_PLANKS.createBlockData(), Pose.IDENTITY
+                        .withOffset(0f, 1.15f, 0f).withScale(0.6f, 1.7f, 0.6f), "base")
+                .block("roof", Material.DARK_OAK_PLANKS.createBlockData(), Pose.IDENTITY
+                        .withOffset(0f, 1f, 0f).withRotation(0f, 45f, 0f).withScale(0.8f, 0.3f, 0.8f), "tower")
+                .block("hub", Material.DARK_OAK_LOG.createBlockData(), Pose.IDENTITY
+                        .withOffset(0f, 0.55f, 0.4f).withScale(0.2f, 0.2f, 0.2f), "tower");
+        for (int i = 0; i < 4; i++) {
+            float angle = i * 90f;
+            double radians = Math.toRadians(angle);
+            model.block("blade" + i, Material.WHITE_WOOL.createBlockData(), Pose.IDENTITY
+                    .withOffset((float) (-Math.sin(radians) * 0.6), (float) (Math.cos(radians) * 0.6), 0.05f)
+                    .withRotation(0f, 0f, angle)
+                    .withScale(0.18f, 1f, 0.04f), "hub");
+        }
+        return model.spawn()
+                .play(Animations.popIn(20))
+                .play("hub", Animations.turn(0f, 0f, 360f, 60).loop());
     }
 }
