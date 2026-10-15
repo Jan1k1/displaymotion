@@ -3,8 +3,9 @@ plugins {
 }
 
 allprojects {
-    group = "org.jan1k"
-    version = "0.1.0-SNAPSHOT"
+    // jitpack serves the modules as com.github.Jan1k1.displaymotion:<module>
+    group = if (System.getenv("JITPACK") == "true") "com.github.Jan1k1.displaymotion" else "org.jan1k"
+    version = if (System.getenv("JITPACK") == "true") System.getenv("VERSION") ?: "0.1.0-SNAPSHOT" else "0.1.0-SNAPSHOT"
 }
 
 subprojects {

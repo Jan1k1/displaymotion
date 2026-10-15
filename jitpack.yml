@@ -1,0 +1,5 @@
+# gradle runs on 17 here and downloads java 25 for the build by itself (foojay toolchain)
+jdk:
+  - openjdk17
+install:
+  - ./gradlew :core:publishToMavenLocal :packetevents:publishToMavenLocal -x test
