@@ -1,0 +1,16 @@
+name: Feature idea
+description: Something the library should do.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What do you want to make?
+      description: Tell us the thing you want to build on your server, not only the API you think of.
+    validations:
+      required: true
+  - type: textarea
+    id: api
+    attributes:
+      label: How could the code look?
+      render: java

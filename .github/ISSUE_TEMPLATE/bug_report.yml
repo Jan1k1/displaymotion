@@ -1,0 +1,43 @@
+name: Bug report
+description: Something does not work like the docs say.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks! Please search the open issues first, maybe it is already reported.
+  - type: input
+    id: server
+    attributes:
+      label: Server version
+      description: The output of /version
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: displaymotion and PacketEvents versions
+      placeholder: displaymotion v0.1.0, PacketEvents 2.14.0
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: Client version
+      placeholder: 1.21.11 through ViaBackwards
+  - type: textarea
+    id: plugins
+    attributes:
+      label: Other plugins on the server
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what you saw. Code that shows the problem helps a lot.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Server log
+      description: The error, if there is one. Turn on debug with motion.debug(true) for click problems.
+      render: text

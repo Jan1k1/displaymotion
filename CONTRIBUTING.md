@@ -2,16 +2,55 @@
 
 Thanks for helping. Bug reports, ideas, models and code are all welcome.
 
-## Issues
+## Before you start
 
-Write the server version, the client version, the plugins you use and what you expected.
+- Search the [issues](https://github.com/Jan1k1/displaymotion/issues) first. Maybe someone already reported it or works on it.
+- For a big change, open an issue first and say what you want to do. Then we can agree on the way before you write a lot of code.
+- Be kind. See the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Setup
+
+You need Git and a JDK 17 or newer to start Gradle. The build downloads Java 25 by itself (Gradle toolchains).
+
+```
+git clone https://github.com/Jan1k1/displaymotion.git
+cd displaymotion
+./gradlew build
+```
+
+- IntelliJ IDEA: open the folder and load it as a Gradle project.
+- Modules: `core` (math and animations, no dependencies), `packetevents` (the API people use), `example` (a demo plugin).
+- The example plugin jar is in `example/build/libs/` after the build.
+
+### Test in game
+
+1. Run a Paper 26.3 server with the [PacketEvents](https://modrinth.com/plugin/packetevents) plugin, 2.14.0 or newer.
+2. Put `example/build/libs/displaymotion-example-<version>.jar` in `plugins/`. Remove older copies first.
+3. Join and try `/dm showcase`. It spawns every example at once. `/dm stop` removes it.
+4. `/dm debug` writes what the library does with clicks and hitboxes to the server log.
+
+## Report a bug
+
+Use the bug report form on GitHub. Write:
+
+- The server version (`/version`), the PacketEvents version and the client version.
+- The other plugins on the server.
+- What you did, what you expected and what happened.
+- The error from the server log, if there is one.
 
 ## Pull requests
 
+- Fork the repository and make a branch from `main`, for example `fix-text-glow`.
 - Keep one change per pull request.
-- Build and test before you send it: `./gradlew build`.
 - Follow the style of the code around your change.
+- Commit messages are short and lowercase, for example `fix clicks on 26.1`.
 - Update `docs/` and `llms.txt` when you change the API.
+
+### Tests
+
+- `./gradlew build` must pass. It runs all tests.
+- Add a test when you change the engine or the math. The tests for packets are in `packetevents/src/test`, they use a fake channel and need no server.
+- Test visible changes in game too, and write in the pull request what you tried.
 
 ## For AI agents
 

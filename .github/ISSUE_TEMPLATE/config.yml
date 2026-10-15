@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Docs
+    url: https://github.com/Jan1k1/displaymotion/tree/main/docs
+    about: Read the docs first, many questions are answered there.
