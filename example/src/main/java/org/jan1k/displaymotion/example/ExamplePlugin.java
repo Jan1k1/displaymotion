@@ -1,6 +1,7 @@
 package org.jan1k.displaymotion.example;
 
 import com.mojang.brigadier.Command;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
@@ -26,7 +27,9 @@ import org.jan1k.displaymotion.Pose;
 import org.jan1k.displaymotion.packetevents.DisplayMotion;
 import org.jan1k.displaymotion.packetevents.ModelBuilder;
 import org.jan1k.displaymotion.packetevents.MotionDisplay;
+import org.jan1k.displaymotion.packetevents.blockbench.BlockbenchModel;
 
+import java.io.File;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,6 +53,9 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
     @Override
     public void onEnable() {
         motion = DisplayMotion.create(this);
+        if (!new File(getDataFolder(), "models/robot.bbmodel").exists()) {
+            saveResource("models/robot.bbmodel", false);
+        }
         getServer().getPluginManager().registerEvents(this, this);
         registerCommand();
     }
@@ -105,6 +111,26 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
         }
         root.then(effect).then(killEffect);
 
+        // drop any .bbmodel from blockbench into plugins/displaymotion-example/models
+        root.then(Commands.literal("model")
+                .then(Commands.argument("file", StringArgumentType.word())
+                        .suggests((context, builder) -> {
+                            modelFiles().forEach(builder::suggest);
+                            return builder.buildFuture();
+                        })
+                        .executes(context -> showModel(context.getSource(), StringArgumentType.getString(context, "file"), null))
+                        .then(Commands.argument("animation", StringArgumentType.word())
+                                .suggests((context, builder) -> {
+                                    BlockbenchModel model = loadModel(StringArgumentType.getString(context, "file"));
+                                    if (model != null) {
+                                        model.animations().forEach(builder::suggest);
+                                    }
+                                    return builder.buildFuture();
+                                })
+                                .executes(context -> showModel(context.getSource(),
+                                        StringArgumentType.getString(context, "file"),
+                                        StringArgumentType.getString(context, "animation"))))));
+
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
                 event.registrar().register(root.build(), "spawn an animated display", List.of("dm")));
     }
@@ -120,6 +146,44 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
         }
         displays.put(player.getUniqueId(), spawn.apply(player));
         return Command.SINGLE_SUCCESS;
+    }
+
+    private int showModel(CommandSourceStack source, String file, String animation) {
+        BlockbenchModel model = loadModel(file);
+        if (model == null) {
+            source.getSender().sendPlainMessage("cant read models/" + file + ", is it a .bbmodel from blockbench?");
+            return 0;
+        }
+        if (animation != null && !model.animations().contains(animation)) {
+            source.getSender().sendPlainMessage("no animation " + animation + ", there is " + model.animations());
+            return 0;
+        }
+        return show(source, player -> {
+            MotionDisplay display = model.spawn(motion, inFront(player, 5));
+            String clip = animation != null ? animation : model.animations().stream().findFirst().orElse(null);
+            if (clip != null) {
+                model.play(display, clip);
+            }
+            return display.play(Animations.popIn(15));
+        });
+    }
+
+    private List<String> modelFiles() {
+        File[] files = new File(getDataFolder(), "models").listFiles((dir, name) -> name.endsWith(".bbmodel"));
+        return files == null ? List.of() : java.util.Arrays.stream(files).map(File::getName).sorted().toList();
+    }
+
+    private BlockbenchModel loadModel(String file) {
+        File source = new File(new File(getDataFolder(), "models"), file);
+        if (!source.isFile() || !file.endsWith(".bbmodel")) {
+            return null;
+        }
+        try {
+            return BlockbenchModel.load(source.toPath());
+        } catch (Exception e) {
+            getLogger().warning("could not read " + file + ": " + e.getMessage());
+            return null;
+        }
     }
 
     private int effectHere(CommandSourceStack source, String effect) {

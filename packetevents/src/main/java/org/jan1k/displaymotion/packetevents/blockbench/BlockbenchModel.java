@@ -157,6 +157,13 @@ public final class BlockbenchModel {
         return nodes.stream().map(Node::name).toList();
     }
 
+    Animation animation(String clip, String part, float scale) {
+        Clip found = clips.get(clip);
+        Node node = nodes.stream().filter(n -> n.name().equals(part)).findFirst().orElseThrow();
+        Channels channels = found.bones().get(node.uuid());
+        return channels == null ? REST : boneAnimation(node, found, channels, scale);
+    }
+
     Material material(String part) {
         return nodes.stream().filter(node -> node.name().equals(part)).findFirst().map(Node::material).orElse(null);
     }

@@ -128,6 +128,23 @@ class BlockbenchModelTest {
     }
 
     @Test
+    void exampleRobotLoadsWithTheRightBlocks() throws Exception {
+        String json = new String(getClass().getResourceAsStream("/robot.bbmodel").readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        BlockbenchModel robot = BlockbenchModel.parse(json);
+
+        assertEquals(List.of("wave", "walk"), robot.animations());
+        assertEquals(Material.WHITE_WOOL, robot.material("head_2"));
+        assertEquals(Material.LIGHT_BLUE_WOOL, robot.material("body_2"));
+        assertEquals(Material.BLACK_CONCRETE, robot.material("eye_left"));
+        assertEquals(Material.REDSTONE_BLOCK, robot.material("light"));
+        for (String clip : robot.animations()) {
+            for (String part : robot.parts()) {
+                org.jan1k.displaymotion.Frames.bake(robot.animation(clip, part, 1f));
+            }
+        }
+    }
+
+    @Test
     void paletteFindsObviousColors() {
         assertEquals(Material.REDSTONE_BLOCK, BlockPalette.closest(0xAF1805));
         assertEquals(Material.SNOW_BLOCK, BlockPalette.closest(0xFFFFFF));
