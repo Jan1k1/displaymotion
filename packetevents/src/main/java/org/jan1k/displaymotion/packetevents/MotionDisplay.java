@@ -334,10 +334,12 @@ public final class MotionDisplay {
     void click(UUID id, Hitbox hitbox, boolean left) {
         Consumer<Click> handler = onClick;
         if (handler == null || isRemoved()) {
+            engine.debug("click on '" + hitbox.name + "' dropped: " + (handler == null ? "no onClick handler" : "display removed"));
             return;
         }
         Player player = Bukkit.getPlayer(id);
         if (player == null || !inReach(player, hitbox)) {
+            engine.debug("click on '" + hitbox.name + "' dropped: " + (player == null ? "player not online" : "too far away"));
             return;
         }
         handler.accept(new Click(player, this, hitbox.name, left));

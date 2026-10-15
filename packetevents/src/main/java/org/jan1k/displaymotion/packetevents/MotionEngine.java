@@ -73,6 +73,7 @@ final class MotionEngine {
     private final Map<Integer, Hitbox> clickable = new ConcurrentHashMap<>();
 
     private volatile Snapshot snapshot = new Snapshot(0L, new PlayerView[0]);
+    volatile boolean debug;
     private Snapshot seen;
     private Object bundle;
     private long tick;
@@ -125,6 +126,12 @@ final class MotionEngine {
         return clickable.get(entityId);
     }
 
+    void debug(String message) {
+        if (debug) {
+            plugin.getLogger().info("[debug] " + message);
+        }
+    }
+
     void close() {
         if (!closed.compareAndSet(false, true)) {
             return;
@@ -171,6 +178,8 @@ final class MotionEngine {
         }
         display.addHitbox(hitbox);
         clickable.put(hitbox.entityId, hitbox);
+        debug("hitbox '" + hitbox.name + "' (" + hitbox.entityId + ") " + hitbox.width + "x" + hitbox.height
+                + " added, " + display.viewers.size() + " players see it now");
         List<Viewer> targets = display.viewers;
         if (display.fresh || targets.isEmpty()) {
             return;

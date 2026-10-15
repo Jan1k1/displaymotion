@@ -7,8 +7,10 @@ import com.github.retrooper.packetevents.event.PacketListenerCommon;
 import com.github.retrooper.packetevents.event.PacketListenerPriority;
 import com.github.retrooper.packetevents.event.PacketReceiveEvent;
 import com.github.retrooper.packetevents.manager.player.PlayerManager;
+import com.github.retrooper.packetevents.manager.server.ServerVersion;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import com.github.retrooper.packetevents.protocol.player.InteractionHand;
+import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientAttack;
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientInteractEntity;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
@@ -124,6 +126,20 @@ public final class DisplayMotion {
         engine.close();
     }
 
+    /**
+     * Logs what the library does with clicks and hitboxes to the plugin logger. Off by default.
+     * Turn it on when a hitbox does not react, the log says where the click got lost.
+     */
+    public DisplayMotion debug(boolean on) {
+        engine.debug = on;
+        return this;
+    }
+
+    /** True while {@link #debug(boolean)} is on. */
+    public boolean isDebug() {
+        return engine.debug;
+    }
+
     /** True after {@link #close()} or after the plugin disabled. */
     public boolean isClosed() {
         return engine.isClosed();
@@ -164,25 +180,47 @@ public final class DisplayMotion {
 
     private final class Clicks implements PacketListener {
 
+        // 26.1 split the old packet in two: left click is its own attack packet now, and a right click
+        // only comes as interact_at. first version only listened for the old way so no click ever got thru
+        private final boolean newClicks = PacketEvents.getAPI().getServerManager().getVersion()
+                .isNewerThanOrEquals(ServerVersion.V_26_1);
+
         @Override
         public void onPacketReceive(PacketReceiveEvent event) {
-            if (event.getPacketType() != PacketType.Play.Client.INTERACT_ENTITY) {
+            int entityId;
+            boolean left;
+            if (event.getPacketType() == PacketType.Play.Client.ATTACK) {
+                entityId = new WrapperPlayClientAttack(event).getEntityId();
+                left = true;
+            } else if (event.getPacketType() == PacketType.Play.Client.INTERACT_ENTITY) {
+                WrapperPlayClientInteractEntity packet = new WrapperPlayClientInteractEntity(event);
+                entityId = packet.getEntityId();
+                WrapperPlayClientInteractEntity.InteractAction action = packet.getAction();
+                left = action == WrapperPlayClientInteractEntity.InteractAction.ATTACK;
+                if (engine.debug && engine.hitbox(entityId) != null) {
+                    engine.debug("click packet on hitbox " + entityId + ": " + action + " " + packet.getHand());
+                }
+                // older servers send interact_at and interact for one right click, and again for the off hand
+                WrapperPlayClientInteractEntity.InteractAction counted = newClicks
+                        ? WrapperPlayClientInteractEntity.InteractAction.INTERACT_AT
+                        : WrapperPlayClientInteractEntity.InteractAction.INTERACT;
+                if (!left && (action != counted || packet.getHand() != InteractionHand.MAIN_HAND)) {
+                    if (engine.hitbox(entityId) != null) {
+                        event.setCancelled(true);
+                    }
+                    return;
+                }
+            } else {
                 return;
             }
-            WrapperPlayClientInteractEntity packet = new WrapperPlayClientInteractEntity(event);
-            Hitbox hitbox = engine.hitbox(packet.getEntityId());
+            Hitbox hitbox = engine.hitbox(entityId);
             if (hitbox == null) {
                 return;
             }
             // the server does not know this entity, so dont let it even look at the packet
             event.setCancelled(true);
-            boolean left = packet.getAction() == WrapperPlayClientInteractEntity.InteractAction.ATTACK;
-            // one right click sends interact_at and interact, and again for the off hand. only count one
-            if (!left && (packet.getAction() != WrapperPlayClientInteractEntity.InteractAction.INTERACT
-                    || packet.getHand() != InteractionHand.MAIN_HAND)) {
-                return;
-            }
             UUID id = event.getUser().getUUID();
+            engine.debug((left ? "left" : "right") + " click on hitbox '" + hitbox.name + "' (" + entityId + ") by " + id);
             if (id == null || !plugin.isEnabled()) {
                 return;
             }
