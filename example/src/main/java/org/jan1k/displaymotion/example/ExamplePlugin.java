@@ -27,7 +27,7 @@ import org.jan1k.displaymotion.Pose;
 import org.jan1k.displaymotion.packetevents.DisplayMotion;
 import org.jan1k.displaymotion.packetevents.ModelBuilder;
 import org.jan1k.displaymotion.packetevents.MotionDisplay;
-import org.jan1k.displaymotion.packetevents.blockbench.BlockbenchModel;
+import org.jan1k.displaymotion.packetevents.ImportedModel;
 
 import java.io.File;
 import java.util.HashMap;
@@ -111,7 +111,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
         }
         root.then(effect).then(killEffect);
 
-        // drop any .bbmodel from blockbench into plugins/displaymotion-example/models
+        // drop any .bbmodel (blockbench) or .bdengine (bdengine) file into plugins/displaymotion-example/models
         root.then(Commands.literal("model")
                 .then(Commands.argument("file", StringArgumentType.word())
                         .suggests((context, builder) -> {
@@ -121,7 +121,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                         .executes(context -> showModel(context.getSource(), StringArgumentType.getString(context, "file"), null))
                         .then(Commands.argument("animation", StringArgumentType.word())
                                 .suggests((context, builder) -> {
-                                    BlockbenchModel model = loadModel(StringArgumentType.getString(context, "file"));
+                                    ImportedModel model = loadModel(StringArgumentType.getString(context, "file"));
                                     if (model != null) {
                                         model.animations().forEach(builder::suggest);
                                     }
@@ -149,9 +149,9 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
     }
 
     private int showModel(CommandSourceStack source, String file, String animation) {
-        BlockbenchModel model = loadModel(file);
+        ImportedModel model = loadModel(file);
         if (model == null) {
-            source.getSender().sendPlainMessage("cant read models/" + file + ", is it a .bbmodel from blockbench?");
+            source.getSender().sendPlainMessage("cant read models/" + file + ", is it a .bbmodel or .bdengine file?");
             return 0;
         }
         if (animation != null && !model.animations().contains(animation)) {
@@ -169,17 +169,17 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
     }
 
     private List<String> modelFiles() {
-        File[] files = new File(getDataFolder(), "models").listFiles((dir, name) -> name.endsWith(".bbmodel"));
+        File[] files = new File(getDataFolder(), "models").listFiles((dir, name) -> name.endsWith(".bbmodel") || name.endsWith(".bdengine"));
         return files == null ? List.of() : java.util.Arrays.stream(files).map(File::getName).sorted().toList();
     }
 
-    private BlockbenchModel loadModel(String file) {
+    private ImportedModel loadModel(String file) {
         File source = new File(new File(getDataFolder(), "models"), file);
-        if (!source.isFile() || !file.endsWith(".bbmodel")) {
+        if (!source.isFile()) {
             return null;
         }
         try {
-            return BlockbenchModel.load(source.toPath());
+            return ImportedModel.load(source.toPath());
         } catch (Exception e) {
             getLogger().warning("could not read " + file + ": " + e.getMessage());
             return null;
