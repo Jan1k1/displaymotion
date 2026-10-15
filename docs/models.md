@@ -132,7 +132,9 @@ MotionDisplay crown = motion.model(player.getLocation())
 - The display becomes a passenger of the entity, only on the players' side. Their game moves it every frame, so it never lags behind and walking costs the server nothing.
 - The server only checks the turn of the entity once per tick, and sends one small packet when it changes. That is cheap even with a thousand riders.
 - The display location is where a passenger sits: the top of the hitbox, 1.8 blocks above the feet of a player. The drawn head goes up to about 1.875, so lift a hat by about 0.04 or it sits inside the head. `withOffset(0f, -0.74f, -0.235f)` puts a 0.25 deep backpack right on the back.
-- `Follow.BODY` turns with the body (backpacks, wings). `Follow.HEAD` turns with where the entity looks, only left and right (hats). `Follow.NONE` keeps its turn.
+- `Follow.BODY` turns with the body (backpacks, wings) and leans forward when a player sneaks. `Follow.HEAD` moves like the head (hats): on a player it turns and tilts around the neck and goes down when they sneak. `Follow.NONE` keeps its turn.
+- The body of a player is worked out like the game does it (walk direction, the head can turn 50 degrees before the body follows), because the server does not know it.
+- The player who wears it sees a turn a little late, about their ping. The server only learns where they look when their game tells it. Other players see it in time with the head.
 - Real passengers of the entity stay on it.
 - `dismount()` or `teleport(...)` stops riding. Call `ride` on the main thread.
 - When the player dies, the display waits and comes back with them. When a mob dies, the display stays where it was.
