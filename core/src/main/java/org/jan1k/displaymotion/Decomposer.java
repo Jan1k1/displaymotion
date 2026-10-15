@@ -49,7 +49,8 @@ public final class Decomposer {
                 v[i * 3 + j] = i == j ? 1 : 0;
             }
         }
-        // if theres no shear the colums are already the answer, skip svd so right rotation stays still
+        // hmm, without shear the colums are already the answer. skipping svd here also
+        // fixed the wobble on tilted spins, jacobi was picking a random right rotation
         if (!orthogonal()) {
             jacobi();
         }

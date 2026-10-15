@@ -8,7 +8,8 @@ import java.util.UUID;
 
 final class DisplayState {
 
-    // hide a bit further then we show so walking on the edge doesnt spam spawn and destroy
+    // standing right on the edge made it spawn and despawn every few ticks,
+    // so we hide a bit further out then we show
     static final double HIDE_MARGIN = 4.0;
 
     UUID world;

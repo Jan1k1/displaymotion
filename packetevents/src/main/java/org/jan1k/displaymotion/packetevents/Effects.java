@@ -119,7 +119,8 @@ public final class Effects {
     }
 
     // rotation is in the animation not the part, so up stays up for the drop
-    // +135 bc the client turns every item display 180 on y first, so the the blade points down
+    // had -135 first and the swords flew sideways lol. client turns item displays 180 on y
+    // before our transform, so its +135 and then the the blade points down
     static Animation swordFall(int start, float yaw) {
         Pose high = Pose.IDENTITY.withOffset(0f, 7f, 0f).withRotation(0f, yaw, 135f);
         Pose stuck = Pose.IDENTITY.withRotation(0f, yaw, 135f);

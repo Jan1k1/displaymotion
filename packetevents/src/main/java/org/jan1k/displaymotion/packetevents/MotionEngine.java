@@ -145,7 +145,8 @@ final class MotionEngine {
     void add(DisplayState display) {
         composer.compose(display, true);
         display.index = displays.size();
-        // wait one tick so a play() right after spawn is already in, otherwise you get a full size flash
+        // got a full size flash here when play() came a tick after the spawn,
+        // so just wait one tick before showing it and the first frame is already right
         display.showAfter = tick + 1;
         displays.add(display);
         fresh.add(display);
