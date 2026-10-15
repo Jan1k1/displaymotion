@@ -271,6 +271,32 @@ final class MotionEngine {
         }
     }
 
+    void visibility(DisplayState display, UUID player, boolean visible) {
+        if (display.removed) {
+            return;
+        }
+        if (visible) {
+            display.hiddenFrom.remove(player);
+            display.shownTo.add(player);
+        } else {
+            display.shownTo.remove(player);
+            display.hiddenFrom.add(player);
+        }
+        if (!display.fresh) {
+            updateViewers(display);
+        }
+    }
+
+    void visibleByDefault(DisplayState display, boolean visible) {
+        if (display.removed) {
+            return;
+        }
+        display.visibleByDefault = visible;
+        if (!display.fresh) {
+            updateViewers(display);
+        }
+    }
+
     void viewRange(DisplayState display, double range) {
         if (display.removed) {
             return;

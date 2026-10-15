@@ -11,6 +11,7 @@ import io.netty.channel.embedded.EmbeddedChannel;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.jan1k.displaymotion.Animations;
 import org.jan1k.displaymotion.Pose;
@@ -180,6 +181,28 @@ class MotionEngineTest {
     }
 
     @Test
+    void hiddenPlayersDoNotSeeIt() {
+        MotionDisplay display = display();
+        tick();
+        tick();
+
+        display.hide(player());
+        assertEquals(List.of("destroy"), kinds(tick()));
+        display.show(player());
+        assertEquals(List.of("bundle", "spawn", "meta", "bundle"), kinds(tick()));
+    }
+
+    @Test
+    void privateDisplayOnlyShowsToChosenPlayers() {
+        MotionDisplay display = display().visibleByDefault(false);
+        tick();
+        assertEquals(List.of(), tick());
+
+        display.show(player());
+        assertEquals(List.of("bundle", "spawn", "meta", "bundle"), kinds(tick()));
+    }
+
+    @Test
     void viewerAtTheEdgeDoesNotFlicker() {
         display();
         tick();
@@ -249,6 +272,10 @@ class MotionEngineTest {
         assertEquals(4, delimiters);
         assertEquals(Viewer.MAX_BUNDLE + 1 + 4, out.length);
         bundle.release();
+    }
+
+    private static Player player() {
+        return FakePacketEvents.proxy(Player.class, (method, args) -> method.equals("getUniqueId") ? PLAYER : null);
     }
 
     private static World world() {

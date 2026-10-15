@@ -4,6 +4,7 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.entity.Display;
+import org.bukkit.entity.Player;
 import org.jan1k.displaymotion.Animation;
 import org.jan1k.displaymotion.Frames;
 
@@ -24,6 +25,7 @@ public final class MotionDisplay {
     private final List<String> parts;
 
     volatile boolean playing;
+    private volatile boolean visibleByDefault = true;
     private volatile boolean removed;
 
     MotionDisplay(MotionEngine engine, Location location, PartState[] parts, double range) {
@@ -185,6 +187,32 @@ public final class MotionDisplay {
         float yaw = copy.getYaw();
         float pitch = copy.getPitch();
         engine.submit(() -> engine.teleport(state, world, x, y, z, yaw, pitch, ticks));
+        return this;
+    }
+
+    public MotionDisplay show(Player player) {
+        return visibility(player, true);
+    }
+
+    public MotionDisplay hide(Player player) {
+        return visibility(player, false);
+    }
+
+    public MotionDisplay visibleByDefault(boolean visible) {
+        requireAlive();
+        visibleByDefault = visible;
+        engine.submit(() -> engine.visibleByDefault(state, visible));
+        return this;
+    }
+
+    public boolean isVisibleByDefault() {
+        return visibleByDefault;
+    }
+
+    private MotionDisplay visibility(Player player, boolean visible) {
+        UUID id = Objects.requireNonNull(player, "player").getUniqueId();
+        requireAlive();
+        engine.submit(() -> engine.visibility(state, id, visible));
         return this;
     }
 

@@ -1,7 +1,9 @@
 package org.jan1k.displaymotion.packetevents;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 final class DisplayState {
@@ -22,6 +24,9 @@ final class DisplayState {
     final long[] requests;
     final MotionDisplay handle;
     final List<Viewer> viewers = new ArrayList<>();
+    final Set<UUID> shownTo = new HashSet<>();
+    final Set<UUID> hiddenFrom = new HashSet<>();
+    boolean visibleByDefault = true;
 
     double range;
     int index;
@@ -55,7 +60,7 @@ final class DisplayState {
     }
 
     boolean canSee(Viewer viewer, boolean shown) {
-        if (!world.equals(viewer.world)) {
+        if (!allowed(viewer.id) || !world.equals(viewer.world)) {
             return false;
         }
         double limit = shown ? range + HIDE_MARGIN : range;
@@ -63,6 +68,13 @@ final class DisplayState {
         double dy = viewer.y - y;
         double dz = viewer.z - z;
         return dx * dx + dy * dy + dz * dz <= limit * limit;
+    }
+
+    boolean allowed(UUID player) {
+        if (hiddenFrom.contains(player)) {
+            return false;
+        }
+        return visibleByDefault || shownTo.contains(player);
     }
 
     double clientRange() {
