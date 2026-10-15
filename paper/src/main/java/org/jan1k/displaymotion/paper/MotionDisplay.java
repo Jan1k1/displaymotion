@@ -37,6 +37,9 @@ public final class MotionDisplay {
     // less then this is not worth a packet, the client cant even show a turn of under a degree
     private static final float RIDE_TURN = 1f;
     private static final double RIDE_MOVE = 0.5;
+    private static final double BODY_WALK_SQUARED = 0.0025;
+    private static final float BODY_FOLLOW = 0.3f;
+    private static final float BODY_MAX_HEAD = 50f;
 
     private final MotionEngine engine;
     private volatile Location location;
@@ -56,6 +59,10 @@ public final class MotionDisplay {
     private double lastY;
     private double lastZ;
     private float lastYaw;
+    // the server keeps no real body turn for players, so it is worked out here like the client does
+    private float bodyYaw;
+    private double previousX;
+    private double previousZ;
 
     volatile boolean playing;
     private volatile boolean visibleByDefault = true;
@@ -300,6 +307,9 @@ public final class MotionDisplay {
             throw new IllegalArgumentException("the vehicle is not in the world");
         }
         Location at = vehicle.getLocation();
+        bodyYaw = vehicle instanceof LivingEntity living && !(vehicle instanceof Player) ? living.getBodyYaw() : at.getYaw();
+        previousX = at.getX();
+        previousZ = at.getZ();
         float yaw = follow == Follow.NONE ? at.getYaw() : yawOf(vehicle, follow, at);
         at.setYaw(yaw);
         at.setPitch(0f);
@@ -423,6 +433,9 @@ public final class MotionDisplay {
         }
         ridden.getLocation(scratch);
         float yaw = follow == Follow.NONE ? lastYaw : yawOf(ridden, follow, scratch);
+        if (follow == Follow.BODY && ridden instanceof Player) {
+            yaw = turnBody(scratch);
+        }
         UUID world = scratch.getWorld().getUID();
         double dx = scratch.getX() - lastX;
         double dy = scratch.getY() - lastY;
@@ -452,11 +465,39 @@ public final class MotionDisplay {
         lastYaw = yaw;
     }
 
-    private static float yawOf(Entity entity, Follow follow, Location at) {
+    private float yawOf(Entity entity, Follow follow, Location at) {
+        if (follow == Follow.BODY && entity instanceof Player) {
+            return bodyYaw;
+        }
         if (follow == Follow.BODY && entity instanceof LivingEntity living) {
             return living.getBodyYaw();
         }
         return at.getYaw();
+    }
+
+    // same steps as vanilla LivingEntity: walking pulls the body to the walk direction (backwards keeps it
+    // facing forward), and the head can only turn 50 degrees away from the body before it drags the body along
+    private float turnBody(Location at) {
+        double dx = at.getX() - previousX;
+        double dz = at.getZ() - previousZ;
+        previousX = at.getX();
+        previousZ = at.getZ();
+        float head = at.getYaw();
+        float target = bodyYaw;
+        if (dx * dx + dz * dz > BODY_WALK_SQUARED) {
+            target = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90f;
+            float away = Math.abs(wrap(head) - target);
+            if (away > 95f && away < 265f) {
+                target -= 180f;
+            }
+        }
+        bodyYaw += wrap(target - bodyYaw) * BODY_FOLLOW;
+        float headAway = wrap(head - bodyYaw);
+        if (Math.abs(headAway) > BODY_MAX_HEAD) {
+            bodyYaw += headAway - Math.signum(headAway) * BODY_MAX_HEAD;
+        }
+        bodyYaw = wrap(bodyYaw);
+        return bodyYaw;
     }
 
     private static float wrap(float degrees) {

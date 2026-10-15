@@ -156,10 +156,16 @@ final class MotionEngine {
         return riders.containsKey(vehicle);
     }
 
+    // our own passenger packet comes thru the listener too, so drop our ids or they count as real ones.
+    // the bot test showed [570,571,570,571] for one backpack before this
     void serverPassengers(int vehicle, int[] passengers) {
-        if (riders.containsKey(vehicle)) {
-            serverPassengers.put(vehicle, passengers.clone());
+        int[] ours = riders.get(vehicle);
+        if (ours == null) {
+            return;
         }
+        serverPassengers.put(vehicle, Arrays.stream(passengers)
+                .filter(id -> Arrays.stream(ours).noneMatch(our -> our == id))
+                .toArray());
     }
 
     // the passenger packet replaces the whole list on the client, so it always has the real ones and ours
