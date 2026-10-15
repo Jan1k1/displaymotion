@@ -226,6 +226,26 @@ class MotionEngineTest {
     }
 
     @Test
+    void matrixPartsWorkLikeVanilla() {
+        float[] doubleSize = {2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 1};
+        float[] oneRight = {1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+        PartState[] parts = {
+                PartState.matrix("big", -1, -1, PartState.GROUP, null, 0, 0, null, doubleSize),
+                PartState.matrix("cube", ENTITY, 0, PartState.BLOCK, null, 0, 1, null, oneRight)
+        };
+        MotionDisplay display = new MotionDisplay(engine, new Location(world(), 0, 0, 0), parts, 48);
+        engine.submit(() -> engine.add(display.state()));
+        tick();
+        Packet meta = tick().get(2);
+
+        Vector3f translation = (Vector3f) value(meta, 11);
+        Vector3f scale = (Vector3f) value(meta, 12);
+        assertEquals(2f, translation.x, 1e-5f);
+        assertEquals(0f, translation.y, 1e-5f);
+        assertEquals(2f, scale.x, 1e-5f);
+    }
+
+    @Test
     void hiddenPlayersDoNotSeeIt() {
         MotionDisplay display = display();
         tick();

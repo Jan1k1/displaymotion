@@ -30,6 +30,7 @@ final class PartState {
     final float[] rest = new float[Affine.SIZE];
     final float[] world = new float[Affine.SIZE];
     final float[] sent = new float[Decomposer.SIZE];
+    final boolean centered;
     int changes;
     float cullWidth;
     float cullHeight;
@@ -54,7 +55,50 @@ final class PartState {
         this.sizeX = pose.scaleX();
         this.sizeY = pose.scaleY();
         this.sizeZ = pose.scaleZ();
+        this.centered = true;
         Affine.fromPose(pose.x(), pose.y(), pose.z(), pose.pitch(), pose.yaw(), pose.roll(), 1f, 1f, 1f, rest, 0);
+    }
+
+    // matrix parts work like vanilla: the whole matrix goes to the children and blocks turn around the corner
+    private PartState(String name, int entityId, int parent, int kind, ItemStack item, int itemTransform,
+                      int blockState, Component text, float[] matrix) {
+        this.name = name;
+        this.entityId = entityId;
+        this.parent = parent;
+        this.kind = kind;
+        this.item = item;
+        this.itemTransform = itemTransform;
+        this.blockState = blockState;
+        this.text = text;
+        this.sizeX = 1f;
+        this.sizeY = 1f;
+        this.sizeZ = 1f;
+        this.centered = false;
+        fromRows(matrix, rest);
+    }
+
+    static PartState matrix(String name, int entityId, int parent, int kind, ItemStack item, int itemTransform,
+                            int blockState, Component text, float[] matrix) {
+        return new PartState(name, entityId, parent, kind, item, itemTransform, blockState, text, matrix);
+    }
+
+    // 4x4 row by row (like /summon and bdengine) into our 3x4 column by column
+    static void fromRows(float[] m, float[] out) {
+        if (m.length != 16 && m.length != 12) {
+            throw new IllegalArgumentException("a matrix needs 16 numbers, row by row, got " + m.length);
+        }
+        out[0] = m[0];
+        out[1] = m[4];
+        out[2] = m[8];
+        out[3] = m[1];
+        out[4] = m[5];
+        out[5] = m[9];
+        out[6] = m[2];
+        out[7] = m[6];
+        out[8] = m[10];
+        out[9] = m[3];
+        out[10] = m[7];
+        out[11] = m[11];
     }
 
     static PartState item(String name, int entityId, int parent, ItemStack item, int itemTransform, Pose pose) {

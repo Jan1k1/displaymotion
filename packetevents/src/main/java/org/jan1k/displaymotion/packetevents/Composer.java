@@ -49,7 +49,7 @@ final class Composer {
             }
             System.arraycopy(part.world, 0, local, 0, Affine.SIZE);
             Affine.scale(local, 0, part.sizeX, part.sizeY, part.sizeZ);
-            if (part.isBlock()) {
+            if (part.isBlock() && part.centered) {
                 Affine.translate(local, 0, -0.5f, -0.5f, -0.5f);
             }
             decomposer.decompose(local, 0, current, 0);

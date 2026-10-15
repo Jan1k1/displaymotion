@@ -62,6 +62,44 @@ public final class ModelBuilder {
         return add(name, pose, parent, (id, parentIndex) -> PartState.group(name, parentIndex, pose));
     }
 
+    /**
+     * Adds a block from a 4x4 matrix given row by row, like the transformation in a /summon command.
+     * It works like vanilla: the block turns around its corner and the whole matrix passes to children.
+     */
+    public ModelBuilder block(String name, BlockData block, float[] matrix, String parent) {
+        Objects.requireNonNull(block, "block");
+        Objects.requireNonNull(matrix, "matrix");
+        int blockState = SpigotConversionUtil.fromBukkitBlockData(block).getGlobalId();
+        return add(name, Pose.IDENTITY, parent, (id, parentIndex) ->
+                PartState.matrix(name, id, parentIndex, PartState.BLOCK, null, 0, blockState, null, matrix.clone()));
+    }
+
+    /** Adds an item from a 4x4 matrix given row by row. */
+    public ModelBuilder item(String name, ItemStack item, ItemDisplay.ItemDisplayTransform transform, float[] matrix, String parent) {
+        Objects.requireNonNull(item, "item");
+        Objects.requireNonNull(transform, "transform");
+        Objects.requireNonNull(matrix, "matrix");
+        var converted = SpigotConversionUtil.fromBukkitItemStack(item);
+        int itemTransform = transform.ordinal();
+        return add(name, Pose.IDENTITY, parent, (id, parentIndex) ->
+                PartState.matrix(name, id, parentIndex, PartState.ITEM, converted, itemTransform, 0, null, matrix.clone()));
+    }
+
+    /** Adds a text from a 4x4 matrix given row by row. */
+    public ModelBuilder text(String name, Component text, float[] matrix, String parent) {
+        checkText(text);
+        Objects.requireNonNull(matrix, "matrix");
+        return add(name, Pose.IDENTITY, parent, (id, parentIndex) ->
+                PartState.matrix(name, id, parentIndex, PartState.TEXT, null, 0, 0, text, matrix.clone()));
+    }
+
+    /** Adds an invisible pivot from a 4x4 matrix given row by row. Its scale passes to the children too. */
+    public ModelBuilder group(String name, float[] matrix, String parent) {
+        Objects.requireNonNull(matrix, "matrix");
+        return add(name, Pose.IDENTITY, parent, (id, parentIndex) ->
+                PartState.matrix(name, -1, parentIndex, PartState.GROUP, null, 0, 0, null, matrix.clone()));
+    }
+
     public ModelBuilder text(String name, Component text, Pose pose) {
         return text(name, text, pose, null);
     }
