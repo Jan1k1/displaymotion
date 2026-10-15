@@ -129,17 +129,45 @@ class BlockbenchModelTest {
 
     @Test
     void exampleRobotLoadsWithTheRightBlocks() throws Exception {
-        String json = new String(getClass().getResourceAsStream("/robot.bbmodel").readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-        BlockbenchModel robot = BlockbenchModel.parse(json);
+        BlockbenchModel robot = example("/robot.bbmodel");
 
-        assertEquals(List.of("wave", "walk"), robot.animations());
-        assertEquals(Material.WHITE_WOOL, robot.material("head_2"));
-        assertEquals(Material.LIGHT_BLUE_WOOL, robot.material("body_2"));
-        assertEquals(Material.BLACK_CONCRETE, robot.material("eye_left"));
-        assertEquals(Material.REDSTONE_BLOCK, robot.material("light"));
-        for (String clip : robot.animations()) {
-            for (String part : robot.parts()) {
-                org.jan1k.displaymotion.Frames.bake(robot.animation(clip, part, 1f));
+        assertEquals(List.of("idle", "walk", "wave", "dance"), robot.animations());
+        assertTrue(robot.parts().containsAll(List.of("head", "arm_right", "forearm_right", "hand_right", "leg_left", "shin_left", "foot_left", "backpack")));
+        assertEquals(Material.WHITE_WOOL, robot.material("head_shell"));
+        assertEquals(Material.BLACK_CONCRETE, robot.material("visor"));
+        assertEquals(Material.DIAMOND_BLOCK, robot.material("eye_left"));
+        assertEquals(Material.ORANGE_CONCRETE, robot.material("knee_pad_left"));
+        assertEquals(Material.GRAY_CONCRETE, robot.material("elbow_right"));
+        assertEquals(Material.REDSTONE_BLOCK, robot.material("button_red"));
+        bakesEverything(robot);
+    }
+
+    @Test
+    void exampleWindmillLoadsWithTheRightBlocks() throws Exception {
+        BlockbenchModel windmill = example("/windmill.bbmodel");
+
+        assertEquals(List.of("spin", "idle"), windmill.animations());
+        assertTrue(windmill.parts().containsAll(List.of("axle", "sail_0", "sail_3", "vane")));
+        assertTrue(windmill.parts().size() <= 256);
+        assertEquals(Material.QUARTZ_BLOCK, windmill.material("tower_lower"));
+        assertEquals(Material.DARK_OAK_PLANKS, windmill.material("post_lower_0"));
+        assertEquals(Material.DEEPSLATE, windmill.material("roof_0"));
+        assertEquals(Material.STONE, windmill.material("foundation"));
+        assertEquals(Material.SANDSTONE, windmill.material("cloth_0"));
+        assertEquals(Material.GOLD_BLOCK, windmill.material("vane_flag"));
+        bakesEverything(windmill);
+    }
+
+    private BlockbenchModel example(String resource) throws IOException {
+        try (var in = getClass().getResourceAsStream(resource)) {
+            return BlockbenchModel.parse(new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+        }
+    }
+
+    private static void bakesEverything(BlockbenchModel model) {
+        for (String clip : model.animations()) {
+            for (String part : model.parts()) {
+                org.jan1k.displaymotion.Frames.bake(model.animation(clip, part, 1f));
             }
         }
     }

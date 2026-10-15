@@ -53,10 +53,9 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
     @Override
     public void onEnable() {
         motion = DisplayMotion.create(this);
-        for (String example : List.of("models/robot.bbmodel", "models/chest.bdengine")) {
-            if (!new File(getDataFolder(), example).exists()) {
-                saveResource(example, false);
-            }
+        // the shipped examples always get the newest version, your own files in models/ are left alone
+        for (String example : List.of("models/robot.bbmodel", "models/windmill.bbmodel", "models/chest.bdengine")) {
+            saveResource(example, true);
         }
         getServer().getPluginManager().registerEvents(this, this);
         registerCommand();
