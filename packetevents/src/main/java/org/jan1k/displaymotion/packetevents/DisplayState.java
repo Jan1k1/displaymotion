@@ -1,6 +1,7 @@
 package org.jan1k.displaymotion.packetevents;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -50,10 +51,7 @@ final class DisplayState {
         this.yaw = yaw;
         this.pitch = pitch;
         this.parts = parts;
-        this.entityIds = new int[parts.length];
-        for (int i = 0; i < parts.length; i++) {
-            entityIds[i] = parts[i].entityId;
-        }
+        this.entityIds = Arrays.stream(parts).filter(PartState::hasEntity).mapToInt(p -> p.entityId).toArray();
         this.tracks = new Track[parts.length + 1];
         this.requests = new long[parts.length + 1];
         this.range = range;

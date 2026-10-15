@@ -44,6 +44,9 @@ final class Composer {
                 track.frames.copyTo(track.frame, frame, 0);
                 Affine.multiply(part.world, 0, frame, 0, part.world, 0);
             }
+            if (!part.hasEntity()) {
+                continue;
+            }
             System.arraycopy(part.world, 0, local, 0, Affine.SIZE);
             Affine.scale(local, 0, part.sizeX, part.sizeY, part.sizeZ);
             if (part.isBlock()) {

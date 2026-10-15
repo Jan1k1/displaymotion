@@ -230,7 +230,7 @@ final class MotionEngine {
 
     private void sendPart(DisplayState display, PartState part, DisplayPacket update) {
         List<Viewer> targets = display.viewers;
-        if (display.fresh || targets.isEmpty()) {
+        if (display.fresh || targets.isEmpty() || !part.hasEntity()) {
             return;
         }
         sendToAll(targets, encode(update, targets.getFirst().channel), false);
@@ -274,11 +274,17 @@ final class MotionEngine {
         // smoothing time has to be set before the move, same bundle so client sees both at once
         if (ticks != oldTicks) {
             for (PartState part : display.parts) {
+                if (!part.hasEntity()) {
+                    continue;
+                }
                 sendToAll(kept, encode(packet.move(part, ticks), channel), false);
             }
         }
         Location to = new Location(x, y, z, yaw, pitch);
         for (PartState part : display.parts) {
+            if (!part.hasEntity()) {
+                continue;
+            }
             sendToAll(kept, encode(new WrapperPlayServerEntityTeleport(part.entityId, to, false), channel), false);
         }
     }
@@ -320,6 +326,9 @@ final class MotionEngine {
         List<Viewer> targets = display.viewers;
         if (!targets.isEmpty()) {
             for (PartState part : display.parts) {
+                if (!part.hasEntity()) {
+                    continue;
+                }
                 sendToAll(targets, encode(packet.range(part, display.clientRange()), targets.getFirst().channel), false);
             }
         }
@@ -478,6 +487,9 @@ final class MotionEngine {
         for (DisplayState display : viewer.visible) {
             freshen(display);
             for (PartState part : display.parts) {
+                if (!part.hasEntity()) {
+                    continue;
+                }
                 queue(viewer, encode(packet.spawn(part, display.clientRange(), display.moveTicks), viewer.channel));
             }
         }
@@ -561,6 +573,9 @@ final class MotionEngine {
     private void sendChanges(DisplayState display, int duration) {
         List<Viewer> targets = display.viewers;
         for (PartState part : display.parts) {
+            if (!part.hasEntity()) {
+                continue;
+            }
             if (part.changes != 0) {
                 sendToAll(targets, encode(packet.frame(part, part.changes, duration), targets.getFirst().channel), true);
             }
@@ -591,6 +606,9 @@ final class MotionEngine {
             markEncoded(display);
             for (int i = 0; i < parts.length; i++) {
                 PartState part = parts[i];
+                if (!part.hasEntity()) {
+                    continue;
+                }
                 WrapperPlayServerSpawnEntity spawn = new WrapperPlayServerSpawnEntity(part.entityId, part.uuid,
                         entityType(part),
                         new Location(display.x, display.y, display.z, display.yaw, display.pitch), display.yaw, 0, null);
@@ -599,7 +617,9 @@ final class MotionEngine {
             }
         }
         for (Object buffer : display.spawnBuffers) {
-            queue(viewer, ByteBufHelper.retainedDuplicate(buffer));
+            if (buffer != null) {
+                queue(viewer, ByteBufHelper.retainedDuplicate(buffer));
+            }
         }
         viewer.visible.add(display);
         display.viewers.add(viewer);

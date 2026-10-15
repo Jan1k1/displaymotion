@@ -52,6 +52,16 @@ public final class ModelBuilder {
     }
 
     /** Adds a text part. The text grows up from its pose. */
+    /** Adds an invisible pivot. Hang parts under it and animate it to turn them all around one point. */
+    public ModelBuilder group(String name, Pose pose) {
+        return group(name, pose, null);
+    }
+
+    /** Adds an invisible pivot under a parent. */
+    public ModelBuilder group(String name, Pose pose, String parent) {
+        return add(name, pose, parent, (id, parentIndex) -> PartState.group(name, parentIndex, pose));
+    }
+
     public ModelBuilder text(String name, Component text, Pose pose) {
         return text(name, text, pose, null);
     }

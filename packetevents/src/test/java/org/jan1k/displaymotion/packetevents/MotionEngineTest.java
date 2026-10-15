@@ -199,6 +199,33 @@ class MotionEngineTest {
     }
 
     @Test
+    void groupsAreNeverSpawnedButMoveTheirChildren() {
+        PartState[] parts = {
+                PartState.group("pivot", -1, Pose.IDENTITY.withOffset(0f, 1f, 0f)),
+                PartState.block("arm", ENTITY, 0, 1, Pose.IDENTITY.withOffset(1f, 0f, 0f))
+        };
+        MotionDisplay display = new MotionDisplay(engine, new Location(world(), 0, 0, 0), parts, 48);
+        engine.submit(() -> engine.add(display.state()));
+        tick();
+        List<Packet> spawn = tick();
+
+        assertEquals(List.of("bundle", "spawn", "meta", "bundle"), kinds(spawn));
+        assertEquals(ENTITY, spawn.get(1).entity());
+
+        display.play("pivot", Animations.turn(0f, 90f, 0f, 20));
+        List<Packet> moves = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            moves.addAll(tick());
+        }
+        assertTrue(moves.stream().anyMatch(p -> p.kind().equals("meta") && p.entity() == ENTITY));
+        assertTrue(moves.stream().allMatch(p -> p.entity() == ENTITY || p.kind().equals("bundle")));
+
+        display.remove();
+        List<Packet> gone = tick();
+        assertEquals(List.of("destroy"), kinds(gone));
+    }
+
+    @Test
     void hiddenPlayersDoNotSeeIt() {
         MotionDisplay display = display();
         tick();

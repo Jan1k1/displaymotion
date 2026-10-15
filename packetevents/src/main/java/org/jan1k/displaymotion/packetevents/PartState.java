@@ -13,6 +13,7 @@ final class PartState {
     static final int ITEM = 0;
     static final int BLOCK = 1;
     static final int TEXT = 2;
+    static final int GROUP = 3;
     static final int DEFAULT_BACKGROUND = 0x40000000;
 
     final String name;
@@ -64,8 +65,17 @@ final class PartState {
         return new PartState(name, entityId, parent, BLOCK, null, 0, blockState, null, pose);
     }
 
+    static PartState group(String name, int parent, Pose pose) {
+        return new PartState(name, -1, parent, GROUP, null, 0, 0, null, pose);
+    }
+
     static PartState text(String name, int entityId, int parent, Component text, Pose pose) {
         return new PartState(name, entityId, parent, TEXT, null, 0, 0, text, pose);
+    }
+
+    // groups are just a pivot, nothing gets spawned for them
+    boolean hasEntity() {
+        return kind != GROUP;
     }
 
     boolean isBlock() {
