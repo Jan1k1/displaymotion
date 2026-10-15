@@ -36,15 +36,17 @@ public final class MotionDisplay {
     // less then this is not worth a packet, the client cant even show a turn of under a degree
     private static final float RIDE_TURN = 0.5f;
     private static final double RIDE_MOVE = 0.5;
-    // where a player head and body turn, from the 1.21.11 player model (scale 0.9375), in blocks
+    // where a player head and body turn, from the 1.21.11 player model (scale 0.9375, 1.501 down), in blocks
     // from the passenger point. it sits 1.8 up standing and 1.5 sneaking, but the model does not
-    // move the same amount, so a sneaking hat has to come down a bit and the body leans forward
-    private static final float HEAD_PIVOT = -0.3928f;
-    private static final float HEAD_PIVOT_SNEAKING = -0.4639f;
-    private static final float HEAD_DROP_SNEAKING = -0.071f;
-    private static final float BODY_PIVOT_SNEAKING = -0.4053f;
-    private static final float BODY_DROP_SNEAKING = -0.0125f;
-    private static final float BODY_LEAN_SNEAKING = 28.65f;
+    // move the same amount, so a sneaking hat has to come down a bit and the body leans forward.
+    // the drop is the sneaking pivot minus the standing one (-0.3928)
+    static final float HEAD_PIVOT = -0.3928125f;
+    static final float HEAD_PIVOT_SNEAKING = -0.46390625f;
+    static final float HEAD_DROP_SNEAKING = -0.07109375f;
+    static final float BODY_PIVOT_SNEAKING = -0.4053125f;
+    static final float BODY_DROP_SNEAKING = -0.0125f;
+    // HumanoidModel leans the body 0.5 radians
+    static final float BODY_LEAN_SNEAKING = 28.64789f;
 
     private final MotionEngine engine;
     private volatile Location location;
@@ -58,6 +60,7 @@ public final class MotionDisplay {
     private final Map<String, Entity> seatEntities = new ConcurrentHashMap<>();
     private volatile Entity vehicle;
     private volatile Follow follow = Follow.BODY;
+    private volatile boolean wearerSees = true;
     // main thread only, what the last ride update sent
     private UUID lastWorld;
     private double lastX;
@@ -323,7 +326,11 @@ public final class MotionDisplay {
         double y = at.getY();
         double z = at.getZ();
         engine.riding.add(this);
-        engine.submit(() -> engine.ride(state, id, passengers, world, x, y, z, pose));
+        if (!wearerSees && vehicle instanceof Player player) {
+            hide(player);
+        }
+        UUID wearer = vehicle instanceof Player player ? player.getUniqueId() : null;
+        engine.submit(() -> engine.ride(state, id, passengers, world, x, y, z, pose, wearer));
         return this;
     }
 
@@ -401,10 +408,36 @@ public final class MotionDisplay {
         if (vehicle == null || isRemoved()) {
             return this;
         }
+        if (!wearerSees && vehicle instanceof Player player) {
+            show(player);
+        }
         vehicle = null;
         engine.riding.remove(this);
         engine.submit(() -> engine.dismount(state, true));
         return this;
+    }
+
+    /**
+     * False hides the display from the player it rides, other players still see it. Good for a backpack
+     * that the wearer should not see when they look down. The server cannot tell first person from F5,
+     * so the wearer does not see it in F5 either. True by default.
+     */
+    public MotionDisplay wearerSees(boolean sees) {
+        requireAlive();
+        wearerSees = sees;
+        if (vehicle instanceof Player player) {
+            if (sees) {
+                show(player);
+            } else {
+                hide(player);
+            }
+        }
+        return this;
+    }
+
+    /** False after {@link #wearerSees(boolean)} was set to false. */
+    public boolean isSeenByWearer() {
+        return wearerSees;
     }
 
     /** What the display rides, or {@code null}. */
@@ -438,6 +471,7 @@ public final class MotionDisplay {
         double dz = scratch.getZ() - lastZ;
         boolean moved = dx * dx + dy * dy + dz * dz > RIDE_MOVE * RIDE_MOVE || !world.equals(lastWorld);
         boolean turned = Math.abs(Bodies.wrap(pose.yaw() - lastPose.yaw())) >= RIDE_TURN
+                || Math.abs(Bodies.wrap(pose.own() - lastPose.own())) >= RIDE_TURN
                 || Math.abs(pose.tilt() - lastPose.tilt()) >= RIDE_TURN
                 || pose.pivot() != lastPose.pivot() || pose.drop() != lastPose.drop();
         if (!moved && !turned) {
@@ -475,9 +509,11 @@ public final class MotionDisplay {
                 return new RidePose(at.getYaw(), at.getPitch(), sneaking ? HEAD_PIVOT_SNEAKING : HEAD_PIVOT,
                         sneaking ? HEAD_DROP_SNEAKING : 0f);
             }
+            float body = engine.bodies.yaw(player);
+            float own = engine.bodies.own(player);
             return sneaking
-                    ? new RidePose(engine.bodies.yaw(player), BODY_LEAN_SNEAKING, BODY_PIVOT_SNEAKING, BODY_DROP_SNEAKING)
-                    : RidePose.turn(engine.bodies.yaw(player));
+                    ? new RidePose(body, BODY_LEAN_SNEAKING, BODY_PIVOT_SNEAKING, BODY_DROP_SNEAKING, own)
+                    : new RidePose(body, 0f, 0f, 0f, own);
         }
         if (follow == Follow.BODY && entity instanceof LivingEntity living) {
             return RidePose.turn(living.getBodyYaw());

@@ -30,6 +30,9 @@ final class PartState {
     final float[] rest = new float[Affine.SIZE];
     final float[] world = new float[Affine.SIZE];
     final float[] sent = new float[Decomposer.SIZE];
+    // what the wearer of a riding display got, and what changed for it
+    final float[] own = new float[Decomposer.SIZE];
+    int ownChanges;
     final boolean centered;
     int changes;
     float cullWidth;

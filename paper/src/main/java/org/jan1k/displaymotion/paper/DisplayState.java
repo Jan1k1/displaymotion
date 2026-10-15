@@ -32,9 +32,12 @@ final class DisplayState {
     boolean visibleByDefault = true;
     // entity id of what it rides, -1 when it does not ride
     int vehicle = -1;
-    // extra turn around Y on top of the entity yaw, in the transform. a riding display turns with this
-    // because the client ignores turn packets for passengers
+    // extra turn around Y on top of the entity yaw, in the transform. a riding display turns with this,
+    // its entity yaw and pitch stay 0 while it rides
     float turn;
+    // the player it rides gets its own turn, see Bodies. null when it rides no player
+    UUID wearer;
+    float ownTurn;
     // tilt around X at the pivot height, then moved down by drop. for hats on a head and leaning backpacks
     float tilt;
     float pivot;

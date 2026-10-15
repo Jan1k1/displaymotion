@@ -22,7 +22,13 @@ final class Bodies {
     private static final int SWING_TICKS = 6;
 
     private static final class Body {
+        // what other players see
         float yaw;
+        // what the player sees on itself in F5. LocalPlayer never gets a body turn from the server,
+        // it starts at 0 and only these steps move it, so it can be up to 50 off from the others
+        float own;
+        // a new player entity for the others, their game starts its body at the head turn (LivingEntity.recreateFromPacket)
+        boolean spawned;
         double x;
         double z;
         long swingUntil;
@@ -40,6 +46,7 @@ final class Bodies {
                 body = new Body();
                 // the server body went thru the same head limit, so it is right as long as nobody walked yet
                 body.yaw = player.getBodyYaw();
+                body.own = 0f;
                 body.x = scratch.getX();
                 body.z = scratch.getZ();
                 bodies.put(player.getUniqueId(), body);
@@ -54,7 +61,11 @@ final class Bodies {
         body.x = at.getX();
         body.z = at.getZ();
         float head = at.getYaw();
-        float target = body.yaw;
+        if (body.spawned) {
+            body.spawned = false;
+            body.yaw = head;
+        }
+        float target = Float.NaN;
         double moved = dx * dx + dz * dz;
         if (moved > WALK_SQUARED && moved < TELEPORT_SQUARED) {
             target = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90f;
@@ -67,18 +78,32 @@ final class Bodies {
         if (tick < body.swingUntil) {
             target = head;
         }
-        body.yaw += wrap(target - body.yaw) * FOLLOW;
         float limit = player.isBlocking() ? SHIELD_HEAD_LIMIT : HEAD_LIMIT;
-        float headAway = wrap(head - body.yaw);
-        if (Math.abs(headAway) > limit) {
-            body.yaw += headAway - Math.signum(headAway) * limit;
+        body.yaw = step(body.yaw, target, head, limit);
+        body.own = step(body.own, target, head, limit);
+    }
+
+    // standing still the target is the body itself, so NaN means stay
+    static float step(float yaw, float target, float head, float limit) {
+        if (!Float.isNaN(target)) {
+            yaw += wrap(target - yaw) * FOLLOW;
         }
-        body.yaw = wrap(body.yaw);
+        float headAway = wrap(head - yaw);
+        if (Math.abs(headAway) > limit) {
+            yaw += headAway - Math.signum(headAway) * limit;
+        }
+        return wrap(yaw);
     }
 
     float yaw(Player player) {
         Body body = bodies.get(player.getUniqueId());
         return body == null ? player.getBodyYaw() : body.yaw;
+    }
+
+    // the body turn the player sees on itself
+    float own(Player player) {
+        Body body = bodies.get(player.getUniqueId());
+        return body == null ? player.getBodyYaw() : body.own;
     }
 
     void swing(Player player) {
@@ -88,11 +113,13 @@ final class Bodies {
         }
     }
 
-    // respawn and a new world make a new player on the client, its body starts at 0 again
+    // respawn and a new world make a new player on every client. its own body starts at 0 again,
+    // the others start it at the head turn it has when it shows up
     void reset(Player player) {
         Body body = bodies.get(player.getUniqueId());
         if (body != null) {
-            body.yaw = 0f;
+            body.own = 0f;
+            body.spawned = true;
             body.x = player.getLocation().getX();
             body.z = player.getLocation().getZ();
         }

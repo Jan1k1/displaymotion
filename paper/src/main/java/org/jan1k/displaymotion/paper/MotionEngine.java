@@ -22,6 +22,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.plugin.Plugin;
 import org.jan1k.displaymotion.Animation;
 import org.jan1k.displaymotion.Frames;
+import org.jan1k.displaymotion.Decomposer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -250,6 +251,10 @@ final class MotionEngine {
     }
 
     void ride(DisplayState display, int vehicle, int[] passengers, UUID world, double x, double y, double z, RidePose pose) {
+        ride(display, vehicle, passengers, world, x, y, z, pose, null);
+    }
+
+    void ride(DisplayState display, int vehicle, int[] passengers, UUID world, double x, double y, double z, RidePose pose, UUID wearer) {
         if (display.removed) {
             return;
         }
@@ -261,6 +266,8 @@ final class MotionEngine {
         display.vehicle = vehicle;
         rideGroups.computeIfAbsent(vehicle, id -> new ArrayList<>()).add(display);
         updateRiders(vehicle);
+        level(display);
+        wear(display, wearer);
         poseTo(display, pose);
         if (display.fresh) {
             return;
@@ -272,13 +279,47 @@ final class MotionEngine {
         updateViewers(display);
     }
 
-    // the entity keeps the yaw it spawned with, the rest of the turn goes in the transform and blends
+    // the client turns a display by the entity yaw and pitch first (DisplayRenderer.calculateOrientation) and a
+    // passenger keeps them. a model made where a player looked down kept that pitch and leaned the whole hat or
+    // backpack, so set both to 0 while it is not a passenger yet. the spawn sends angles as a byte, 0 stays exact
+    private void level(DisplayState display) {
+        if (display.yaw == 0f && display.pitch == 0f) {
+            return;
+        }
+        display.yaw = 0f;
+        display.pitch = 0f;
+        List<Viewer> targets = display.viewers;
+        if (display.fresh || targets.isEmpty()) {
+            return;
+        }
+        Object channel = targets.getFirst().channel;
+        Location at = new Location(display.x, display.y, display.z, 0f, 0f);
+        for (PartState part : display.parts) {
+            if (part.hasEntity()) {
+                sendToAll(targets, encode(new WrapperPlayServerEntityTeleport(part.entityId, at, false), channel), false);
+            }
+        }
+    }
+
+    // the wearer starts from what everyone got, after that it gets its own transform
+    private void wear(DisplayState display, UUID wearer) {
+        display.wearer = wearer;
+        display.ownTurn = display.turn;
+        for (PartState part : display.parts) {
+            System.arraycopy(part.sent, 0, part.own, 0, Decomposer.SIZE);
+        }
+    }
+
+    // the entity yaw is 0 while it rides, the whole turn goes in the transform and blends
     private void poseTo(DisplayState display, RidePose pose) {
         float turn = wrap(pose.yaw() - display.yaw);
-        if (turn == display.turn && pose.tilt() == display.tilt && pose.pivot() == display.pivot && pose.drop() == display.drop) {
+        float ownTurn = display.wearer == null ? turn : wrap(pose.own() - display.yaw);
+        if (turn == display.turn && ownTurn == display.ownTurn && pose.tilt() == display.tilt
+                && pose.pivot() == display.pivot && pose.drop() == display.drop) {
             return;
         }
         display.turn = turn;
+        display.ownTurn = ownTurn;
         display.tilt = pose.tilt();
         display.pivot = pose.pivot();
         display.drop = pose.drop();
@@ -317,9 +358,10 @@ final class MotionEngine {
             return;
         }
         display.vehicle = -1;
-        // off the vehicle a turn packet works again, so the turn goes back into the entity yaw
+        // off the vehicle the turn goes back into the entity yaw
         display.yaw = wrap(display.yaw + display.turn);
         display.turn = 0f;
+        display.ownTurn = 0f;
         display.tilt = 0f;
         display.pivot = 0f;
         display.drop = 0f;
@@ -327,6 +369,7 @@ final class MotionEngine {
         if (!display.removed && !display.fresh && !display.viewers.isEmpty()) {
             sendChanges(display, Frames.STEP_TICKS);
         }
+        display.wearer = null;
         List<DisplayState> group = rideGroups.get(vehicle);
         if (group != null) {
             group.remove(display);
@@ -736,7 +779,8 @@ final class MotionEngine {
                 if (!part.hasEntity()) {
                     continue;
                 }
-                queue(viewer, encode(packet.spawn(part, display.clientRange(), display.moveTicks), viewer.channel));
+                float[] values = viewer.id.equals(display.wearer) ? part.own : part.sent;
+                queue(viewer, encode(packet.spawn(part, values, display.clientRange(), display.moveTicks), viewer.channel));
             }
         }
     }
@@ -823,20 +867,40 @@ final class MotionEngine {
 
     private void sendChanges(DisplayState display, int duration) {
         List<Viewer> targets = display.viewers;
+        Viewer wearer = wearerOf(display);
         for (PartState part : display.parts) {
             if (!part.hasEntity()) {
                 continue;
             }
-            if (part.changes != 0) {
-                sendToAll(targets, encode(packet.frame(part, part.changes, duration), targets.getFirst().channel), true);
+            if (part.changes != 0 && (wearer == null || targets.size() > 1)) {
+                sendToAll(targets, wearer, encode(packet.frame(part, part.changes, duration), targets.getFirst().channel), true);
+            }
+            if (wearer != null && part.ownChanges != 0) {
+                sendToAll(List.of(wearer), null, encode(packet.frame(part, part.own, part.ownChanges, duration), wearer.channel), true);
             }
         }
     }
 
+    // the player a riding display sits on, when that player sees it
+    private Viewer wearerOf(DisplayState display) {
+        if (display.wearer == null) {
+            return null;
+        }
+        Viewer viewer = viewers.get(display.wearer);
+        return viewer != null && viewer.visible.contains(display) ? viewer : null;
+    }
+
     private void sendToAll(List<Viewer> targets, Object buffer, boolean droppable) {
+        sendToAll(targets, null, buffer, droppable);
+    }
+
+    private void sendToAll(List<Viewer> targets, Viewer skip, Object buffer, boolean droppable) {
         try {
             for (int i = 0; i < targets.size(); i++) {
                 Viewer viewer = targets.get(i);
+                if (viewer == skip) {
+                    continue;
+                }
                 if (droppable && viewer.stalled) {
                     viewer.resync = true;
                     continue;
@@ -873,10 +937,19 @@ final class MotionEngine {
                 buffers[slot + 1] = encode(hitboxData(hitboxes.get(i)), viewer.channel);
             }
         }
-        for (Object buffer : display.spawnBuffers) {
-            if (buffer != null) {
-                queue(viewer, ByteBufHelper.retainedDuplicate(buffer));
+        boolean wearer = viewer.id.equals(display.wearer);
+        Object[] buffers = display.spawnBuffers;
+        for (int i = 0; i < buffers.length; i++) {
+            if (buffers[i] == null) {
+                continue;
             }
+            // the wearer gets its own transform in the data packet after each spawn
+            if (wearer && i % 2 == 1 && i / 2 < display.parts.length) {
+                PartState part = display.parts[i / 2];
+                queue(viewer, encode(packet.spawn(part, part.own, display.clientRange(), display.moveTicks), viewer.channel));
+                continue;
+            }
+            queue(viewer, ByteBufHelper.retainedDuplicate(buffers[i]));
         }
         // after the spawn, the client ignores passengers it does not know yet
         if (display.vehicle >= 0) {

@@ -427,7 +427,7 @@ class MotionEngineTest {
         List<Packet> packets = tick();
         List<String> kinds = kinds(packets);
 
-        // the client ignores turn packets for passengers, so the turn is in the transform: yaw 90 faces -x,
+        // the turn is in the transform and the entity yaw stays 0: yaw 90 faces -x,
         // so the back of a centered block (its -z side) has to come round to +x
         assertFalse(kinds.contains("rotation"));
         Vector3f translation = (Vector3f) value(packets.stream().filter(p -> p.kind().equals("meta")).findFirst().orElseThrow(), 11);

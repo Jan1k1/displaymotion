@@ -16,6 +16,7 @@ final class Composer {
     private final float[] frame = new float[Affine.SIZE];
     private final float[] local = new float[Affine.SIZE];
     private final float[] current = new float[Decomposer.SIZE];
+    private final float[] ownCurrent = new float[Decomposer.SIZE];
     private final boolean[] dirty = new boolean[ModelBuilder.MAX_PARTS];
 
     void compose(DisplayState display, boolean everything) {
@@ -28,12 +29,14 @@ final class Composer {
         }
         if (display.turn != 0f || display.tilt != 0f || display.drop != 0f) {
             // same way round as the entity yaw, the client turns a display by minus its yaw. the tilt
-            // turns around the pivot height and not the origin, so move the pivot there and back again
+            // turns around the pivot height and not the origin, so move the pivot there and back again.
+            // the drop goes in before the turn, so a sneaking hat stays as far from the neck as a standing one
             Affine.fromPose(0f, 0f, 0f, display.tilt, -display.turn, 0f, 1f, 1f, 1f, turn, 0);
             float pivot = display.pivot;
-            turn[9] = -turn[3] * pivot;
-            turn[10] = pivot + display.drop - turn[4] * pivot;
-            turn[11] = -turn[5] * pivot;
+            float above = pivot - display.drop;
+            turn[9] = -turn[3] * above;
+            turn[10] = pivot - turn[4] * above;
+            turn[11] = -turn[5] * above;
             Affine.multiply(turn, 0, root, 0, frame, 0);
             System.arraycopy(frame, 0, root, 0, Affine.SIZE);
         }
@@ -46,6 +49,7 @@ final class Composer {
             needed |= everything || track != null && track.moved;
             dirty[i] = needed;
             part.changes = 0;
+            part.ownChanges = 0;
             if (!needed) {
                 continue;
             }
@@ -72,12 +76,41 @@ final class Composer {
             if (cullBox(part, display.pitch == 0f)) {
                 part.changes |= DisplayPacket.BOX;
             }
+            if (display.wearer != null) {
+                turnAround(current, display.ownTurn - display.turn, ownCurrent);
+                part.ownChanges = changes(part.own, ownCurrent) | part.changes & DisplayPacket.BOX;
+                System.arraycopy(ownCurrent, 0, part.own, 0, Decomposer.SIZE);
+            }
         }
         for (Track track : display.tracks) {
             if (track != null) {
                 track.moved = false;
             }
         }
+    }
+
+    // the wearer only sees the body turned by a bit more around Y. that turn sits in front of the whole
+    // root (the pivot and drop are straight up), so it only turns the translation and the left rotation
+    static void turnAround(float[] from, float degrees, float[] to) {
+        System.arraycopy(from, 0, to, 0, Decomposer.SIZE);
+        if (degrees == 0f) {
+            return;
+        }
+        double half = Math.toRadians(-degrees) * 0.5;
+        float s = (float) Math.sin(half);
+        float c = (float) Math.cos(half);
+        float x = from[Decomposer.TX];
+        float z = from[Decomposer.TZ];
+        to[Decomposer.TX] = (c * c - s * s) * x + 2f * s * c * z;
+        to[Decomposer.TZ] = -2f * s * c * x + (c * c - s * s) * z;
+        float lx = from[Decomposer.LX];
+        float ly = from[Decomposer.LY];
+        float lz = from[Decomposer.LZ];
+        float lw = from[Decomposer.LW];
+        to[Decomposer.LX] = c * lx + s * lz;
+        to[Decomposer.LY] = c * ly + s * lw;
+        to[Decomposer.LZ] = c * lz - s * lx;
+        to[Decomposer.LW] = c * lw - s * ly;
     }
 
     // client only culls a display when width and height arent 0 and the box goes from the feet up

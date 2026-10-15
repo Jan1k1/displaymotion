@@ -54,6 +54,7 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
     private final int componentType;
 
     private PartState part;
+    private float[] values;
     private int changes;
     private int duration;
     private double range;
@@ -74,12 +75,25 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
     }
 
     DisplayPacket frame(PartState part, int changes, int duration) {
-        return set(part, FRAME, changes, duration, 0);
+        return frame(part, part.sent, changes, duration);
+    }
+
+    // values is part.sent, or part.own for the player that wears a riding display
+    DisplayPacket frame(PartState part, float[] values, int changes, int duration) {
+        set(part, FRAME, changes, duration, 0);
+        this.values = values;
+        return this;
     }
 
     DisplayPacket spawn(PartState part, double range, int moveTicks) {
+        return spawn(part, part.sent, range, moveTicks);
+    }
+
+    DisplayPacket spawn(PartState part, float[] values, double range, int moveTicks) {
         this.moveTicks = moveTicks;
-        return set(part, SPAWN, ALL, 1, range);
+        set(part, SPAWN, ALL, 1, range);
+        this.values = values;
+        return this;
     }
 
     DisplayPacket move(PartState part, int moveTicks) {
@@ -101,6 +115,7 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
 
     private DisplayPacket set(PartState part, int mode, int changes, int duration, double range) {
         this.part = part;
+        this.values = part.sent;
         this.mode = mode;
         this.changes = changes;
         this.duration = duration;
@@ -131,7 +146,7 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
     }
 
     private void writeTransform() {
-        float[] s = part.sent;
+        float[] s = values;
         // box only update, dont restart the transform blend or it stutters
         if ((changes & ALL) != 0) {
             entry(START_DELAY_SLOT, intType);
