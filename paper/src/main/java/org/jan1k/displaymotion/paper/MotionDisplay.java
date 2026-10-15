@@ -5,6 +5,8 @@ import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.entity.Display;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.jan1k.displaymotion.Animation;
 import org.jan1k.displaymotion.Frames;
@@ -30,6 +32,9 @@ public final class MotionDisplay {
 
     // a bit more then survival reach, so a click on the far edge of a big box still counts
     private static final double CLICK_REACH = 8.0;
+    // less then this is not worth a packet, the client cant even show a turn of under a degree
+    private static final float RIDE_TURN = 1f;
+    private static final double RIDE_MOVE = 0.5;
 
     private final MotionEngine engine;
     private volatile Location location;
@@ -39,6 +44,14 @@ public final class MotionDisplay {
     private final Set<String> hitboxes = ConcurrentHashMap.newKeySet();
     private volatile Consumer<Click> onClick;
     private volatile Consumer<DisplayEvent> onEvent;
+    private volatile Entity vehicle;
+    private volatile Follow follow = Follow.BODY;
+    // main thread only, what the last ride update sent
+    private UUID lastWorld;
+    private double lastX;
+    private double lastY;
+    private double lastZ;
+    private float lastYaw;
 
     volatile boolean playing;
     private volatile boolean visibleByDefault = true;
@@ -236,6 +249,11 @@ public final class MotionDisplay {
             throw new IllegalArgumentException("ticks must be 0 to " + MAX_TELEPORT_TICKS + " (the client limit), got " + ticks);
         }
         requireAlive();
+        if (vehicle != null) {
+            vehicle = null;
+            engine.riding.remove(this);
+            engine.submit(() -> engine.dismount(state, false));
+        }
         Location copy = to.clone();
         location = copy;
         UUID world = copy.getWorld().getUID();
@@ -246,6 +264,133 @@ public final class MotionDisplay {
         float pitch = copy.getPitch();
         engine.submit(() -> engine.teleport(state, world, x, y, z, yaw, pitch, ticks));
         return this;
+    }
+
+    /**
+     * Makes the display ride an entity, like a hat or a backpack, and turn with its body.
+     * Same as {@code ride(vehicle, Follow.BODY)}.
+     */
+    public MotionDisplay ride(Entity vehicle) {
+        return ride(vehicle, Follow.BODY);
+    }
+
+    /**
+     * Makes the display ride an entity. The players' games move it with the entity every frame,
+     * so walking costs the server nothing. Only a turn is sent, and only when it changes.
+     * The display location is where a passenger sits: on top of the head for a player. Move parts down
+     * with their pose for a backpack. Real passengers of the entity stay on it.
+     * Call it on the main thread. {@link #teleport(Location)} or {@link #dismount()} stops riding.
+     * @throws IllegalArgumentException if the entity is not in the world
+     */
+    public MotionDisplay ride(Entity vehicle, Follow follow) {
+        Objects.requireNonNull(vehicle, "vehicle");
+        Objects.requireNonNull(follow, "follow");
+        if (!Bukkit.isPrimaryThread()) {
+            throw new IllegalStateException("call ride on the main thread");
+        }
+        requireAlive();
+        if (!vehicle.isValid()) {
+            throw new IllegalArgumentException("the vehicle is not in the world");
+        }
+        Location at = vehicle.getLocation();
+        float yaw = follow == Follow.NONE ? at.getYaw() : yawOf(vehicle, follow, at);
+        at.setYaw(yaw);
+        at.setPitch(0f);
+        this.vehicle = vehicle;
+        this.follow = follow;
+        location = at.clone();
+        remember(at, yaw);
+        int id = vehicle.getEntityId();
+        int[] passengers = vehicle.getPassengers().stream().mapToInt(Entity::getEntityId).toArray();
+        UUID world = at.getWorld().getUID();
+        double x = at.getX();
+        double y = at.getY();
+        double z = at.getZ();
+        engine.riding.add(this);
+        engine.submit(() -> engine.ride(state, id, passengers, world, x, y, z, yaw));
+        return this;
+    }
+
+    /** Stops riding. The display stays where the entity was. */
+    public MotionDisplay dismount() {
+        if (vehicle == null || isRemoved()) {
+            return this;
+        }
+        vehicle = null;
+        engine.riding.remove(this);
+        engine.submit(() -> engine.dismount(state, true));
+        return this;
+    }
+
+    /** What the display rides, or {@code null}. */
+    public Entity vehicle() {
+        return vehicle;
+    }
+
+    // main thread, every tick. only sends something when the vehicle moved a bit or turned
+    void followVehicle(Location scratch) {
+        Entity ridden = vehicle;
+        if (ridden == null) {
+            return;
+        }
+        if (isRemoved()) {
+            engine.riding.remove(this);
+            return;
+        }
+        if (!ridden.isValid()) {
+            // a dead player comes back on respawn, keep the hat for them
+            if (ridden instanceof Player player && player.isOnline()) {
+                return;
+            }
+            dismount();
+            return;
+        }
+        ridden.getLocation(scratch);
+        float yaw = follow == Follow.NONE ? lastYaw : yawOf(ridden, follow, scratch);
+        UUID world = scratch.getWorld().getUID();
+        double dx = scratch.getX() - lastX;
+        double dy = scratch.getY() - lastY;
+        double dz = scratch.getZ() - lastZ;
+        boolean moved = dx * dx + dy * dy + dz * dz > RIDE_MOVE * RIDE_MOVE || !world.equals(lastWorld);
+        boolean turned = Math.abs(wrap(yaw - lastYaw)) >= RIDE_TURN;
+        if (!moved && !turned) {
+            return;
+        }
+        Location at = scratch.clone();
+        at.setYaw(turned ? yaw : lastYaw);
+        at.setPitch(0f);
+        location = at;
+        float sendYaw = turned ? yaw : lastYaw;
+        remember(at, sendYaw);
+        double x = at.getX();
+        double y = at.getY();
+        double z = at.getZ();
+        engine.submitQuietly(() -> engine.follow(state, world, x, y, z, sendYaw));
+    }
+
+    private void remember(Location at, float yaw) {
+        lastWorld = at.getWorld().getUID();
+        lastX = at.getX();
+        lastY = at.getY();
+        lastZ = at.getZ();
+        lastYaw = yaw;
+    }
+
+    private static float yawOf(Entity entity, Follow follow, Location at) {
+        if (follow == Follow.BODY && entity instanceof LivingEntity living) {
+            return living.getBodyYaw();
+        }
+        return at.getYaw();
+    }
+
+    private static float wrap(float degrees) {
+        float d = degrees % 360f;
+        if (d >= 180f) {
+            d -= 360f;
+        } else if (d < -180f) {
+            d += 360f;
+        }
+        return d;
     }
 
     /** Lets this player see the display, even when it is not visible by default. */
@@ -399,6 +544,8 @@ public final class MotionDisplay {
         }
         removed = true;
         playing = false;
+        vehicle = null;
+        engine.riding.remove(this);
         engine.submitQuietly(() -> engine.remove(state));
     }
 

@@ -30,6 +30,8 @@ final class DisplayState {
     final Set<UUID> shownTo = new HashSet<>();
     final Set<UUID> hiddenFrom = new HashSet<>();
     boolean visibleByDefault = true;
+    // entity id of what it rides, -1 when it does not ride
+    int vehicle = -1;
 
     double range;
     int index;

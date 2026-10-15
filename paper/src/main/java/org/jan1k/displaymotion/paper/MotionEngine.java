@@ -13,6 +13,8 @@ import com.github.retrooper.packetevents.wrapper.PacketWrapper;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerBundle;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDestroyEntities;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityMetadata;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityRotation;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSetPassengers;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityTeleport;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSpawnEntity;
 import io.netty.channel.Channel;
@@ -23,10 +25,12 @@ import org.jan1k.displaymotion.Animation;
 import org.jan1k.displaymotion.Frames;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Set;
 import java.util.UUID;
 import java.util.WeakHashMap;
 import java.util.concurrent.CompletableFuture;
@@ -53,6 +57,9 @@ final class MotionEngine {
     private static final int HITBOX_WIDTH_SLOT = 8;
     private static final int HITBOX_HEIGHT_SLOT = 9;
     private static final int HITBOX_RESPONSE_SLOT = 10;
+    private static final int[] NO_IDS = new int[0];
+    // the client blends a turn over this many ticks, so a riding display turns smooth and not in steps
+    private static final int RIDE_TURN_TICKS = 2;
 
     private final Plugin plugin;
     private final ProtocolManager protocol;
@@ -71,6 +78,12 @@ final class MotionEngine {
     private final Map<Animation, Frames> baked = new WeakHashMap<>();
     // read from netty threads when a click comes in, so it has to be concurrent
     private final Map<Integer, Hitbox> clickable = new ConcurrentHashMap<>();
+    // vehicle entity id to our entity ids that ride it, read from netty threads too
+    private final Map<Integer, int[]> riders = new ConcurrentHashMap<>();
+    // what the server itself says rides that vehicle, so we never kick a real passenger off
+    private final Map<Integer, int[]> serverPassengers = new ConcurrentHashMap<>();
+    private final Map<Integer, List<DisplayState>> rideGroups = new HashMap<>();
+    final Set<MotionDisplay> riding = ConcurrentHashMap.newKeySet();
 
     private volatile Snapshot snapshot = new Snapshot(0L, new PlayerView[0]);
     volatile boolean debug;
@@ -131,6 +144,29 @@ final class MotionEngine {
 
     Hitbox hitbox(int entityId) {
         return clickable.get(entityId);
+    }
+
+    boolean hasRiders() {
+        return !riders.isEmpty();
+    }
+
+    boolean ridden(int vehicle) {
+        return riders.containsKey(vehicle);
+    }
+
+    void serverPassengers(int vehicle, int[] passengers) {
+        if (riders.containsKey(vehicle)) {
+            serverPassengers.put(vehicle, passengers.clone());
+        }
+    }
+
+    // the passenger packet replaces the whole list on the client, so it always has the real ones and ours
+    int[] passengersOf(int vehicle) {
+        int[] real = serverPassengers.getOrDefault(vehicle, NO_IDS);
+        int[] ours = riders.getOrDefault(vehicle, NO_IDS);
+        int[] all = Arrays.copyOf(real, real.length + ours.length);
+        System.arraycopy(ours, 0, all, real.length, ours.length);
+        return all;
     }
 
     void debug(String message) {
@@ -194,6 +230,135 @@ final class MotionEngine {
         Object channel = targets.getFirst().channel;
         sendToAll(targets, encode(spawnHitbox(display, hitbox), channel), false);
         sendToAll(targets, encode(hitboxData(hitbox), channel), false);
+        if (display.vehicle >= 0) {
+            updateRiders(display.vehicle);
+            sendToAll(targets, encode(passengers(display.vehicle), channel), false);
+        }
+    }
+
+    void ride(DisplayState display, int vehicle, int[] passengers, UUID world, double x, double y, double z, float yaw) {
+        if (display.removed) {
+            return;
+        }
+        if (display.vehicle >= 0) {
+            dismount(display, false);
+        }
+        serverPassengers.put(vehicle, passengers);
+        moveTo(display, world, x, y, z);
+        display.yaw = yaw;
+        display.vehicle = vehicle;
+        rideGroups.computeIfAbsent(vehicle, id -> new ArrayList<>()).add(display);
+        updateRiders(vehicle);
+        int oldTicks = display.moveTicks;
+        display.moveTicks = Math.max(display.moveTicks, RIDE_TURN_TICKS);
+        if (display.fresh) {
+            return;
+        }
+        List<Viewer> targets = display.viewers;
+        if (!targets.isEmpty()) {
+            Object channel = targets.getFirst().channel;
+            for (PartState part : display.parts) {
+                if (!part.hasEntity()) {
+                    continue;
+                }
+                if (display.moveTicks != oldTicks) {
+                    sendToAll(targets, encode(packet.move(part, display.moveTicks), channel), false);
+                }
+                sendToAll(targets, encode(new WrapperPlayServerEntityRotation(part.entityId, yaw, display.pitch, false), channel), false);
+            }
+            sendToAll(targets, encode(passengers(vehicle), channel), false);
+        }
+        updateViewers(display);
+    }
+
+    // the client moves a passenger by itself every frame, so here only the numbers change and a turn goes out
+    void follow(DisplayState display, UUID world, double x, double y, double z, float yaw) {
+        if (display.removed || display.vehicle < 0) {
+            return;
+        }
+        moveTo(display, world, x, y, z);
+        if (yaw == display.yaw) {
+            return;
+        }
+        display.yaw = yaw;
+        List<Viewer> targets = display.viewers;
+        if (display.fresh || targets.isEmpty()) {
+            return;
+        }
+        Object channel = targets.getFirst().channel;
+        for (PartState part : display.parts) {
+            if (part.hasEntity()) {
+                sendToAll(targets, encode(new WrapperPlayServerEntityRotation(part.entityId, yaw, display.pitch, false), channel), false);
+            }
+        }
+    }
+
+    void dismount(DisplayState display, boolean stayHere) {
+        int vehicle = display.vehicle;
+        if (vehicle < 0) {
+            return;
+        }
+        display.vehicle = -1;
+        List<DisplayState> group = rideGroups.get(vehicle);
+        if (group != null) {
+            group.remove(display);
+        }
+        updateRiders(vehicle);
+        List<Viewer> targets = display.viewers;
+        if (!display.removed && !display.fresh && !targets.isEmpty()) {
+            sendToAll(targets, encode(passengers(vehicle), targets.getFirst().channel), false);
+        }
+        if (!riders.containsKey(vehicle)) {
+            serverPassengers.remove(vehicle);
+        }
+        if (display.removed || display.fresh || targets.isEmpty()) {
+            return;
+        }
+        Object channel = targets.getFirst().channel;
+        if (stayHere) {
+            Location at = new Location(display.x, display.y, display.z, display.yaw, display.pitch);
+            for (PartState part : display.parts) {
+                if (part.hasEntity()) {
+                    sendToAll(targets, encode(new WrapperPlayServerEntityTeleport(part.entityId, at, false), channel), false);
+                }
+            }
+        }
+    }
+
+    private void moveTo(DisplayState display, UUID world, double x, double y, double z) {
+        if (!display.world.equals(world)) {
+            for (int i = display.viewers.size() - 1; i >= 0; i--) {
+                hide(display, display.viewers.get(i));
+            }
+            display.world = world;
+        }
+        display.x = x;
+        display.y = y;
+        display.z = z;
+    }
+
+    private void updateRiders(int vehicle) {
+        List<DisplayState> group = rideGroups.get(vehicle);
+        if (group == null || group.isEmpty()) {
+            rideGroups.remove(vehicle);
+            riders.remove(vehicle);
+            return;
+        }
+        int count = 0;
+        for (DisplayState display : group) {
+            count += display.entityIds.length;
+        }
+        int[] ids = new int[count];
+        int i = 0;
+        for (DisplayState display : group) {
+            System.arraycopy(display.entityIds, 0, ids, i, display.entityIds.length);
+            i += display.entityIds.length;
+        }
+        riders.put(vehicle, ids);
+    }
+
+    private WrapperPlayServerSetPassengers passengers(int vehicle) {
+        return new WrapperPlayServerSetPassengers(vehicle, passengersOf(vehicle));
     }
 
     void play(DisplayState display, int track, Animation animation, Runnable onEnd) {
@@ -390,6 +555,9 @@ final class MotionEngine {
         display.active = false;
         for (Hitbox hitbox : display.hitboxes) {
             clickable.remove(hitbox.entityId);
+        }
+        if (display.vehicle >= 0) {
+            dismount(display, false);
         }
         display.handle.playing = false;
         for (int i = display.viewers.size() - 1; i >= 0; i--) {
@@ -681,6 +849,10 @@ final class MotionEngine {
             if (buffer != null) {
                 queue(viewer, ByteBufHelper.retainedDuplicate(buffer));
             }
+        }
+        // after the spawn, the client ignores passengers it does not know yet
+        if (display.vehicle >= 0) {
+            queue(viewer, encode(passengers(display.vehicle), viewer.channel));
         }
         viewer.visible.add(display);
         display.viewers.add(viewer);

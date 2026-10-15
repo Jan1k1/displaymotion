@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.UUID;
 import java.util.logging.Logger;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -36,6 +38,7 @@ class MotionEngineTest {
     private static final UUID PLAYER = UUID.randomUUID();
     private static final int ENTITY = 1000;
     private static final int HITBOX = 4243;
+    private static final int VEHICLE = 500;
 
     private MotionEngine engine;
     private EmbeddedChannel channel;
@@ -414,6 +417,70 @@ class MotionEngineTest {
         assertEquals(List.of("whole@null", "part@main"), heard);
     }
 
+    @Test
+    void rideTurnsItAndPutsItOnTheVehicle() {
+        MotionDisplay display = display();
+        tick();
+        tick();
+
+        engine.submit(() -> engine.ride(display.state(), VEHICLE, new int[]{77}, WORLD, 0, 0, 0, 90f));
+        List<String> kinds = kinds(tick());
+
+        assertTrue(kinds.contains("rotation"));
+        assertTrue(kinds.contains("passengers [77, " + ENTITY + "]"));
+        assertTrue(engine.ridden(VEHICLE));
+    }
+
+    @Test
+    void newViewerGetsThePassengersRightAfterTheSpawn() {
+        MotionDisplay display = display();
+        engine.submit(() -> engine.ride(display.state(), VEHICLE, new int[0], WORLD, 0, 0, 0, 0f));
+
+        tick();
+        List<String> kinds = kinds(tick());
+
+        assertEquals(List.of("bundle", "spawn", "meta", "passengers [" + ENTITY + "]", "bundle"), kinds);
+    }
+
+    @Test
+    void followOnlySendsATurnAndNothingForTheSameTurn() {
+        MotionDisplay display = display();
+        engine.submit(() -> engine.ride(display.state(), VEHICLE, new int[0], WORLD, 0, 0, 0, 0f));
+        tick();
+        tick();
+
+        engine.submit(() -> engine.follow(display.state(), WORLD, 5, 0, 0, 0f));
+        assertEquals(List.of(), tick());
+        engine.submit(() -> engine.follow(display.state(), WORLD, 6, 0, 0, 45f));
+        assertEquals(List.of("rotation"), kinds(tick()));
+    }
+
+    @Test
+    void dismountKeepsTheRealPassengers() {
+        MotionDisplay display = display();
+        engine.submit(() -> engine.ride(display.state(), VEHICLE, new int[]{77}, WORLD, 0, 0, 0, 0f));
+        tick();
+        tick();
+
+        engine.submit(() -> engine.dismount(display.state(), true));
+        List<String> kinds = kinds(tick());
+
+        assertTrue(kinds.contains("passengers [77]"));
+        assertTrue(kinds.contains("teleport"));
+        assertFalse(engine.ridden(VEHICLE));
+    }
+
+    @Test
+    void serverPassengersAreMergedWithOurs() {
+        MotionDisplay display = display();
+        engine.submit(() -> engine.ride(display.state(), VEHICLE, new int[0], WORLD, 0, 0, 0, 0f));
+        tick();
+
+        engine.serverPassengers(VEHICLE, new int[]{88});
+
+        assertArrayEquals(new int[]{88, ENTITY}, engine.passengersOf(VEHICLE));
+    }
+
     private static Player player() {
         return FakePacketEvents.proxy(Player.class, (method, args) -> method.equals("getUniqueId") ? PLAYER : null);
     }
@@ -456,6 +523,15 @@ class MotionEngineTest {
                     packets.add(new Packet("meta", entity, reader.readEntityMetadata()));
                 } else if (id == PacketType.Play.Server.ENTITY_TELEPORT.getId(version)) {
                     packets.add(new Packet("teleport", reader.readVarInt(), List.of()));
+                } else if (id == PacketType.Play.Server.SET_PASSENGERS.getId(version)) {
+                    int vehicle = reader.readVarInt();
+                    int[] riders = new int[reader.readVarInt()];
+                    for (int i = 0; i < riders.length; i++) {
+                        riders[i] = reader.readVarInt();
+                    }
+                    packets.add(new Packet("passengers " + java.util.Arrays.toString(riders), vehicle, List.of()));
+                } else if (id == PacketType.Play.Server.ENTITY_ROTATION.getId(version)) {
+                    packets.add(new Packet("rotation", reader.readVarInt(), List.of()));
                 } else if (id == PacketType.Play.Server.DESTROY_ENTITIES.getId(version)) {
                     reader.readVarInt();
                     packets.add(new Packet("destroy", reader.readVarInt(), List.of()));

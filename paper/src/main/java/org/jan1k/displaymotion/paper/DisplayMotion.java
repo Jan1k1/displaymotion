@@ -6,12 +6,16 @@ import com.github.retrooper.packetevents.event.PacketListener;
 import com.github.retrooper.packetevents.event.PacketListenerCommon;
 import com.github.retrooper.packetevents.event.PacketListenerPriority;
 import com.github.retrooper.packetevents.event.PacketReceiveEvent;
+import com.github.retrooper.packetevents.event.PacketSendEvent;
 import com.github.retrooper.packetevents.manager.player.PlayerManager;
 import com.github.retrooper.packetevents.manager.server.ServerVersion;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import com.github.retrooper.packetevents.protocol.player.InteractionHand;
+import com.github.retrooper.packetevents.protocol.player.User;
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientAttack;
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientInteractEntity;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSetPassengers;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSpawnEntity;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -58,6 +62,8 @@ public final class DisplayMotion {
     private final Events events = new Events();
     private final Effects effects = new Effects(this);
     private final BukkitTask snapshotTask;
+    private final BukkitTask rideTask;
+    private final Location rideScratch = new Location(null, 0, 0, 0);
     private final PacketListenerCommon clicks;
     private final Location scratch = new Location(null, 0, 0, 0);
     private long snapshots;
@@ -67,7 +73,8 @@ public final class DisplayMotion {
         this.engine = new MotionEngine(plugin);
         Bukkit.getPluginManager().registerEvents(events, plugin);
         this.snapshotTask = Bukkit.getScheduler().runTaskTimer(plugin, this::snapshot, 0L, VIEW_CHECK_TICKS);
-        this.clicks = PacketEvents.getAPI().getEventManager().registerListener(new Clicks(), PacketListenerPriority.NORMAL);
+        this.rideTask = Bukkit.getScheduler().runTaskTimer(plugin, this::followVehicles, 1L, 1L);
+        this.clicks = PacketEvents.getAPI().getEventManager().registerListener(new Packets(), PacketListenerPriority.NORMAL);
         if (metrics) {
             // shows which plugins use the library, owners turn it off in plugins/bStats/config.yml
             new Metrics(plugin, BSTATS_ID).addCustomChart(new Metrics.SimplePie("host_plugin", plugin::getName));
@@ -138,6 +145,7 @@ public final class DisplayMotion {
             return;
         }
         snapshotTask.cancel();
+        rideTask.cancel();
         HandlerList.unregisterAll(events);
         PacketEvents.getAPI().getEventManager().unregisterListener(clicks);
         engine.close();
@@ -195,7 +203,40 @@ public final class DisplayMotion {
         engine.publish(new Snapshot(++snapshots, count == views.length ? views : Arrays.copyOf(views, count)));
     }
 
-    private final class Clicks implements PacketListener {
+    private void followVehicles() {
+        for (MotionDisplay display : engine.riding) {
+            display.followVehicle(rideScratch);
+        }
+    }
+
+    private final class Packets implements PacketListener {
+
+        // the server knows nothing about our riders, so every passenger list it sends for that
+        // vehicle gets ours added, and a fresh spawn of the vehicle gets them sent right after
+        @Override
+        public void onPacketSend(PacketSendEvent event) {
+            if (!engine.hasRiders()) {
+                return;
+            }
+            if (event.getPacketType() == PacketType.Play.Server.SET_PASSENGERS) {
+                WrapperPlayServerSetPassengers packet = new WrapperPlayServerSetPassengers(event);
+                int vehicle = packet.getEntityId();
+                if (!engine.ridden(vehicle)) {
+                    return;
+                }
+                engine.serverPassengers(vehicle, packet.getPassengers());
+                packet.setPassengers(engine.passengersOf(vehicle));
+                event.markForReEncode(true);
+            } else if (event.getPacketType() == PacketType.Play.Server.SPAWN_ENTITY) {
+                int vehicle = new WrapperPlayServerSpawnEntity(event).getEntityId();
+                if (!engine.ridden(vehicle)) {
+                    return;
+                }
+                User user = event.getUser();
+                event.getTasksAfterSend().add(() ->
+                        user.sendPacketSilently(new WrapperPlayServerSetPassengers(vehicle, engine.passengersOf(vehicle))));
+            }
+        }
 
         // 26.1 split the old packet in two: left click is its own attack packet now, and a right click
         // only comes as interact_at. first version only listened for the old way so no click ever got thru
