@@ -84,6 +84,8 @@ final class MotionEngine {
     private final Map<Integer, int[]> serverPassengers = new ConcurrentHashMap<>();
     private final Map<Integer, List<DisplayState>> rideGroups = new HashMap<>();
     final Set<MotionDisplay> riding = ConcurrentHashMap.newKeySet();
+    // real server entities players sit on, removed when the library closes
+    final Set<org.bukkit.entity.Entity> seats = ConcurrentHashMap.newKeySet();
 
     private volatile Snapshot snapshot = new Snapshot(0L, new PlayerView[0]);
     volatile boolean debug;

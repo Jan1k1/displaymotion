@@ -5,7 +5,9 @@ import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.entity.Display;
+import io.papermc.paper.entity.TeleportFlag;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.jan1k.displaymotion.Animation;
@@ -44,6 +46,8 @@ public final class MotionDisplay {
     private final Set<String> hitboxes = ConcurrentHashMap.newKeySet();
     private volatile Consumer<Click> onClick;
     private volatile Consumer<DisplayEvent> onEvent;
+    private final Map<String, double[]> seats = new ConcurrentHashMap<>();
+    private final Map<String, Entity> seatEntities = new ConcurrentHashMap<>();
     private volatile Entity vehicle;
     private volatile Follow follow = Follow.BODY;
     // main thread only, what the last ride update sent
@@ -256,6 +260,9 @@ public final class MotionDisplay {
         }
         Location copy = to.clone();
         location = copy;
+        if (!seatEntities.isEmpty()) {
+            engine.mainThread.accept(this::moveSeats);
+        }
         UUID world = copy.getWorld().getUID();
         double x = copy.getX();
         double y = copy.getY();
@@ -309,6 +316,75 @@ public final class MotionDisplay {
         engine.riding.add(this);
         engine.submit(() -> engine.ride(state, id, passengers, world, x, y, z, yaw));
         return this;
+    }
+
+    /**
+     * Adds a place to sit at this offset from the display location. The offset turns with the display.
+     * {@code y} is the height of the seat surface, for a chair about 0.45.
+     * Nothing happens until you call {@link #sit(Player, String)}, for example from {@link #onClick(Consumer)}.
+     */
+    public MotionDisplay seat(String name, double x, double y, double z) {
+        Objects.requireNonNull(name, "name");
+        requireAlive();
+        seats.put(name, new double[]{x, y, z});
+        return this;
+    }
+
+    /**
+     * Puts the player on a seat. The player gets off with sneak, like from a horse.
+     * The seat is a real invisible entity, the server needs one for a player to ride.
+     * It is made the first time someone sits, moves with {@link #teleport(Location)} and goes away with the display.
+     * Call it on the main thread.
+     * @return false when someone already sits there
+     * @throws IllegalArgumentException if there is no seat with that name
+     */
+    public boolean sit(Player player, String seat) {
+        Objects.requireNonNull(player, "player");
+        if (!Bukkit.isPrimaryThread()) {
+            throw new IllegalStateException("call sit on the main thread");
+        }
+        requireAlive();
+        double[] offset = seats.get(seat);
+        if (offset == null) {
+            throw new IllegalArgumentException("no seat named '" + seat + "', seats are " + seats.keySet());
+        }
+        Entity entity = seatEntities.get(seat);
+        if (entity == null || !entity.isValid()) {
+            entity = location.getWorld().spawn(seatSpot(offset), ItemDisplay.class, made -> made.setPersistent(false));
+            seatEntities.put(seat, entity);
+            engine.seats.add(entity);
+        }
+        if (!entity.getPassengers().isEmpty()) {
+            return false;
+        }
+        return entity.addPassenger(player);
+    }
+
+    private Location seatSpot(double[] offset) {
+        Location at = location;
+        double[] turned = Hitbox.turn(offset[0], offset[1], offset[2], at.getYaw(), at.getPitch());
+        Location spot = at.clone().add(turned[0], turned[1], turned[2]);
+        spot.setPitch(0f);
+        return spot;
+    }
+
+    // main thread
+    private void moveSeats() {
+        for (Map.Entry<String, Entity> seat : seatEntities.entrySet()) {
+            double[] offset = seats.get(seat.getKey());
+            if (offset != null && seat.getValue().isValid()) {
+                seat.getValue().teleport(seatSpot(offset), TeleportFlag.EntityState.RETAIN_PASSENGERS);
+            }
+        }
+    }
+
+    // main thread
+    private void removeSeats() {
+        for (Entity entity : seatEntities.values()) {
+            engine.seats.remove(entity);
+            entity.remove();
+        }
+        seatEntities.clear();
     }
 
     /** Stops riding. The display stays where the entity was. */
@@ -546,6 +622,13 @@ public final class MotionDisplay {
         playing = false;
         vehicle = null;
         engine.riding.remove(this);
+        if (!seatEntities.isEmpty()) {
+            if (Bukkit.isPrimaryThread()) {
+                removeSeats();
+            } else {
+                engine.mainThread.accept(this::removeSeats);
+            }
+        }
         engine.submitQuietly(() -> engine.remove(state));
     }
 

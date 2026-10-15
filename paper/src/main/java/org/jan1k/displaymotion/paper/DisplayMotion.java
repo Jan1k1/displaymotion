@@ -146,6 +146,10 @@ public final class DisplayMotion {
         }
         snapshotTask.cancel();
         rideTask.cancel();
+        for (org.bukkit.entity.Entity seat : engine.seats) {
+            seat.remove();
+        }
+        engine.seats.clear();
         HandlerList.unregisterAll(events);
         PacketEvents.getAPI().getEventManager().unregisterListener(clicks);
         engine.close();

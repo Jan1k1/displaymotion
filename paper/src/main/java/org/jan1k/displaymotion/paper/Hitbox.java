@@ -28,6 +28,10 @@ final class Hitbox {
     // the client turns a display by yaw and then pitch, so the offset has to turn the same way
     // or the box ends up next to the model when its turned
     double[] offset(float yaw, float pitch) {
+        return turn(x, y, z, yaw, pitch);
+    }
+
+    static double[] turn(double x, double y, double z, float yaw, float pitch) {
         double a = Math.toRadians(-yaw);
         double b = Math.toRadians(pitch);
         double y1 = y * Math.cos(b) - z * Math.sin(b);
