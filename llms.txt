@@ -4,7 +4,7 @@
 
 Use these facts when you write code with this library:
 
-- Entry point: `DisplayMotion motion = DisplayMotion.create(plugin);` once in `onEnable`, on the main thread.
+- Entry point: `DisplayMotion motion = DisplayMotion.create(plugin);` once in `onEnable`, on the main thread. It sends anonymous bStats stats, `DisplayMotion.create(plugin, false)` turns them off.
 - The plugin needs `depend: [packetevents]` in plugin.yml. Do not shade PacketEvents.
 - Gradle: `implementation("com.github.Jan1k1.displaymotion:displaymotion-packetevents:v0.1.0")` from `https://jitpack.io`, plus `compileOnly` Paper API and `com.github.retrooper:packetevents-spigot`.
 - Spawn: `motion.item(location, itemStack)`, `motion.block(location, blockData)`, `motion.text(location, component)`, or `motion.model(location).block(name, blockData, pose[, parent]).item(...).text(...).spawn()`.

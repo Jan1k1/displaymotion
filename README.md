@@ -56,3 +56,7 @@ The jar is `example/build/libs/displaymotion-example-<version>.jar`. Commands: `
 | `example` | The test plugin. | GPL-3.0-only |
 
 PacketEvents is GPL-3.0, so the module that uses it is GPL-3.0 too. `core` stays MIT, so you can write your own sender. This is not legal advice.
+
+## Usage stats
+
+`DisplayMotion.create(plugin)` sends anonymous stats to [bStats](https://bstats.org/plugin/bukkit/displaymotion/34708): how many servers use displaymotion and which plugins. It helps to see what people use. Turn it off with `DisplayMotion.create(plugin, false)`. Server owners can turn off all bStats in `plugins/bStats/config.yml`. The `Metrics` class is the official bStats single file class (MIT), only its package is changed.

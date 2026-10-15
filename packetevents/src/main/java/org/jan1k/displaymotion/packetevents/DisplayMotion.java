@@ -32,6 +32,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 import org.jan1k.displaymotion.Pose;
+import org.jan1k.displaymotion.packetevents.bstats.Metrics;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -50,6 +51,7 @@ public final class DisplayMotion {
 
     private static final long VIEW_CHECK_TICKS = 10L;
     private static final double TELEPORT_RESET_DISTANCE = 32.0;
+    private static final int BSTATS_ID = 34708;
 
     private final Plugin plugin;
     private final MotionEngine engine;
@@ -60,19 +62,34 @@ public final class DisplayMotion {
     private final Location scratch = new Location(null, 0, 0, 0);
     private long snapshots;
 
-    private DisplayMotion(Plugin plugin) {
+    private DisplayMotion(Plugin plugin, boolean metrics) {
         this.plugin = plugin;
         this.engine = new MotionEngine(plugin);
         Bukkit.getPluginManager().registerEvents(events, plugin);
         this.snapshotTask = Bukkit.getScheduler().runTaskTimer(plugin, this::snapshot, 0L, VIEW_CHECK_TICKS);
         this.clicks = PacketEvents.getAPI().getEventManager().registerListener(new Clicks(), PacketListenerPriority.NORMAL);
+        if (metrics) {
+            // shows which plugins use the library, owners turn it off in plugins/bStats/config.yml
+            new Metrics(plugin, BSTATS_ID).addCustomChart(new Metrics.SimplePie("host_plugin", plugin::getName));
+        }
     }
 
     /**
      * Starts the library for this plugin. Call it once, on the main thread.
+     * It sends anonymous usage stats to bStats (which plugins use displaymotion, server counts).
+     * Use {@link #create(Plugin, boolean)} to turn that off. Server owners can turn off all bStats
+     * in {@code plugins/bStats/config.yml}.
      * @throws IllegalStateException if PacketEvents is not running
      */
     public static DisplayMotion create(Plugin plugin) {
+        return create(plugin, true);
+    }
+
+    /**
+     * Same as {@link #create(Plugin)}. {@code metrics} false sends no bStats stats.
+     * @throws IllegalStateException if PacketEvents is not running
+     */
+    public static DisplayMotion create(Plugin plugin, boolean metrics) {
         Objects.requireNonNull(plugin, "plugin");
         PacketEventsAPI<?> api = PacketEvents.getAPI();
         if (api == null || !api.isInitialized()) {
@@ -81,7 +98,7 @@ public final class DisplayMotion {
         if (!Bukkit.isPrimaryThread()) {
             throw new IllegalStateException("create DisplayMotion on the main thread, for example in onEnable");
         }
-        return new DisplayMotion(plugin);
+        return new DisplayMotion(plugin, metrics);
     }
 
     /** Spawns one item display at this location. Its single part is named {@code main}. */
