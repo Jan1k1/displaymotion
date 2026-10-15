@@ -44,6 +44,7 @@ public final class DisplayMotion {
     private final Plugin plugin;
     private final MotionEngine engine;
     private final Events events = new Events();
+    private final Effects effects = new Effects(this);
     private final BukkitTask snapshotTask;
     private final Location scratch = new Location(null, 0, 0, 0);
     private long snapshots;
@@ -92,6 +93,11 @@ public final class DisplayMotion {
     }
 
     /** Starts a model made of many parts. Add parts, then call {@link ModelBuilder#spawn()}. */
+    /** Ready-made effects like kill effects. Each one removes itself when it ends. */
+    public Effects effects() {
+        return effects;
+    }
+
     public ModelBuilder model(Location location) {
         World world = requireWorld(location);
         return new ModelBuilder(this, location.clone(), world);
