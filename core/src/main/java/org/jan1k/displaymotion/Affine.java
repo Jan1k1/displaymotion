@@ -1,5 +1,6 @@
 package org.jan1k.displaymotion;
 
+/** Internal. 3x4 matrix math on flat float arrays, no objects. */
 public final class Affine {
 
     public static final int SIZE = 12;

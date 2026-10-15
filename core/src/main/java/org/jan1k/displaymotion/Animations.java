@@ -1,5 +1,6 @@
 package org.jan1k.displaymotion;
 
+/** Ready-made animations. Combine them with {@code then}, {@code with} and {@code loop}. */
 public final class Animations {
 
     public static final int MIN_TICKS_PER_TURN = 6;
@@ -7,6 +8,7 @@ public final class Animations {
     private Animations() {
     }
 
+    /** Grows from nothing to full size, fast at first. */
     public static Animation popIn(int ticks) {
         requirePositive(ticks);
         return Animation.keyframes()
@@ -15,6 +17,7 @@ public final class Animations {
                 .build();
     }
 
+    /** Shrinks from full size to nothing, fast at the end. */
     public static Animation popOut(int ticks) {
         requirePositive(ticks);
         return Animation.keyframes()
@@ -23,6 +26,7 @@ public final class Animations {
                 .build();
     }
 
+    /** Turns around the Y axis forever. At least 6 ticks per turn. */
     public static Animation spin(int ticksPerTurn) {
         if (ticksPerTurn < MIN_TICKS_PER_TURN) {
             throw new IllegalArgumentException("a spin needs at least " + MIN_TICKS_PER_TURN
@@ -31,6 +35,7 @@ public final class Animations {
         return turn(0f, 360f, 0f, ticksPerTurn).loop();
     }
 
+    /** Turns by these angles in degrees, once. Add {@code .loop()} to repeat it. */
     public static Animation turn(float pitch, float yaw, float roll, int ticks) {
         requirePositive(ticks);
         return Animation.keyframes()
@@ -39,6 +44,7 @@ public final class Animations {
                 .build();
     }
 
+    /** Moves up by {@code height} and back down, forever. */
     public static Animation bob(float height, int ticks) {
         if (ticks < 2) {
             throw new IllegalArgumentException("ticks must be 2 or more, got " + ticks);
@@ -51,6 +57,7 @@ public final class Animations {
                 .loop();
     }
 
+    /** Moves by this offset, once. */
     public static Animation slide(float x, float y, float z, int ticks, Ease ease) {
         requirePositive(ticks);
         return Animation.keyframes()
@@ -59,6 +66,7 @@ public final class Animations {
                 .build();
     }
 
+    /** Stays still for a time. Use it inside {@code then} for a pause. */
     public static Animation hold(int ticks) {
         requirePositive(ticks);
         return Animation.keyframes()

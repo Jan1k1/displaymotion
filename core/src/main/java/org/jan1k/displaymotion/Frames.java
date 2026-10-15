@@ -1,5 +1,6 @@
 package org.jan1k.displaymotion;
 
+/** Internal. A baked animation, one matrix every 2 ticks. Used by the sender modules. */
 public final class Frames {
 
     public static final int STEP_TICKS = 2;

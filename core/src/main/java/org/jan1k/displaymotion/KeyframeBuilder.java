@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+/** Builds an animation from keyframes. Ticks must go up. */
 public final class KeyframeBuilder {
 
     private final List<KeyframeAnimation.Key> keys = new ArrayList<>();
@@ -11,10 +12,12 @@ public final class KeyframeBuilder {
     KeyframeBuilder() {
     }
 
+    /** Adds a keyframe reached with a straight blend. */
     public KeyframeBuilder at(int tick, Pose pose) {
         return at(tick, pose, Ease.LINEAR);
     }
 
+    /** Adds a keyframe reached with this ease. */
     public KeyframeBuilder at(int tick, Pose pose, Ease ease) {
         Objects.requireNonNull(pose, "pose");
         Objects.requireNonNull(ease, "ease");
@@ -28,6 +31,7 @@ public final class KeyframeBuilder {
         return this;
     }
 
+    /** Finishes the animation. Before the first keyframe it holds the first pose, after the last it holds the last. */
     public Animation build() {
         if (keys.isEmpty()) {
             throw new IllegalStateException("add at least one keyframe");

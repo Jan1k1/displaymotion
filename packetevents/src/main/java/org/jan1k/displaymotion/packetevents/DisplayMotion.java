@@ -29,6 +29,10 @@ import java.util.Collection;
 import java.util.Objects;
 import java.util.UUID;
 
+/**
+ * Entry point. Create one per plugin in {@code onEnable}, then spawn displays from it.
+ * Everything runs off the main thread. It closes itself when your plugin disables.
+ */
 public final class DisplayMotion {
 
     public static final double DEFAULT_VIEW_RANGE = 48.0;
@@ -51,6 +55,10 @@ public final class DisplayMotion {
         this.snapshotTask = Bukkit.getScheduler().runTaskTimer(plugin, this::snapshot, 0L, VIEW_CHECK_TICKS);
     }
 
+    /**
+     * Starts the library for this plugin. Call it once, on the main thread.
+     * @throws IllegalStateException if PacketEvents is not running
+     */
     public static DisplayMotion create(Plugin plugin) {
         Objects.requireNonNull(plugin, "plugin");
         PacketEventsAPI<?> api = PacketEvents.getAPI();
@@ -63,27 +71,33 @@ public final class DisplayMotion {
         return new DisplayMotion(plugin);
     }
 
+    /** Spawns one item display at this location. Its single part is named {@code main}. */
     public MotionDisplay item(Location location, ItemStack item) {
         return item(location, item, ItemDisplay.ItemDisplayTransform.NONE);
     }
 
+    /** Spawns one item display drawn with this item transform, for example {@code GROUND}. */
     public MotionDisplay item(Location location, ItemStack item, ItemDisplay.ItemDisplayTransform transform) {
         return model(location).item(MAIN_PART, item, transform, Pose.IDENTITY).spawn();
     }
 
+    /** Spawns one block display. It turns and scales around the block center. */
     public MotionDisplay block(Location location, BlockData block) {
         return model(location).block(MAIN_PART, block, Pose.IDENTITY).spawn();
     }
 
+    /** Spawns one text display. The text grows up from the location. */
     public MotionDisplay text(Location location, Component text) {
         return model(location).text(MAIN_PART, text, Pose.IDENTITY).spawn();
     }
 
+    /** Starts a model made of many parts. Add parts, then call {@link ModelBuilder#spawn()}. */
     public ModelBuilder model(Location location) {
         World world = requireWorld(location);
         return new ModelBuilder(this, location.clone(), world);
     }
 
+    /** Removes every display of this plugin for every player. Safe to call more than once. */
     public void close() {
         if (engine.isClosed()) {
             return;
@@ -93,6 +107,7 @@ public final class DisplayMotion {
         engine.close();
     }
 
+    /** True after {@link #close()} or after the plugin disabled. */
     public boolean isClosed() {
         return engine.isClosed();
     }

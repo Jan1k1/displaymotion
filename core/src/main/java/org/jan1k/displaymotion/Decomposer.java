@@ -1,5 +1,9 @@
 package org.jan1k.displaymotion;
 
+/**
+ * Internal. Splits a matrix into the four transform fields of a display.
+ * One instance is not safe to share between threads.
+ */
 public final class Decomposer {
 
     public static final int SIZE = 14;

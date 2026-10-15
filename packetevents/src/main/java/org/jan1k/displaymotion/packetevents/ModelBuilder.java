@@ -17,6 +17,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+/**
+ * Builds a model from parts. A part can have a parent, which must be added first.
+ * Offset and rotation of a pose pass to the children. Scale is the size of that part only.
+ */
 public final class ModelBuilder {
 
     public static final int MAX_PARTS = 256;
@@ -35,37 +39,45 @@ public final class ModelBuilder {
         this.world = world;
     }
 
+    /** Adds a block part. It turns and scales around its center. */
     public ModelBuilder block(String name, BlockData block, Pose pose) {
         return block(name, block, pose, null);
     }
 
+    /** Adds a block part that moves with its parent. */
     public ModelBuilder block(String name, BlockData block, Pose pose, String parent) {
         Objects.requireNonNull(block, "block");
         int blockState = SpigotConversionUtil.fromBukkitBlockData(block).getGlobalId();
         return add(name, pose, parent, (id, parentIndex) -> PartState.block(name, id, parentIndex, blockState, pose));
     }
 
+    /** Adds a text part. The text grows up from its pose. */
     public ModelBuilder text(String name, Component text, Pose pose) {
         return text(name, text, pose, null);
     }
 
+    /** Adds a text part that moves with its parent. */
     public ModelBuilder text(String name, Component text, Pose pose, String parent) {
         checkText(text);
         return add(name, pose, parent, (id, parentIndex) -> PartState.text(name, id, parentIndex, text, pose));
     }
 
+    /** Adds an item part. It turns around the item center. */
     public ModelBuilder item(String name, ItemStack item, Pose pose) {
         return item(name, item, ItemDisplay.ItemDisplayTransform.NONE, pose, null);
     }
 
+    /** Adds an item part that moves with its parent. */
     public ModelBuilder item(String name, ItemStack item, Pose pose, String parent) {
         return item(name, item, ItemDisplay.ItemDisplayTransform.NONE, pose, parent);
     }
 
+    /** Adds an item part drawn with this item transform. */
     public ModelBuilder item(String name, ItemStack item, ItemDisplay.ItemDisplayTransform transform, Pose pose) {
         return item(name, item, transform, pose, null);
     }
 
+    /** Adds an item part with an item transform and a parent. */
     public ModelBuilder item(String name, ItemStack item, ItemDisplay.ItemDisplayTransform transform, Pose pose, String parent) {
         Objects.requireNonNull(item, "item");
         Objects.requireNonNull(transform, "transform");
@@ -84,6 +96,7 @@ public final class ModelBuilder {
         }
     }
 
+    /** Spawns the model. Call {@code play} on the result in the same tick to avoid a frame at the rest pose. */
     public MotionDisplay spawn() {
         if (spawned) {
             throw new IllegalStateException("this model was already spawned, make a new one with motion.model(location)");
