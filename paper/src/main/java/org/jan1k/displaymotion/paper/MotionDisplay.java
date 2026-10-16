@@ -9,6 +9,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.util.Vector;
 import org.jan1k.displaymotion.Animation;
 import org.jan1k.displaymotion.Frames;
 
@@ -30,6 +31,9 @@ public final class MotionDisplay {
     public static final int MAX_TELEPORT_TICKS = 59;
     /** The longest {@link #crossfade(Animation, int)}. */
     public static final int MAX_FADE_TICKS = 200;
+    /** Where {@link #follow(Entity)} puts it: a bit above and behind, like a pet. */
+    public static final Vector DEFAULT_FOLLOW_OFFSET = new Vector(0.0, 1.6, -1.2);
+    public static final int DEFAULT_FOLLOW_GLIDE = 4;
     /** The biggest hitbox side, in blocks. */
     public static final float MAX_HITBOX_SIZE = 16f;
 
@@ -38,6 +42,8 @@ public final class MotionDisplay {
     // less then this is not worth a packet, the client cant even show a turn of under a degree
     private static final float RIDE_TURN = 0.5f;
     private static final double RIDE_MOVE = 0.5;
+    // less then this is not worth a move packet
+    private static final double FOLLOW_STILL = 0.01;
     // where a player head and body turn, from the 1.21.11 player model (scale 0.9375, 1.501 down), in blocks
     // from the passenger point. it sits 1.8 up standing and 1.5 sneaking, but the model does not
     // move the same amount, so a sneaking hat has to come down a bit and the body leans forward.
@@ -69,6 +75,15 @@ public final class MotionDisplay {
     private final Map<String, double[]> seats = new ConcurrentHashMap<>();
     private final Map<String, Entity> seatEntities = new ConcurrentHashMap<>();
     private volatile Entity vehicle;
+    private volatile Entity followed;
+    private volatile Vector followOffset;
+    private volatile int followGlide;
+    // main thread only
+    private int followTick;
+    private double followX;
+    private double followY;
+    private double followZ;
+    private float followYaw;
     private volatile Follow follow = Follow.BODY;
     // null is the default for the follow, see effectiveSelfView
     private volatile SelfView selfView;
@@ -312,6 +327,14 @@ public final class MotionDisplay {
             engine.riding.remove(this);
             engine.submit(() -> engine.dismount(state, false));
         }
+        if (followed != null) {
+            unfollow();
+        }
+        place(to, ticks);
+        return this;
+    }
+
+    private void place(Location to, int ticks) {
         Location copy = to.clone();
         location = copy;
         if (!seatEntities.isEmpty()) {
@@ -324,7 +347,102 @@ public final class MotionDisplay {
         float yaw = copy.getYaw();
         float pitch = copy.getPitch();
         engine.submit(() -> engine.teleport(state, world, x, y, z, yaw, pitch, ticks));
+    }
+
+    /** Floats after the entity like a pet: a bit above and behind it. Same as {@code follow(target, DEFAULT_FOLLOW_OFFSET, DEFAULT_FOLLOW_GLIDE)}. */
+    public MotionDisplay follow(Entity target) {
+        return follow(target, DEFAULT_FOLLOW_OFFSET, DEFAULT_FOLLOW_GLIDE);
+    }
+
+    /**
+     * Floats after the entity. Every 2 ticks it moves to the spot at {@code offset} from the entity and the
+     * players' games glide it there over {@code glideTicks}, so it trails a bit behind. The offset turns with the
+     * body: x to the right, y up, z forward (negative is behind). Unlike {@link #ride(Entity)} it lags a bit, which
+     * looks alive for pets and drones. {@link #teleport(Location)} or {@link #unfollow()} stops it. Main thread.
+     * @throws IllegalArgumentException if the glide is not 1 to 59 ticks or the entity is not in the world
+     */
+    public MotionDisplay follow(Entity target, Vector offset, int glideTicks) {
+        Objects.requireNonNull(target, "target");
+        Objects.requireNonNull(offset, "offset");
+        if (!Bukkit.isPrimaryThread()) {
+            throw new IllegalStateException("call follow on the main thread");
+        }
+        if (glideTicks < 1 || glideTicks > MAX_TELEPORT_TICKS) {
+            throw new IllegalArgumentException("glide must be 1 to " + MAX_TELEPORT_TICKS + " ticks, got " + glideTicks);
+        }
+        if (!target.isValid()) {
+            throw new IllegalArgumentException("the target is not in the world");
+        }
+        requireAlive();
+        if (vehicle != null) {
+            dismount();
+        }
+        followed = target;
+        followOffset = offset.clone();
+        followGlide = glideTicks;
+        followTick = 0;
+        followX = Double.NaN;
+        engine.following.add(this);
+        followTarget(new Location(null, 0, 0, 0));
         return this;
+    }
+
+    /** Stops {@link #follow(Entity)}. It stays where it is. */
+    public MotionDisplay unfollow() {
+        followed = null;
+        engine.following.remove(this);
+        return this;
+    }
+
+    /** What it follows, or {@code null}. */
+    public Entity followed() {
+        return followed;
+    }
+
+    // main thread, every tick, but it only moves every 2 ticks like the frames
+    void followTarget(Location scratch) {
+        Entity target = followed;
+        if (target == null) {
+            return;
+        }
+        if (isRemoved()) {
+            engine.following.remove(this);
+            return;
+        }
+        if (!target.isValid()) {
+            if (target instanceof Player player && player.isOnline()) {
+                return;
+            }
+            unfollow();
+            return;
+        }
+        boolean first = Double.isNaN(followX);
+        if (!first && ++followTick % Frames.STEP_TICKS != 0) {
+            return;
+        }
+        target.getLocation(scratch);
+        float yaw = target instanceof Player player ? engine.bodies.yaw(player)
+                : target instanceof LivingEntity living ? living.getBodyYaw() : scratch.getYaw();
+        Vector offset = followOffset;
+        // displays turn the other way round on x, so right is minus x before the turn
+        double[] turned = Hitbox.turn(-offset.getX(), offset.getY(), offset.getZ(), yaw, 0f);
+        double x = scratch.getX() + turned[0];
+        double y = scratch.getY() + turned[1];
+        double z = scratch.getZ() + turned[2];
+        if (!first) {
+            double dx = x - followX;
+            double dy = y - followY;
+            double dz = z - followZ;
+            if (dx * dx + dy * dy + dz * dz < FOLLOW_STILL * FOLLOW_STILL && Math.abs(Bodies.wrap(yaw - followYaw)) < 1f
+                    && scratch.getWorld().equals(location.getWorld())) {
+                return;
+            }
+        }
+        followX = x;
+        followY = y;
+        followZ = z;
+        followYaw = yaw;
+        place(new Location(scratch.getWorld(), x, y, z, yaw, 0f), first ? 0 : followGlide);
     }
 
     /**
@@ -758,6 +876,8 @@ public final class MotionDisplay {
         playing = false;
         vehicle = null;
         engine.riding.remove(this);
+        followed = null;
+        engine.following.remove(this);
         if (!seatEntities.isEmpty()) {
             if (Bukkit.isPrimaryThread()) {
                 removeSeats();
