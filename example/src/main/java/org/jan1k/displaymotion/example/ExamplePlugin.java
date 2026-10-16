@@ -264,10 +264,10 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
         UUID id = player.getUniqueId();
         clearShowcase(id);
         Ease[] eases = {Ease.LINEAR, Ease.OUT, Ease.IN_OUT, Ease.BACK_OUT, Ease.ELASTIC_OUT, Ease.BOUNCE_OUT};
-        Location center = inFront(player, 5);
+        Location center = inFront(player, 7);
         List<MotionDisplay> spawned = new ArrayList<>();
         for (int i = 0; i < eases.length; i++) {
-            float x = (i - (eases.length - 1) / 2f) * 1.2f;
+            float x = (i - (eases.length - 1) / 2f) * 2f;
             Location at = center.clone().add(sideways(center, x));
             Animation drop = Animation.keyframes()
                     .at(0, Pose.IDENTITY.withOffset(0f, 1.6f, 0f))
