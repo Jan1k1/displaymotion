@@ -1,0 +1,4 @@
+DisplayMotion, GPL-3.0-only, see META-INF/LICENSE.
+
+This jar includes PacketEvents 2.14.0 by retrooper (https://github.com/retrooper/packetevents),
+licensed GPL-3.0. Its packages are relocated to org.jan1k.displaymotion.libs.packetevents.

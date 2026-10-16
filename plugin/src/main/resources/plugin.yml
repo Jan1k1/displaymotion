@@ -1,0 +1,8 @@
+name: DisplayMotion
+version: "${version}"
+main: org.jan1k.displaymotion.plugin.DisplayMotionPlugin
+api-version: "1.21.4"
+description: Animated display entities for Paper plugins. PacketEvents is built in.
+website: https://displaymotion.peakstone.app
+authors: [jan1k]
+folia-supported: false

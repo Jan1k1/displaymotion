@@ -4,4 +4,4 @@ plugins {
 
 rootProject.name = "displaymotion"
 
-include("core", "paper", "example")
+include("core", "paper", "plugin", "example")
