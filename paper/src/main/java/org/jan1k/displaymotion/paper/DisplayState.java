@@ -12,6 +12,7 @@ final class DisplayState {
     // standing right on the edge made it spawn and despawn every few ticks,
     // so we hide a bit further out then we show
     static final double HIDE_MARGIN = 4.0;
+    static final double LOD_MARGIN = 2.0;
 
     UUID world;
     double x;
@@ -30,6 +31,9 @@ final class DisplayState {
     final Set<UUID> shownTo = new HashSet<>();
     final Set<UUID> hiddenFrom = new HashSet<>();
     boolean visibleByDefault = true;
+    // past this many blocks a viewer gets no frames and no detail parts, 0 is off
+    double lod;
+    final Set<Viewer> far = new HashSet<>();
     // entity id of what it rides, -1 when it does not ride
     int vehicle = -1;
     // extra turn around Y on top of the entity yaw, in the transform. a riding display turns with this,
@@ -95,6 +99,18 @@ final class DisplayState {
             return false;
         }
         return visibleByDefault || shownTo.contains(player);
+    }
+
+    // a bit of room around the line, or standing right on it would switch every snapshot
+    boolean farFor(Viewer viewer, boolean now) {
+        if (lod <= 0) {
+            return false;
+        }
+        double limit = now ? lod - LOD_MARGIN : lod + LOD_MARGIN;
+        double dx = viewer.x - x;
+        double dy = viewer.y - y;
+        double dz = viewer.z - z;
+        return dx * dx + dy * dy + dz * dz > limit * limit;
     }
 
     double clientRange() {

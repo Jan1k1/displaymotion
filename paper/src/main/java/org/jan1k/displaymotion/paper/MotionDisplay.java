@@ -826,6 +826,21 @@ public final class MotionDisplay {
         return this;
     }
 
+    /**
+     * Level of detail: players farther than this many blocks get no more animation frames, so they see the
+     * display stand still, and do not get parts marked with {@link ModelBuilder#detail(String...)}. When they
+     * come closer they get the current pose at once. It saves a lot of packets and fps on a busy server.
+     * {@code 0} turns it off, which is the default.
+     */
+    public MotionDisplay lod(double blocks) {
+        if (!(blocks >= 0)) {
+            throw new IllegalArgumentException("lod must be 0 or more blocks, got " + blocks);
+        }
+        requireAlive();
+        engine.submit(() -> engine.lod(state, blocks));
+        return this;
+    }
+
     /** Players closer than this, in the same world, see the display. The default is 48. */
     public MotionDisplay viewRange(double blocks) {
         if (!(blocks > 0)) {

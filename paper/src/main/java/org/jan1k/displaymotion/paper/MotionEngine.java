@@ -619,6 +619,16 @@ final class MotionEngine {
         }
     }
 
+    void lod(DisplayState display, double blocks) {
+        if (display.removed) {
+            return;
+        }
+        display.lod = blocks;
+        if (!display.fresh) {
+            updateDetail(display);
+        }
+    }
+
     void viewRange(DisplayState display, double range) {
         if (display.removed) {
             return;
@@ -671,6 +681,7 @@ final class MotionEngine {
         viewerList.remove(viewer);
         for (DisplayState display : viewer.visible) {
             display.viewers.remove(viewer);
+            display.far.remove(viewer);
         }
         viewer.visible.clear();
         viewer.drop();
@@ -808,6 +819,9 @@ final class MotionEngine {
             } else if (!see && shown) {
                 hide(display, viewer);
             }
+        }
+        if (display.lod > 0 || !display.far.isEmpty()) {
+            updateDetail(display);
         }
     }
 
@@ -957,8 +971,69 @@ final class MotionEngine {
         }
     }
 
-    private void sendChanges(DisplayState display, int duration) {
+    // far viewers keep the pose they have, they get it all again when they come closer
+    private void updateDetail(DisplayState display) {
         List<Viewer> targets = display.viewers;
+        for (int i = 0; i < targets.size(); i++) {
+            Viewer viewer = targets.get(i);
+            boolean was = display.far.contains(viewer);
+            boolean now = display.farFor(viewer, was);
+            if (now == was) {
+                continue;
+            }
+            if (now) {
+                display.far.add(viewer);
+                int[] details = detailIds(display);
+                if (details.length > 0) {
+                    queue(viewer, encode(new WrapperPlayServerDestroyEntities(details), viewer.channel));
+                }
+            } else {
+                display.far.remove(viewer);
+                catchUp(display, viewer);
+            }
+        }
+    }
+
+    private void catchUp(DisplayState display, Viewer viewer) {
+        boolean wearer = viewer.id.equals(display.wearer);
+        Location at = new Location(display.x, display.y, display.z, display.yaw, display.pitch);
+        for (PartState part : display.parts) {
+            if (!part.hasEntity()) {
+                continue;
+            }
+            if (part.detail) {
+                queue(viewer, encode(new WrapperPlayServerSpawnEntity(part.entityId, part.uuid, entityType(part), at, display.yaw, 0, null), viewer.channel));
+            }
+            queue(viewer, encode(wearer ? packet.spawn(part, part.own, display.clientRange(), display.moveTicks)
+                    : packet.spawn(part, display.clientRange(), display.moveTicks), viewer.channel));
+        }
+        if (display.vehicle >= 0) {
+            queue(viewer, encode(passengers(display.vehicle), viewer.channel));
+        }
+    }
+
+    private static int[] detailIds(DisplayState display) {
+        return java.util.Arrays.stream(display.parts).filter(part -> part.detail && part.hasEntity()).mapToInt(part -> part.entityId).toArray();
+    }
+
+    private List<Viewer> nearViewers(DisplayState display) {
+        if (display.far.isEmpty()) {
+            return display.viewers;
+        }
+        List<Viewer> near = new ArrayList<>(display.viewers.size());
+        for (Viewer viewer : display.viewers) {
+            if (!display.far.contains(viewer)) {
+                near.add(viewer);
+            }
+        }
+        return near;
+    }
+
+    private void sendChanges(DisplayState display, int duration) {
+        List<Viewer> targets = nearViewers(display);
+        if (targets.isEmpty()) {
+            return;
+        }
         Viewer wearer = wearerOf(display);
         for (PartState part : display.parts) {
             if (!part.hasEntity()) {
@@ -1030,9 +1105,16 @@ final class MotionEngine {
             }
         }
         boolean wearer = viewer.id.equals(display.wearer);
+        boolean far = display.farFor(viewer, false);
+        if (far) {
+            display.far.add(viewer);
+        }
         Object[] buffers = display.spawnBuffers;
         for (int i = 0; i < buffers.length; i++) {
             if (buffers[i] == null) {
+                continue;
+            }
+            if (far && i / 2 < display.parts.length && display.parts[i / 2].detail) {
                 continue;
             }
             // the wearer gets its own transform in the data packet after each spawn
@@ -1059,6 +1141,7 @@ final class MotionEngine {
         queue(viewer, ByteBufHelper.retainedDuplicate(display.destroyBuffer));
         viewer.visible.remove(display);
         display.viewers.remove(viewer);
+        display.far.remove(viewer);
     }
 
     private void queue(Viewer viewer, Object buffer) {

@@ -566,6 +566,44 @@ class MotionEngineTest {
     }
 
     @Test
+    void farViewerGetsNoFramesAndCatchesUpWhenItComesBack() {
+        MotionDisplay display = display().lod(10);
+        tick();
+        tick();
+        viewerAt(20);
+        tick();
+
+        display.play(Animations.popIn(20));
+        int far = 0;
+        for (int i = 0; i < 10; i++) {
+            far += kinds(tick()).size();
+        }
+        viewerAt(0);
+        List<Packet> back = tick();
+
+        assertEquals(0, far);
+        assertTrue(kinds(back).contains("meta"), "it gets the pose at once " + kinds(back));
+    }
+
+    @Test
+    void detailPartsOnlyGoToNearViewers() {
+        PartState[] parts = {PartState.block("main", ENTITY, -1, 1, Pose.IDENTITY), PartState.block("bolt", HITBOX, 0, 1, Pose.IDENTITY)};
+        parts[1].detail = true;
+        MotionDisplay display = new MotionDisplay(engine, new Location(world(), 0, 0, 0), parts, 48);
+        engine.submit(() -> engine.add(display.state()));
+        display.lod(10);
+        viewerAt(20);
+
+        tick();
+        List<Packet> spawned = tick();
+        viewerAt(0);
+        List<Packet> closer = tick();
+
+        assertEquals(List.of(ENTITY), spawned.stream().filter(p -> p.kind().equals("spawn")).map(Packet::entity).toList());
+        assertEquals(List.of(HITBOX), closer.stream().filter(p -> p.kind().equals("spawn")).map(Packet::entity).toList());
+    }
+
+    @Test
     void newViewerGetsThePassengersRightAfterTheSpawn() {
         MotionDisplay display = display();
         engine.submit(() -> engine.ride(display.state(), VEHICLE, new int[0], WORLD, 0, 0, 0, 0f));

@@ -145,6 +145,21 @@ public final class ModelBuilder {
     }
 
     /** Spawns the model. Call {@code play} on the result in the same tick to avoid a frame at the rest pose. */
+    /**
+     * Marks parts as detail: small extras that players far away do not get at all, so their game has
+     * less to draw. Only counts when the display has a {@link MotionDisplay#lod(double)}.
+     */
+    public ModelBuilder detail(String... names) {
+        for (String name : names) {
+            Integer index = this.names.get(name);
+            if (index == null) {
+                throw new IllegalArgumentException("no part named '" + name + "' yet, add it before marking it");
+            }
+            parts.get(index).detail = true;
+        }
+        return this;
+    }
+
     public MotionDisplay spawn() {
         if (spawned) {
             throw new IllegalStateException("this model was already spawned, make a new one with motion.model(location)");

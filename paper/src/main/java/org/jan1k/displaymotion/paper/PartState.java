@@ -44,6 +44,8 @@ final class PartState {
     int brightness = -1;
     int billboard;
     int background = DEFAULT_BACKGROUND;
+    // small extras that players far away dont get at all, see MotionDisplay.lod
+    boolean detail;
 
     private PartState(String name, int entityId, int parent, int kind, ItemStack item, int itemTransform,
                       int blockState, Component text, Pose pose) {
