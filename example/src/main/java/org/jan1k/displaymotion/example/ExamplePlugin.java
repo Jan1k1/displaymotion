@@ -26,6 +26,7 @@ import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
 import org.jan1k.displaymotion.Animation;
 import org.jan1k.displaymotion.Animations;
+import org.jan1k.displaymotion.Ease;
 import org.jan1k.displaymotion.Pose;
 import org.jan1k.displaymotion.paper.DisplayMotion;
 import org.jan1k.displaymotion.paper.Follow;
@@ -130,6 +131,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 .then(Commands.literal("backpack").executes(context -> show(context.getSource(), this::backpack)))
                 .then(Commands.literal("selfview").executes(context -> selfView(context.getSource())))
                 .then(Commands.literal("leaderboard").executes(context -> leaderboard(context.getSource())))
+                .then(Commands.literal("ease").executes(context -> easings(context.getSource())))
                 .then(Commands.literal("bench").executes(context -> show(context.getSource(), player -> bench(inFront(player, 3)))))
                 .then(Commands.literal("button").executes(context -> show(context.getSource(), player -> button(inFront(player, 3)))))
                 .then(Commands.literal("showcase").executes(context -> showcase(context.getSource())))
@@ -251,6 +253,45 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
             case "swords" -> motion.effects().swordRain(at, ItemStack.of(Material.IRON_SWORD));
             default -> motion.effects().soul(at);
         }
+    }
+
+    // one block per ease, dropping and rising again, so you can see how each one feels
+    private int easings(CommandSourceStack source) {
+        if (!(source.getSender() instanceof Player player)) {
+            source.getSender().sendPlainMessage("players only");
+            return 0;
+        }
+        UUID id = player.getUniqueId();
+        clearShowcase(id);
+        Ease[] eases = {Ease.LINEAR, Ease.OUT, Ease.IN_OUT, Ease.BACK_OUT, Ease.ELASTIC_OUT, Ease.BOUNCE_OUT};
+        Location center = inFront(player, 5);
+        List<MotionDisplay> spawned = new ArrayList<>();
+        for (int i = 0; i < eases.length; i++) {
+            float x = (i - (eases.length - 1) / 2f) * 1.2f;
+            Location at = center.clone().add(sideways(center, x));
+            Animation drop = Animation.keyframes()
+                    .at(0, Pose.IDENTITY.withOffset(0f, 1.6f, 0f))
+                    .at(24, Pose.IDENTITY, eases[i])
+                    .at(40, Pose.IDENTITY)
+                    .at(64, Pose.IDENTITY.withOffset(0f, 1.6f, 0f), eases[i])
+                    .at(80, Pose.IDENTITY.withOffset(0f, 1.6f, 0f))
+                    .build()
+                    .loop();
+            spawned.add(motion.model(at)
+                    .block("cube", Material.DIAMOND_BLOCK.createBlockData(), Pose.IDENTITY.withOffset(0f, 0.3f, 0f).withScale(0.6f))
+                    .spawn()
+                    .play(drop));
+            spawned.add(label(at, 2.5, eases[i].name().toLowerCase()));
+        }
+        showcases.put(id, spawned);
+        player.sendPlainMessage("easings spawned, /dm stop removes them");
+        return Command.SINGLE_SUCCESS;
+    }
+
+    // x blocks to the right of where the location looks
+    private static Vector sideways(Location at, float x) {
+        double yaw = Math.toRadians(at.getYaw());
+        return new Vector(-Math.cos(yaw) * x, 0, -Math.sin(yaw) * x);
     }
 
     // a fake top 8 that changes every 3 seconds, so you can see rows glide and scores count up
