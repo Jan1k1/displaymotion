@@ -22,6 +22,7 @@ Use these facts when you write code with this library:
 - Text style (text parts only): `display.lineWidth(int)` (default 200), `.textOpacity(0..255)`, `.textShadow(boolean)`, `.seeThrough(boolean)`, `.alignment(TextDisplay.TextAlignment)`. Each also takes a part name first, a non-text part throws IllegalArgumentException.
 - Shadow on any part: `display.shadow(radius 0..64, strength 0+)`, also `shadow(part, radius, strength)`.
 - Swap content: `display.item(ItemStack)` / `display.item(part, ItemStack)`, `display.block(BlockData)` / `display.block(part, BlockData)`. Wrong kind of part throws IllegalArgumentException.
+- Size and speed: `display.scale(size 0..32[, ticks 0..200])`, `display.scale(part, size[, ticks])` (children grow too), `display.speed(0..10)` (1 normal, 0 holds, slow blends between frames). Both work on top of what plays. Hitboxes keep their size.
 - Move: `display.teleport(location)` or `display.teleport(location, glideTicks)` with 0 to 59 ticks.
 - Visibility: `display.hide(player)`, `display.show(player)`, `display.visibleByDefault(false)`, `display.viewRange(blocks)` (default 48).
 - NPC: `motion.npc(location, Skin.of(player) | Skin.name("Notch") | Skin.texture(value, signature))` or `.npc("part", skin)` in a model, then `display.npc()` / `display.npc("part")`: `.name(component)`, `.description(component)`, `.pose(NpcPose.CROUCHING)`, `.equip(EquipmentSlot.HAND, item)`, `.swing()` (shows on 26.3+ games), `.lookAtPlayers(range)`. Vanilla mannequin as packets, needs a 1.21.9+ server, older ones throw UnsupportedOperationException.

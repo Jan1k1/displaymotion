@@ -111,6 +111,20 @@ display.stop();
 - `stop()` freezes the display where it is.
 - `isPlaying()` tells you if an animation plays on the whole display.
 
+## Speed and size
+
+```java
+display.speed(0.5);              // every animation on it plays half as fast
+display.speed(0);                // holds them where they are, speed(1) goes on
+display.scale(2f);               // twice as big, around its location
+display.scale(0.5f, 20);         // shrinks to half over 20 ticks
+display.scale("hub", 1.5f);      // one part, its children grow with it
+```
+
+- `speed` is 0 to 10, 1 is normal. A slow animation still moves smoothly, it blends between its frames. A fast one still runs all of its [events](#events).
+- `scale` is 0 to 32 and works on top of what plays, so a spinning sword stays a spinning sword, only bigger. With ticks (up to 200) it grows or shrinks smoothly.
+- Hitboxes and seats keep their size.
+
 ## Crossfade
 
 `play` switches right away. `crossfade` fades from what plays now into the new animation over some ticks, so a switch from walking to waving is soft:
