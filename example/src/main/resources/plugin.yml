@@ -1,7 +1,7 @@
 name: displaymotion-example
 version: "${version}"
 main: org.jan1k.displaymotion.example.ExamplePlugin
-api-version: "26.3"
+api-version: "1.21.4"
 depend: [packetevents]
 
 # /displaymotion is a brigadier command, its registered in code so the client can tab complete it

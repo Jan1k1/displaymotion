@@ -182,7 +182,12 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
         if (old != null) {
             old.remove();
         }
-        displays.put(player.getUniqueId(), spawn.apply(player));
+        try {
+            displays.put(player.getUniqueId(), spawn.apply(player));
+        } catch (UnsupportedOperationException e) {
+            player.sendPlainMessage(e.getMessage());
+            return 0;
+        }
         return Command.SINGLE_SUCCESS;
     }
 
