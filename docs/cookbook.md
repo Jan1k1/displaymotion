@@ -147,6 +147,21 @@ button.onClick(click -> {
 
 Try it in game with `/dm button` from the example plugin.
 
+## Text that types and counts
+
+```java
+MotionDisplay sign = motion.text(location, Component.empty());
+sign.type(Component.text("Welcome to ").append(Component.text("Spawn", NamedTextColor.GOLD)), 2);   // a char every 2 ticks
+
+MotionDisplay coins = motion.text(location, Component.empty());
+coins.count("main", 0, 1500, 40, n -> Component.text(n + " coins", NamedTextColor.YELLOW));       // 0 to 1500 in 2 seconds
+```
+
+- Colors and styles stay while it types. A model with more text parts takes the part name first: `type("title", text, 2)`.
+- Counting starts fast and slows down at the end. It can count down too.
+- Both run on the motion thread, not the main thread. Setting the text by hand stops them.
+- `type(part, text, ticksPerChar, onEnd)` runs code on the main thread when the last char shows.
+
 ## A leaderboard that moves
 
 Rows glide to their new rank, new names pop in, names that drop off pop out, and changed scores count up. The top 3 get gold, silver and bronze.
