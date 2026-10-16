@@ -338,7 +338,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
     private MotionDisplay npc(Player player, Location at) {
         MotionDisplay guide = motion.model(at)
                 .npc("guide", Skin.of(player))
-                .text("speech", Component.empty(), Pose.IDENTITY.withOffset(0f, 2.25f, 0f).withScale(0.8f))
+                .text("speech", Component.empty(), Pose.IDENTITY.withOffset(0f, 2.55f, 0f).withScale(0.8f))
                 .spawn()
                 .billboard("speech", Display.Billboard.CENTER)
                 .hitbox(0.8f, 1.9f);
