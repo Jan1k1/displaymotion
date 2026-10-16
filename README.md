@@ -14,11 +14,11 @@ Java Edition only. Paper 1.21.4 to 26.3, Java 21 or newer. NPCs (mannequins) nee
 
 Two ways. Both have the same API.
 
-**Plugin way (simplest).** The server owner installs `DisplayMotion.jar` (PacketEvents is inside). You add this and write `depend: [DisplayMotion]` in `plugin.yml`:
+**Plugin way (simplest).** The server owner installs `DisplayMotion.jar` from the [releases](https://github.com/Jan1k1/displaymotion/releases/latest) (PacketEvents is inside). You add this and write `depend: [DisplayMotion]` in `plugin.yml`:
 
 ```kotlin
 repositories { maven("https://jitpack.io") }
-dependencies { compileOnly("com.github.Jan1k1.displaymotion:displaymotion-paper:v0.3.0") }
+dependencies { compileOnly("com.github.Jan1k1.displaymotion:displaymotion-paper:v0.3.1") }
 ```
 
 **Shaded way.** You put the library in your own jar with `implementation(...)`. The server owner installs the PacketEvents plugin and you write `depend: [packetevents]`. No extra jar from us.

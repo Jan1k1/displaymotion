@@ -5,8 +5,8 @@
 Use these facts when you write code with this library:
 
 - Entry point: `DisplayMotion motion = DisplayMotion.create(plugin);` once in `onEnable`, on the main thread. It sends anonymous bStats stats, `DisplayMotion.create(plugin, false)` turns them off.
-- Plugin way (simplest): the server has `DisplayMotion-<version>.jar` (PacketEvents built in). Your plugin uses `compileOnly("com.github.Jan1k1.displaymotion:displaymotion-paper:v0.3.0")` from `https://jitpack.io` and `depend: [DisplayMotion]` in plugin.yml. No PacketEvents needed.
-- Shaded way: `implementation("com.github.Jan1k1.displaymotion:displaymotion-paper:v0.3.0")` from `https://jitpack.io`, plus `compileOnly` Paper API and `com.github.retrooper:packetevents-spigot`. The server needs the PacketEvents plugin and the plugin needs `depend: [packetevents]`. Do not shade PacketEvents.
+- Plugin way (simplest): the server has `DisplayMotion-<version>.jar` (PacketEvents built in). Your plugin uses `compileOnly("com.github.Jan1k1.displaymotion:displaymotion-paper:v0.3.1")` from `https://jitpack.io` and `depend: [DisplayMotion]` in plugin.yml. No PacketEvents needed.
+- Shaded way: `implementation("com.github.Jan1k1.displaymotion:displaymotion-paper:v0.3.1")` from `https://jitpack.io`, plus `compileOnly` Paper API and `com.github.retrooper:packetevents-spigot`. The server needs the PacketEvents plugin and the plugin needs `depend: [packetevents]`. Do not shade PacketEvents.
 - Spawn: `motion.item(location, itemStack)`, `motion.block(location, blockData)`, `motion.text(location, component)`, or `motion.model(location).block(name, blockData, pose[, parent]).item(...).text(...).spawn()`.
 - Every spawn returns a `MotionDisplay`. Its methods return the same object, so chain them. They are safe from any thread.
 - Crossfade: `display.crossfade(animation, ticks)`, `display.crossfade("part", animation, ticks)`, `importedModel.play(display, "clip", fadeTicks)`.

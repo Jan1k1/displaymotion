@@ -16,7 +16,7 @@ body:
     id: versions
     attributes:
       label: displaymotion and PacketEvents versions
-      placeholder: displaymotion v0.3.0, PacketEvents 2.14.0
+      placeholder: displaymotion v0.3.1, PacketEvents 2.14.0
     validations:
       required: true
   - type: input
