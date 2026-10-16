@@ -36,7 +36,7 @@ repositories {
 dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
     compileOnly("com.github.retrooper:packetevents-spigot:2.14.0")
-    implementation("com.github.Jan1k1.displaymotion:displaymotion-paper:v0.2.0")
+    implementation("com.github.Jan1k1.displaymotion:displaymotion-paper:v0.3.0")
 }
 
 tasks.shadowJar {
@@ -49,7 +49,7 @@ What the parts do:
 - `compileOnly` means: use it to build, but do not put it in the jar. Paper and PacketEvents are on the server already.
 - `implementation` means: put it in the jar. This is displaymotion.
 - `relocate` moves the displaymotion classes into your own package. Then two plugins that both use displaymotion never clash. Change `your.plugin.libs.displaymotion` to a package that fits your plugin.
-- `v0.2.0` is the newest release. `main-SNAPSHOT` gives the newest commit instead.
+- `v0.3.0` is the newest release. `main-SNAPSHOT` gives the newest commit instead.
 
 Do not shade PacketEvents. The server installs it.
 
