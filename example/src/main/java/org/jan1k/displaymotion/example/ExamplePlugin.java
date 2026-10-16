@@ -29,6 +29,7 @@ import org.jan1k.displaymotion.Animations;
 import org.jan1k.displaymotion.Pose;
 import org.jan1k.displaymotion.paper.DisplayMotion;
 import org.jan1k.displaymotion.paper.Follow;
+import org.jan1k.displaymotion.paper.Leaderboard;
 import org.jan1k.displaymotion.paper.SelfView;
 import org.jan1k.displaymotion.paper.ModelBuilder;
 import org.jan1k.displaymotion.paper.MotionDisplay;
@@ -68,6 +69,8 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
     private final Map<UUID, String> killEffects = new HashMap<>();
     private final Map<UUID, List<MotionDisplay>> showcases = new HashMap<>();
     private final Map<UUID, BukkitTask> showcaseTasks = new HashMap<>();
+    private final Map<UUID, Leaderboard> boards = new HashMap<>();
+    private final Map<UUID, BukkitTask> boardTasks = new HashMap<>();
     private DisplayMotion motion;
 
     @Override
@@ -107,6 +110,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
     public void onQuit(PlayerQuitEvent event) {
         killEffects.remove(event.getPlayer().getUniqueId());
         clearShowcase(event.getPlayer().getUniqueId());
+        clearBoard(event.getPlayer().getUniqueId());
         MotionDisplay display = displays.remove(event.getPlayer().getUniqueId());
         if (display != null) {
             display.remove();
@@ -125,6 +129,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 .then(Commands.literal("hat").executes(context -> show(context.getSource(), this::hat)))
                 .then(Commands.literal("backpack").executes(context -> show(context.getSource(), this::backpack)))
                 .then(Commands.literal("selfview").executes(context -> selfView(context.getSource())))
+                .then(Commands.literal("leaderboard").executes(context -> leaderboard(context.getSource())))
                 .then(Commands.literal("bench").executes(context -> show(context.getSource(), player -> bench(inFront(player, 3)))))
                 .then(Commands.literal("button").executes(context -> show(context.getSource(), player -> button(inFront(player, 3)))))
                 .then(Commands.literal("showcase").executes(context -> showcase(context.getSource())))
@@ -248,6 +253,53 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
         }
     }
 
+    // a fake top 8 that changes every 3 seconds, so you can see rows glide and scores count up
+    private int leaderboard(CommandSourceStack source) {
+        if (!(source.getSender() instanceof Player player)) {
+            source.getSender().sendPlainMessage("players only");
+            return 0;
+        }
+        UUID id = player.getUniqueId();
+        clearBoard(id);
+        Location at = inFront(player, 5).add(0, 3.2, 0);
+        Leaderboard board = motion.leaderboard(at).rows(8).title(Component.text("Top kills", NamedTextColor.GOLD));
+        List<String> names = new ArrayList<>(List.of("Notch", "jeb_", "Dinnerbone", "Grumm", "Steve", "Alex", "Herobrine", "Technoblade", "Dream"));
+        names.add(player.getName());
+        Map<String, Long> scores = new HashMap<>();
+        java.util.Random random = new java.util.Random();
+        for (String name : names) {
+            scores.put(name, 50L + random.nextInt(950));
+        }
+        Runnable push = () -> board.update(names.stream()
+                .map(name -> Leaderboard.Entry.of(name, Component.text(name, NamedTextColor.WHITE), scores.get(name))
+                        .icon(Leaderboard.head(Bukkit.getOfflinePlayer(name))))
+                .toList());
+        push.run();
+        boards.put(id, board);
+        boardTasks.put(id, getServer().getScheduler().runTaskTimer(this, () -> {
+            for (int i = 0; i < 3; i++) {
+                String lucky = names.get(random.nextInt(names.size()));
+                scores.merge(lucky, 40L + random.nextInt(260), Long::sum);
+            }
+            push.run();
+        }, 60L, 60L));
+        player.sendPlainMessage("leaderboard spawned, /dm stop removes it");
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private boolean clearBoard(UUID id) {
+        BukkitTask task = boardTasks.remove(id);
+        if (task != null) {
+            task.cancel();
+        }
+        Leaderboard board = boards.remove(id);
+        if (board == null) {
+            return false;
+        }
+        board.remove();
+        return true;
+    }
+
     // hat or backpack on you: what you see of it yourself, others always see it
     private int selfView(CommandSourceStack source) {
         if (!(source.getSender() instanceof Player player)) {
@@ -278,7 +330,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
             source.getSender().sendPlainMessage("players only");
             return 0;
         }
-        boolean showcase = clearShowcase(player.getUniqueId());
+        boolean showcase = clearShowcase(player.getUniqueId()) | clearBoard(player.getUniqueId());
         MotionDisplay old = displays.remove(player.getUniqueId());
         if (old == null && !showcase) {
             player.sendPlainMessage("nothing to remove");
