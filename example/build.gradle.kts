@@ -5,7 +5,7 @@ plugins {
 
 dependencies {
     implementation(project(":paper"))
-    compileOnly("io.papermc.paper:paper-api:26.3.build.180-stable")
+    compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
     compileOnly("com.github.retrooper:packetevents-spigot:2.14.0")
 }
 
@@ -26,4 +26,8 @@ tasks.processResources {
 
 tasks.assemble {
     dependsOn(tasks.shadowJar)
+}
+
+tasks.compileJava {
+    options.release.set(21)
 }

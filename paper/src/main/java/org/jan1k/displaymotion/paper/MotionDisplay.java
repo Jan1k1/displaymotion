@@ -888,7 +888,7 @@ public final class MotionDisplay {
         if (!hitboxes.add(name)) {
             throw new IllegalArgumentException("there is already a hitbox named '" + name + "'");
         }
-        Hitbox hitbox = new Hitbox(name, Bukkit.getUnsafe().nextEntityId(location.getWorld()), width, height, x, y, z, this);
+        Hitbox hitbox = new Hitbox(name, EntityIds.next(location.getWorld()), width, height, x, y, z, this);
         engine.submit(() -> engine.addHitbox(state, hitbox));
         return this;
     }

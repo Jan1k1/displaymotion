@@ -74,6 +74,9 @@ final class NpcPackets {
     }
 
     static EquipmentSlot slot(org.bukkit.inventory.EquipmentSlot slot) {
+        if (slot.name().equals("SADDLE")) {
+            return EquipmentSlot.SADDLE;
+        }
         return switch (slot) {
             case HAND -> EquipmentSlot.MAIN_HAND;
             case OFF_HAND -> EquipmentSlot.OFF_HAND;
@@ -82,7 +85,7 @@ final class NpcPackets {
             case LEGS -> EquipmentSlot.LEGGINGS;
             case FEET -> EquipmentSlot.BOOTS;
             case BODY -> EquipmentSlot.BODY;
-            case SADDLE -> EquipmentSlot.SADDLE;
+            default -> throw new IllegalArgumentException("no mannequin slot for " + slot);
         };
     }
 

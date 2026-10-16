@@ -1,9 +1,10 @@
 package org.jan1k.displaymotion.paper;
 
+import com.github.retrooper.packetevents.PacketEvents;
+import com.github.retrooper.packetevents.manager.server.ServerVersion;
 import io.github.retrooper.packetevents.util.SpigotConversionUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.data.BlockData;
@@ -166,6 +167,10 @@ public final class ModelBuilder {
      */
     public ModelBuilder npc(String name, Skin skin) {
         Objects.requireNonNull(skin, "skin");
+        // mannequins came with 1.21.9
+        if (PacketEvents.getAPI().getServerManager().getVersion().isOlderThan(ServerVersion.V_1_21_9)) {
+            throw new UnsupportedOperationException("mannequins need a 1.21.9 or newer server");
+        }
         return add(name, Pose.IDENTITY, null, (entityId, parent) -> PartState.npc(name, entityId, parent, skin));
     }
 
@@ -208,7 +213,7 @@ public final class ModelBuilder {
             parentIndex = index;
         }
         // take a real id from the server counter, if we made up our own it could hit a real entity
-        int entityId = Bukkit.getUnsafe().nextEntityId(world);
+        int entityId = EntityIds.next(world);
         names.put(name, parts.size());
         parts.add(factory.create(entityId, parentIndex));
         return this;
