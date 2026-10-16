@@ -9,6 +9,7 @@ Use these facts when you write code with this library:
 - Gradle: `implementation("com.github.Jan1k1.displaymotion:displaymotion-paper:v0.2.0")` from `https://jitpack.io`, plus `compileOnly` Paper API and `com.github.retrooper:packetevents-spigot`.
 - Spawn: `motion.item(location, itemStack)`, `motion.block(location, blockData)`, `motion.text(location, component)`, or `motion.model(location).block(name, blockData, pose[, parent]).item(...).text(...).spawn()`.
 - Every spawn returns a `MotionDisplay`. Its methods return the same object, so chain them. They are safe from any thread.
+- Crossfade: `display.crossfade(animation, ticks)`, `display.crossfade("part", animation, ticks)`, `importedModel.play(display, "clip", fadeTicks)`.
 - Animate: `display.play(animation)`, `display.play(animation, onEnd)`, `display.play("part", animation)`, `display.stop()`.
 - Animations: `Animations.popIn(ticks)`, `popOut(ticks)`, `spin(ticksPerTurn)`, `turn(pitch, yaw, roll, ticks)`, `bob(height, ticks)`, `slide(x, y, z, ticks, ease)`, `hold(ticks)`. Combine with `a.then(b)`, `a.with(b)`, `a.loop()`. Custom: `Animation.keyframes().at(tick, pose, ease).build()`.
 - Events: `animation.event(tick, "name")` marks a tick (works through then, with, loop). `display.onEvent(event -> ...)` runs on the main thread with `event.name()`, `event.part()` (null for the whole display).

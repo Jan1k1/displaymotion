@@ -111,6 +111,20 @@ display.stop();
 - `stop()` freezes the display where it is.
 - `isPlaying()` tells you if an animation plays on the whole display.
 
+## Crossfade
+
+`play` switches right away. `crossfade` fades from what plays now into the new animation over some ticks, so a switch from walking to waving is soft:
+
+```java
+display.crossfade(WAVE, 10);                 // whole display, fade over 10 ticks
+display.crossfade("arm", WAVE, 10);          // one part
+model.play(display, "wave", 10);             // an imported model, every part fades
+```
+
+- During the fade the old animation keeps going, so a walk does not freeze while it fades out.
+- With nothing playing before, it fades in from the rest pose.
+- At most 200 ticks. Short fades (5 to 15 ticks) look best: a fade between two very different turns squashes the part a little in the middle.
+
 ## Events
 
 An event is a name at one tick of an animation. When the display reaches that tick, your code runs. Use it to play a sound or spawn particles at the exact moment something happens.
