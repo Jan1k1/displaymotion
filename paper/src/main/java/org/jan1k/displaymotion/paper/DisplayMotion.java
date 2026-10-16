@@ -77,7 +77,7 @@ public final class DisplayMotion {
         this.snapshotTask = Bukkit.getScheduler().runTaskTimer(plugin, this::snapshot, 0L, VIEW_CHECK_TICKS);
         this.rideTask = Bukkit.getScheduler().runTaskTimer(plugin, this::followVehicles, 1L, 1L);
         this.clicks = PacketEvents.getAPI().getEventManager().registerListener(new Packets(), PacketListenerPriority.NORMAL);
-        if (metrics) {
+        if (metrics && !insidePlugin()) {
             // shows which plugins use the library, owners turn it off in plugins/bStats/config.yml
             new Metrics(plugin, BSTATS_ID).addCustomChart(new Metrics.SimplePie("host_plugin", plugin::getName));
         }
@@ -102,12 +102,25 @@ public final class DisplayMotion {
         Objects.requireNonNull(plugin, "plugin");
         PacketEventsAPI<?> api = PacketEvents.getAPI();
         if (api == null || !api.isInitialized()) {
-            throw new IllegalStateException("PacketEvents is not running. Install it and add 'depend: [packetevents]' to plugin.yml");
+            throw new IllegalStateException(insidePlugin()
+                    ? "PacketEvents did not start inside the DisplayMotion plugin, check the server log for its error"
+                    : "PacketEvents is not running. Install the DisplayMotion plugin and add 'depend: [DisplayMotion]' to plugin.yml, "
+                    + "or install PacketEvents and add 'depend: [packetevents]'");
         }
         if (!Bukkit.isPrimaryThread()) {
             throw new IllegalStateException("create DisplayMotion on the main thread, for example in onEnable");
         }
         return new DisplayMotion(plugin, metrics);
+    }
+
+    // true when this copy of the library is the one inside the DisplayMotion plugin jar, that plugin sends the stats
+    private static boolean insidePlugin() {
+        try {
+            ClassLoader loader = DisplayMotion.class.getClassLoader();
+            return Class.forName("org.jan1k.displaymotion.plugin.DisplayMotionPlugin", false, loader).getClassLoader() == loader;
+        } catch (ClassNotFoundException | LinkageError e) {
+            return false;
+        }
     }
 
     /** Spawns one item display at this location. Its single part is named {@code main}. */
