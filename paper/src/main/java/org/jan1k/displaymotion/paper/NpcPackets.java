@@ -1,11 +1,18 @@
 package org.jan1k.displaymotion.paper;
 
+import com.github.retrooper.packetevents.PacketEvents;
+import com.github.retrooper.packetevents.manager.server.ServerVersion;
+import com.github.retrooper.packetevents.protocol.component.builtin.item.ItemSwingAnimation;
 import com.github.retrooper.packetevents.protocol.entity.data.EntityData;
 import com.github.retrooper.packetevents.protocol.entity.data.EntityDataTypes;
 import com.github.retrooper.packetevents.protocol.player.Equipment;
 import com.github.retrooper.packetevents.protocol.player.EquipmentSlot;
+import com.github.retrooper.packetevents.protocol.player.InteractionHand;
+import com.github.retrooper.packetevents.wrapper.PacketWrapper;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityAnimation;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityEquipment;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityMetadata;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSwingAnimation;
 import io.github.retrooper.packetevents.util.SpigotConversionUtil;
 import org.bukkit.inventory.ItemStack;
 
@@ -28,6 +35,7 @@ final class NpcPackets {
     private static final int DESCRIPTION_SLOT = 19;
     private static final byte ALL_LAYERS = 0x7F;
     private static final byte GLOWING = 0x40;
+    private static final int SWING_TICKS = 6;
 
     private NpcPackets() {
     }
@@ -43,6 +51,18 @@ final class NpcPackets {
         data.add(new EntityData<>(IMMOVABLE_SLOT, EntityDataTypes.BOOLEAN, true));
         data.add(new EntityData<>(DESCRIPTION_SLOT, EntityDataTypes.OPTIONAL_ADV_COMPONENT, Optional.ofNullable(npc.description)));
         return new WrapperPlayServerEntityMetadata(npc.entityId, data);
+    }
+
+    // 26.3 took the swing out of the animate packet and gave it its own one, the old swing throws there.
+    // games older than 26.3 never tick the swing of a mannequin, so they dont show it at all
+    static PacketWrapper<?> swing(PartState npc, boolean offHand) {
+        if (PacketEvents.getAPI().getServerManager().getVersion().isNewerThanOrEquals(ServerVersion.V_26_3)) {
+            return new WrapperPlayServerSwingAnimation(npc.entityId, offHand ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND,
+                    new ItemSwingAnimation(ItemSwingAnimation.Type.WHACK, SWING_TICKS));
+        }
+        return new WrapperPlayServerEntityAnimation(npc.entityId, offHand
+                ? WrapperPlayServerEntityAnimation.EntityAnimationType.SWING_OFF_HAND
+                : WrapperPlayServerEntityAnimation.EntityAnimationType.SWING_MAIN_ARM);
     }
 
     static WrapperPlayServerEntityEquipment equipment(PartState npc) {

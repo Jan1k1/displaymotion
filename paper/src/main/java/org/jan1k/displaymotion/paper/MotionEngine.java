@@ -12,7 +12,6 @@ import com.github.retrooper.packetevents.protocol.world.Location;
 import com.github.retrooper.packetevents.wrapper.PacketWrapper;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerBundle;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDestroyEntities;
-import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityAnimation;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityHeadLook;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityMetadata;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityRotation;
@@ -762,9 +761,7 @@ final class MotionEngine {
             return;
         }
         PartState npc = display.parts[part];
-        sendPart(display, npc, new WrapperPlayServerEntityAnimation(npc.entityId, offHand
-                ? WrapperPlayServerEntityAnimation.EntityAnimationType.SWING_OFF_HAND
-                : WrapperPlayServerEntityAnimation.EntityAnimationType.SWING_MAIN_ARM));
+        sendPart(display, npc, NpcPackets.swing(npc, offHand));
     }
 
     void npcLook(DisplayState display, int part, double range) {
