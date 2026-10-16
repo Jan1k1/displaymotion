@@ -56,6 +56,13 @@ Easing is how a movement feels. Without it, everything moves at one speed and lo
 | `OUT` | Fast at the start, slow at the end. | Something that pops in. |
 | `IN` | Slow at the start, fast at the end. | Something that falls. |
 | `IN_OUT` | Slow, fast, slow. | Floating up and down. |
+| `BACK_OUT` | Goes a bit too far, then settles. | A pop in with some life. |
+| `BACK_IN` | Pulls back a little first, then goes. | Winding up before a jump. |
+| `ELASTIC_OUT` | Shoots past and wobbles before it stops. | A spring, a jelly block. |
+| `BOUNCE_OUT` | Lands and bounces like a ball. | Something that drops on the floor. |
+| `BOUNCE_IN` | Small bounces first, then goes. | The reverse of a drop. |
+
+`BACK` and `ELASTIC` go past the end on purpose. With scale that means it gets a bit bigger than the target before it settles.
 
 ## Your own keyframes
 
