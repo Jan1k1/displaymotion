@@ -1,6 +1,6 @@
 # displaymotion docs
 
-1. [Getting started](getting-started.md): add the library, first display.
+1. [Getting started](getting-started.md): plugin way or shaded way, first display.
 2. [Animations](animations.md): presets, `then`, `with`, `loop`, keyframes.
 3. [Models](models.md): many parts, parents, one part at a time.
 4. [Effects](effects.md): kill effects and more, one line each.

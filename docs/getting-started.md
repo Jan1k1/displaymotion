@@ -2,7 +2,7 @@
 
 This page builds a small plugin from zero. At the end, a sword spins and floats above you when you type a command.
 
-You need Paper 1.21.4 or newer (26.x works too), Java 21 or newer and the PacketEvents plugin (2.14.0 or newer) on the server. Mannequin NPCs need Paper 1.21.9 or newer, on older servers `npc(...)` throws an `UnsupportedOperationException`. PacketEvents is a separate plugin. The server owner installs it. You do not put it in your jar.
+You need Paper 1.21.4 or newer (26.x works too) and Java 21 or newer. Mannequin NPCs need Paper 1.21.9 or newer, on older servers `npc(...)` throws an `UnsupportedOperationException`.
 
 ## What is displaymotion?
 
@@ -10,9 +10,70 @@ Minecraft has three display entities: item, block and text displays. They show a
 
 displaymotion makes this easy. You say what should move, and the library sends the right packets to the players. There are no real entities on the server, so it does not slow the server down. Players need no mod and no resource pack.
 
-## 1. Add the library
+## 1. Pick a way
 
-Make a Gradle project. This is the full `build.gradle.kts`:
+There are two ways to use displaymotion. Both have the same API. Only the setup is different.
+
+| | Plugin way | Shaded way |
+| --- | --- | --- |
+| Server owner installs | `DisplayMotion.jar` | The PacketEvents plugin |
+| Your jar | Small. No library inside. | Bigger. The library is inside. |
+| PacketEvents | Built in. Nothing to install. | Separate plugin on the server. |
+| Several plugins | They share one copy. | Each plugin has its own copy. |
+
+Pick the plugin way if you are not sure. It is the simplest. Pick the shaded way if you want no extra jar for the server owner.
+
+## 2. Plugin way
+
+The server owner puts `DisplayMotion-0.3.0.jar` in the `plugins` folder. It has PacketEvents inside. It also works next to the normal PacketEvents plugin.
+
+Your `build.gradle.kts`:
+
+```kotlin
+plugins {
+    java
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+repositories {
+    mavenCentral()
+    maven("https://repo.papermc.io/repository/maven-public/")
+    maven("https://jitpack.io")
+}
+
+dependencies {
+    compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
+    compileOnly("com.github.Jan1k1.displaymotion:displaymotion-paper:v0.3.0")
+}
+```
+
+`compileOnly` means: use it to build, but do not put it in the jar. The server has the library already. You do not need PacketEvents in your build.
+
+Your `src/main/resources/plugin.yml`:
+
+```yaml
+name: MyPlugin
+version: "1.0"
+main: your.plugin.MyPlugin
+api-version: "1.21.4"
+depend: [DisplayMotion]
+commands:
+  sword:
+    description: Shows a spinning sword
+```
+
+`depend: [DisplayMotion]` makes the server load displaymotion first. Without it, `DisplayMotion.create` fails.
+
+In `onEnable`, call `DisplayMotion.create(this)`. Go to step 4.
+
+## 3. Shaded way
+
+The library goes inside your jar. The server owner installs the PacketEvents plugin (2.14.0 or newer). Your `build.gradle.kts`:
 
 ```kotlin
 plugins {
@@ -53,9 +114,7 @@ What the parts do:
 
 Do not shade PacketEvents. The server installs it.
 
-## 2. plugin.yml
-
-Make the file `src/main/resources/plugin.yml`:
+Your `src/main/resources/plugin.yml`:
 
 ```yaml
 name: MyPlugin
@@ -70,7 +129,7 @@ commands:
 
 `depend: [packetevents]` is important. It makes the server load PacketEvents first. Without it, `DisplayMotion.create` fails.
 
-## 3. First display
+## 4. First display
 
 Make the file `src/main/java/your/plugin/MyPlugin.java`:
 
@@ -122,10 +181,10 @@ What happens in the code:
 
 That is all. The library removes every display when your plugin disables.
 
-## 4. Build and run
+## 5. Build and run
 
-1. Run `./gradlew shadowJar`. The jar is in `build/libs/`.
-2. Copy the jar to the `plugins` folder of a Paper 1.21.4 or newer server. Put the PacketEvents jar there too.
+1. Run `./gradlew build` (plugin way) or `./gradlew shadowJar` (shaded way). The jar is in `build/libs/`.
+2. Copy the jar to the `plugins` folder of a Paper 1.21.4 or newer server. Put `DisplayMotion-0.3.0.jar` there too (plugin way), or the PacketEvents jar (shaded way).
 3. Start the server and join.
 4. Type `/sword`.
 
@@ -135,7 +194,7 @@ If something is wrong:
 
 | What you see | Fix |
 | --- | --- |
-| `PacketEvents is not running` in the log | Install PacketEvents on the server. Check that `depend: [packetevents]` is in `plugin.yml`. |
+| `PacketEvents is not running` in the log | Plugin way: install `DisplayMotion.jar` and check `depend: [DisplayMotion]`. Shaded way: install PacketEvents and check `depend: [packetevents]`. |
 | `Unknown command` | The command is not in `plugin.yml`, or the plugin did not load. Read the log. |
 | The sword does not show | You are more than 48 blocks away, or your client is older than 1.19.4. |
 
