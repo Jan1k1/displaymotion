@@ -665,6 +665,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
 
         box(model, "door_frame", Material.DARK_OAK_PLANKS, 0, 1.0f, 0.905f, 0.7f, 1.05f, 0.04f);
         box(model, "door", Material.SPRUCE_PLANKS, 0, 0.975f, 0.925f, 0.55f, 0.95f, 0.04f);
+        model.detail("door_frame", "rod");
         for (int side = -1; side <= 1; side += 2) {
             window(model, "window_lower_" + side, side * 0.9f, 1.6f);
             window(model, "window_upper_" + side, side * 0.75f, 3.1f);
@@ -676,7 +677,9 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
             sail(model, i);
         }
 
+        // past 24 blocks the sails stand still and the small parts go away, near players see it all
         return model.spawn()
+                .lod(24)
                 .play(Animations.popIn(25))
                 .play("axle", Animations.turn(0f, 0f, -360f, 120).loop());
     }
@@ -702,6 +705,8 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
         float out = Math.signum(x) * 0.02f;
         box(model, name + "_frame", Material.DARK_OAK_PLANKS, x + out, y, 0, 0.05f, 0.4f, 0.4f);
         box(model, name, Material.BLACK_STAINED_GLASS, x + out * 2, y, 0, 0.04f, 0.28f, 0.28f);
+        // too small to see from far away anyway
+        model.detail(name + "_frame", name);
     }
 
     private static void sail(ModelBuilder model, int index) {
