@@ -131,6 +131,15 @@ public final class DisplayMotion {
     }
 
     /** Starts a model made of many parts. Add parts, then call {@link ModelBuilder#spawn()}. */
+    /**
+     * Starts a leaderboard here, facing where the location looks. Rows go down from it.
+     * Fill it with {@link Leaderboard#update(java.util.List)}. Main thread only.
+     */
+    public Leaderboard leaderboard(Location location) {
+        requireWorld(location);
+        return new Leaderboard(this, plugin, location);
+    }
+
     /** Ready-made effects like kill effects. Each one removes itself when it ends. */
     public Effects effects() {
         return effects;
