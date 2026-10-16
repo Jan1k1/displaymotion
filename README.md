@@ -3,12 +3,29 @@
 Animate vanilla item, block and text displays from Java code.
 No resource pack. No real entities. Packets only, through PacketEvents. No work on the main thread.
 
-Java Edition only. Paper 1.21.4 to 26.3, Java 21 or newer, PacketEvents 2.14.0. NPCs (mannequins) need a 1.21.9 or newer server.
+Java Edition only. Paper 1.21.4 to 26.3, Java 21 or newer. NPCs (mannequins) need a 1.21.9 or newer server.
 
 <p align="center">
   <img src=".github/media/windmill.gif" alt="A windmill model with turning sails" height="300">
   <img src=".github/media/leaderboard.gif" alt="A leaderboard where the scores count up" height="300">
 </p>
+
+## Setup
+
+Two ways. Both have the same API.
+
+**Plugin way (simplest).** The server owner installs `DisplayMotion.jar` (PacketEvents is inside). You add this and write `depend: [DisplayMotion]` in `plugin.yml`:
+
+```kotlin
+repositories { maven("https://jitpack.io") }
+dependencies { compileOnly("com.github.Jan1k1.displaymotion:displaymotion-paper:v0.3.0") }
+```
+
+**Shaded way.** You put the library in your own jar with `implementation(...)`. The server owner installs the PacketEvents plugin and you write `depend: [packetevents]`. No extra jar from us.
+
+Details: [Getting started](docs/getting-started.md).
+
+## Example
 
 ```java
 DisplayMotion motion = DisplayMotion.create(plugin); // once, in onEnable
@@ -33,7 +50,7 @@ sword.play(Animations.popOut(10), sword::remove); // later: shrink, then remove
 
 ## Docs
 
-- [Getting started](docs/getting-started.md): install with JitPack, first display.
+- [Getting started](docs/getting-started.md): plugin way or shaded way, first display.
 - [Animations](docs/animations.md)
 - [Models](docs/models.md)
 - [Effects](docs/effects.md)
@@ -44,7 +61,7 @@ sword.play(Animations.popOut(10), sword::remove); // later: shrink, then remove
 
 ## Try it
 
-Build the example plugin and put it next to PacketEvents on a Paper 1.21.4 or newer server:
+Build the example plugin and put it on a Paper 1.21.4 or newer server (with `DisplayMotion.jar` or the PacketEvents plugin):
 
 ```
 ./gradlew build
