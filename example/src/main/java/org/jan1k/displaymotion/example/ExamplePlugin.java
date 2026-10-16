@@ -145,6 +145,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 .then(Commands.literal("selfview").executes(context -> selfView(context.getSource())))
                 .then(Commands.literal("leaderboard").executes(context -> leaderboard(context.getSource())))
                 .then(Commands.literal("ease").executes(context -> easings(context.getSource())))
+                .then(dragons())
                 .then(spawns("npc", EnumSet.of(Part.TEXT), player -> npc(player, inFront(player, 4))))
                 .then(spawns("bench", EnumSet.of(Part.BLOCK), player -> bench(inFront(player, 3))))
                 .then(spawns("button", EnumSet.of(Part.BLOCK, Part.TEXT), player -> button(inFront(player, 3))))
@@ -384,6 +385,44 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
         showcases.put(id, spawned);
         player.sendPlainMessage("easings spawned, /dm stop removes them");
         return Command.SINGLE_SUCCESS;
+    }
+
+    // /dm dragon [build|ice|ender|three]. build starts with the tornado of blocks, three is a fire, an ice
+    // and an ender dragon at once. they need room, about 30 blocks around for the flight
+    private LiteralArgumentBuilder<CommandSourceStack> dragons() {
+        LiteralArgumentBuilder<CommandSourceStack> dragon = Commands.literal("dragon")
+                .executes(context -> dragon(context.getSource(), Dragon.Kind.FIRE, false, false))
+                .then(Commands.literal("build").executes(context -> dragon(context.getSource(), Dragon.Kind.FIRE, true, false)))
+                .then(Commands.literal("three").executes(context -> dragon(context.getSource(), Dragon.Kind.FIRE, false, true)));
+        for (Dragon.Kind kind : Dragon.Kind.values()) {
+            dragon.then(Commands.literal(kind.name().toLowerCase(Locale.ROOT))
+                    .executes(context -> dragon(context.getSource(), kind, false, false)));
+        }
+        return dragon;
+    }
+
+    private int dragon(CommandSourceStack source, Dragon.Kind kind, boolean build, boolean three) {
+        if (!(source.getSender() instanceof Player player)) {
+            source.getSender().sendPlainMessage("players only");
+            return 0;
+        }
+        UUID id = player.getUniqueId();
+        clearShowcase(id);
+        Location at = inFront(player, 14);
+        List<MotionDisplay> spawned = new ArrayList<>(Dragon.spawn(motion, at, kind, build, 0, 1, 1f));
+        if (three) {
+            // smaller ones on the sides, later in their life and flying the other way so they dont move in step
+            spawned.addAll(Dragon.spawn(motion, at.clone().add(sideways(at, -11f)).add(forward(at, -6f)), Dragon.Kind.ICE, false, 130, 1, 0.75f));
+            spawned.addAll(Dragon.spawn(motion, at.clone().add(sideways(at, 11f)).add(forward(at, -6f)), Dragon.Kind.ENDER, false, 255, -1, 0.65f));
+        }
+        showcases.put(id, spawned);
+        player.sendPlainMessage((three ? "dragons" : "dragon") + " spawned, /dm stop removes it");
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static Vector forward(Location at, float z) {
+        double yaw = Math.toRadians(at.getYaw());
+        return new Vector(-Math.sin(yaw) * z, 0, Math.cos(yaw) * z);
     }
 
     // x blocks to the right of where the location looks
