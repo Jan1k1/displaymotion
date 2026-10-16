@@ -147,6 +147,29 @@ button.onClick(click -> {
 
 Try it in game with `/dm button` from the example plugin.
 
+## A leaderboard that moves
+
+Rows glide to their new rank, new names pop in, names that drop off pop out, and changed scores count up. The top 3 get gold, silver and bronze.
+
+```java
+Leaderboard board = motion.leaderboard(location)       // faces where the location looks, rows go down
+        .rows(10)
+        .title(Component.text("Top kills", NamedTextColor.GOLD));
+
+// call it again whenever the scores change, it works out what moved
+board.update(players.stream()
+        .map(p -> Leaderboard.Entry.of(p.getUniqueId().toString(), p.name(), kills(p))
+                .icon(Leaderboard.head(p)))
+        .toList());
+
+board.remove();                                        // when you are done
+```
+
+- The board sorts by score, highest first. The id says which row is which between updates.
+- A rank change costs one move per part: the players' games glide it there by themselves.
+- `format(score -> Component.text(score + " kills"))` changes how a score shows.
+- Call it on the main thread. Try it with `/dm leaderboard`.
+
 ## Spawn an imported model
 
 Load the file once. Spawn it every time you need it. See [Importing](importing.md) for the full steps.
