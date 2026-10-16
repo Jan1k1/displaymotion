@@ -601,7 +601,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 return;
             }
             clip[0] = (clip[0] + 1) % clips.size();
-            model.play(display, clips.get(clip[0]));
+            model.play(display, clips.get(clip[0]), 8);
             click.player().sendActionBar(Component.text(file + ": " + clips.get(clip[0]), NamedTextColor.GOLD));
         });
         return display.play(Animations.popIn(15));
