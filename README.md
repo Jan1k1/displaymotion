@@ -67,7 +67,7 @@ Build the example plugin and put it on a Paper 1.21.4 or newer server (with `Dis
 ./gradlew build
 ```
 
-The jar is `example/build/libs/displaymotion-example-<version>.jar`. Commands: `/dm showcase` (everything at once), `/dm sword`, `/dm block`, `/dm windmill`, `/dm text`, `/dm pet`, `/dm hat`, `/dm backpack`, `/dm selfview`, `/dm leaderboard`, `/dm ease`, `/dm npc`, `/dm bench`, `/dm button`, `/dm effect <name>`, `/dm killeffect <name>`, `/dm model <file> [animation]`, `/dm debug`, `/dm stop`. Every command that spawns a display takes options after it, like `/dm sword size:3 speed:0.5 glow:gold` or `/dm text text:Hello there align:left`. Keys: `size`, `grow`, `speed`, `glow`, `bright`, `billboard`, `shadow`, `item`, `block`, `text` (last), `align`, `textshadow`, `seethrough`, `width`, `range`. Tab complete lists them.
+The jar is `example/build/libs/displaymotion-example-<version>.jar`. Commands: `/dm showcase` (everything at once), `/dm sword`, `/dm block`, `/dm windmill`, `/dm text`, `/dm pet`, `/dm hat`, `/dm backpack`, `/dm selfview`, `/dm leaderboard`, `/dm ease`, `/dm npc`, `/dm bench`, `/dm button`, `/dm dragon [build|ice|ender|three]`, `/dm effect <name>`, `/dm killeffect <name>`, `/dm model <file> [animation]`, `/dm debug`, `/dm stop`. Every command that spawns a display takes options after it, like `/dm sword size:3 speed:0.5 glow:gold` or `/dm text text:Hello there align:left`. Keys: `size`, `grow`, `speed`, `glow`, `bright`, `billboard`, `shadow`, `item`, `block`, `text` (last), `align`, `textshadow`, `seethrough`, `width`, `range`. Tab complete lists them.
 
 ## Modules
 

@@ -234,4 +234,5 @@ bench.onClick(click -> {
 ## Example
 
 `example/src/main/java/org/jan1k/displaymotion/example/ExamplePlugin.java` builds a 53 part windmill. Run it with `/dm windmill`.
+`Dragon.java` next to it is the big one: a dragon from two models (about 240 parts and 140 more for the fire) that roars, flies a circle and lands, with `/dm dragon`. `/dm dragon build` first lets it fly together from a swirl of glowing blocks, `/dm dragon three` spawns a fire, an ice and an ender dragon. All its motion is plain `Animation` code, see the `Motion` record at the end of the file.
 To build models in an editor instead, see [Importing](importing.md).
