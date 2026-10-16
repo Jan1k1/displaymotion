@@ -56,7 +56,6 @@ public final class Leaderboard {
     private static final int POP_TICKS = 8;
     private static final int STAGGER_TICKS = 2;
     private static final int COUNT_TICKS = 20;
-    private static final int COUNT_STEP_TICKS = 2;
     private static final long ARROW_TICKS = 40L;
     private static final Color CLEAR = Color.fromARGB(0, 0, 0, 0);
     private static final Color[] PANELS = {
@@ -100,16 +99,12 @@ public final class Leaderboard {
     private static final class Row {
         final MotionDisplay display;
         int rank;
-        long shown;
-        long from;
         long to;
-        int countTick = -1;
         BukkitTask arrow;
 
         Row(MotionDisplay display, int rank, long score) {
             this.display = display;
             this.rank = rank;
-            this.shown = score;
             this.to = score;
         }
     }
@@ -121,7 +116,6 @@ public final class Leaderboard {
     private MotionDisplay title;
     private int size = DEFAULT_ROWS;
     private LongFunction<Component> format = score -> Component.text(String.format("%,d", score), NamedTextColor.WHITE);
-    private BukkitTask counter;
     private boolean removed;
 
     Leaderboard(DisplayMotion motion, Plugin plugin, Location origin) {
@@ -203,9 +197,6 @@ public final class Leaderboard {
             return;
         }
         removed = true;
-        if (counter != null) {
-            counter.cancel();
-        }
         for (Row row : rows.values()) {
             drop(row);
         }
@@ -276,40 +267,11 @@ public final class Leaderboard {
         }, ARROW_TICKS);
     }
 
+    // the counting runs on the motion thread, the board itself does nothing every tick
     private void count(Row row, long score) {
-        row.from = row.shown;
+        long from = row.to;
         row.to = score;
-        row.countTick = 0;
-        row.display.play("score", BUMP);
-        if (counter == null) {
-            counter = Bukkit.getScheduler().runTaskTimer(plugin, this::countStep, COUNT_STEP_TICKS, COUNT_STEP_TICKS);
-        }
-    }
-
-    // only runs while a score counts, so a quiet board does nothing every tick
-    private void countStep() {
-        boolean busy = false;
-        for (Row row : rows.values()) {
-            if (row.countTick < 0) {
-                continue;
-            }
-            row.countTick += COUNT_STEP_TICKS;
-            float t = Math.min(1f, row.countTick / (float) COUNT_TICKS);
-            float eased = 1f - (1f - t) * (1f - t);
-            row.shown = row.from + Math.round((row.to - row.from) * (double) eased);
-            if (!row.display.isRemoved()) {
-                row.display.text("score", format.apply(row.shown));
-            }
-            if (t >= 1f) {
-                row.countTick = -1;
-            } else {
-                busy = true;
-            }
-        }
-        if (!busy && counter != null) {
-            counter.cancel();
-            counter = null;
-        }
+        row.display.play("score", BUMP).count("score", from, score, COUNT_TICKS, format);
     }
 
     private void drop(Row row) {
