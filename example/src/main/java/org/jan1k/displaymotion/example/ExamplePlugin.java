@@ -31,6 +31,7 @@ import org.jan1k.displaymotion.Pose;
 import org.jan1k.displaymotion.paper.DisplayMotion;
 import org.jan1k.displaymotion.paper.Follow;
 import org.jan1k.displaymotion.paper.Leaderboard;
+import org.jan1k.displaymotion.paper.Skin;
 import org.jan1k.displaymotion.paper.SelfView;
 import org.jan1k.displaymotion.paper.ModelBuilder;
 import org.jan1k.displaymotion.paper.MotionDisplay;
@@ -132,6 +133,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 .then(Commands.literal("selfview").executes(context -> selfView(context.getSource())))
                 .then(Commands.literal("leaderboard").executes(context -> leaderboard(context.getSource())))
                 .then(Commands.literal("ease").executes(context -> easings(context.getSource())))
+                .then(Commands.literal("npc").executes(context -> show(context.getSource(), player -> npc(player, inFront(player, 4)))))
                 .then(Commands.literal("bench").executes(context -> show(context.getSource(), player -> bench(inFront(player, 3)))))
                 .then(Commands.literal("button").executes(context -> show(context.getSource(), player -> button(inFront(player, 3)))))
                 .then(Commands.literal("showcase").executes(context -> showcase(context.getSource())))
@@ -253,6 +255,25 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
             case "swords" -> motion.effects().swordRain(at, ItemStack.of(Material.IRON_SWORD));
             default -> motion.effects().soul(at);
         }
+    }
+
+    // a mannequin with your skin that looks at you, right click it and it waves and says hello
+    private MotionDisplay npc(Player player, Location at) {
+        MotionDisplay guide = motion.model(at)
+                .npc("guide", Skin.of(player))
+                .text("speech", Component.empty(), Pose.IDENTITY.withOffset(0f, 2.25f, 0f).withScale(0.8f))
+                .spawn()
+                .billboard("speech", Display.Billboard.CENTER)
+                .hitbox(0.8f, 1.9f);
+        guide.npc("guide")
+                .name(Component.text("Guide", NamedTextColor.GOLD))
+                .equip(org.bukkit.inventory.EquipmentSlot.HAND, ItemStack.of(Material.DIAMOND_SWORD))
+                .lookAtPlayers();
+        guide.onClick(click -> {
+            guide.npc("guide").swing();
+            guide.type("speech", Component.text("Hello, " + click.player().getName() + "!", NamedTextColor.WHITE), 2);
+        });
+        return guide;
     }
 
     // one block per ease, dropping and rising again, so you can see how each one feels
