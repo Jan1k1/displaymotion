@@ -9,6 +9,7 @@ import com.github.retrooper.packetevents.protocol.entity.data.EntityDataTypes;
 import com.github.retrooper.packetevents.protocol.entity.type.EntityType;
 import com.github.retrooper.packetevents.protocol.entity.type.EntityTypes;
 import com.github.retrooper.packetevents.protocol.world.Location;
+import com.github.retrooper.packetevents.util.Vector3d;
 import com.github.retrooper.packetevents.wrapper.PacketWrapper;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerBundle;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDestroyEntities;
@@ -1098,7 +1099,7 @@ final class MotionEngine {
                 continue;
             }
             if (part.detail) {
-                queue(viewer, encode(new WrapperPlayServerSpawnEntity(part.entityId, part.uuid, entityType(part), at, display.yaw, 0, null), viewer.channel));
+                queue(viewer, encode(new WrapperPlayServerSpawnEntity(part.entityId, part.uuid, entityType(part), at, display.yaw, 0, Vector3d.zero()), viewer.channel));
             }
             if (part.kind == PartState.NPC) {
                 if (part.detail) {
@@ -1199,7 +1200,7 @@ final class MotionEngine {
                 }
                 WrapperPlayServerSpawnEntity spawn = new WrapperPlayServerSpawnEntity(part.entityId, part.uuid,
                         entityType(part),
-                        new Location(display.x, display.y, display.z, display.yaw, display.pitch), display.yaw, 0, null);
+                        new Location(display.x, display.y, display.z, display.yaw, display.pitch), display.yaw, 0, Vector3d.zero());
                 buffers[i * 2] = encode(spawn, viewer.channel);
                 buffers[i * 2 + 1] = encode(part.kind == PartState.NPC ? NpcPackets.data(part)
                         : packet.spawn(part, display.clientRange(), display.moveTicks), viewer.channel);
@@ -1335,7 +1336,7 @@ final class MotionEngine {
 
     private static WrapperPlayServerSpawnEntity spawnHitbox(DisplayState display, Hitbox hitbox) {
         return new WrapperPlayServerSpawnEntity(hitbox.entityId, hitbox.uuid, EntityTypes.INTERACTION,
-                hitboxSpot(display, hitbox), 0f, 0, null);
+                hitboxSpot(display, hitbox), 0f, 0, Vector3d.zero());
     }
 
     // response true makes the hand swing on a right click, like a real entity
