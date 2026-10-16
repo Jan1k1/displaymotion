@@ -26,12 +26,17 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
     private static final int BILLBOARD_SLOT = 15;
     private static final int BRIGHTNESS_SLOT = 16;
     private static final int VIEW_RANGE_SLOT = 17;
+    private static final int SHADOW_RADIUS_SLOT = 18;
+    private static final int SHADOW_STRENGTH_SLOT = 19;
     private static final int WIDTH_SLOT = 20;
     private static final int HEIGHT_SLOT = 21;
     private static final int GLOW_COLOR_SLOT = 22;
     private static final int CONTENT_SLOT = 23;
     private static final int ITEM_TRANSFORM_SLOT = 24;
+    private static final int LINE_WIDTH_SLOT = 24;
     private static final int BACKGROUND_SLOT = 25;
+    private static final int TEXT_OPACITY_SLOT = 26;
+    private static final int TEXT_FLAGS_SLOT = 27;
     private static final int END = 0xFF;
     private static final int GLOWING_FLAG = 0x40;
     // client hides displays past view_range * 64 blocks on its own
@@ -212,9 +217,19 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
         writeVarInt(part.brightness);
         entry(GLOW_COLOR_SLOT, intType);
         writeVarInt(part.glowColor);
+        entry(SHADOW_RADIUS_SLOT, floatType);
+        writeFloat(part.shadowRadius);
+        entry(SHADOW_STRENGTH_SLOT, floatType);
+        writeFloat(part.shadowStrength);
         if (part.kind == PartState.TEXT) {
+            entry(LINE_WIDTH_SLOT, intType);
+            writeVarInt(part.lineWidth);
             entry(BACKGROUND_SLOT, intType);
             writeVarInt(part.background);
+            entry(TEXT_OPACITY_SLOT, byteType);
+            writeByte(part.textOpacity);
+            entry(TEXT_FLAGS_SLOT, byteType);
+            writeByte(part.textFlags());
         }
     }
 

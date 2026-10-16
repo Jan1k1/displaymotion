@@ -7,6 +7,10 @@ import org.bukkit.Location;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.ItemDisplay;
+import org.bukkit.entity.TextDisplay;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.inventory.ItemStack;
+import io.github.retrooper.packetevents.util.SpigotConversionUtil;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
@@ -39,6 +43,7 @@ public final class MotionDisplay {
     public static final int MAX_SCALE_TICKS = 200;
     /** The fastest speed for {@link #speed(double)}. */
     public static final double MAX_SPEED = 10.0;
+    private static final float MAX_SHADOW_RADIUS = 64f;
     /** Where {@link #follow(Entity)} puts it: a bit above and behind, like a pet. */
     public static final Vector DEFAULT_FOLLOW_OFFSET = new Vector(0.0, 1.6, -1.2);
     public static final int DEFAULT_FOLLOW_GLIDE = 4;
@@ -296,6 +301,179 @@ public final class MotionDisplay {
     /** Background behind one text part. */
     public MotionDisplay background(String part, Color color) {
         return background(index(part), color);
+    }
+
+    /** Wraps the lines of every text part after this many pixels. The default is 200. */
+    public MotionDisplay lineWidth(int width) {
+        return lineWidth(MotionEngine.ALL_PARTS, width);
+    }
+
+    /** Line width of one text part. */
+    public MotionDisplay lineWidth(String part, int width) {
+        return lineWidth(textPart(part), width);
+    }
+
+    /** How solid the text of every text part is, 0 to 255. 255 is the default. */
+    public MotionDisplay textOpacity(int alpha) {
+        return textOpacity(MotionEngine.ALL_PARTS, alpha);
+    }
+
+    /** Text opacity of one text part. */
+    public MotionDisplay textOpacity(String part, int alpha) {
+        return textOpacity(textPart(part), alpha);
+    }
+
+    /** Draws a shadow behind the letters of every text part. */
+    public MotionDisplay textShadow(boolean shadow) {
+        return textStyle(MotionEngine.ALL_PARTS, p -> p.textShadow = shadow);
+    }
+
+    /** Letter shadow of one text part. */
+    public MotionDisplay textShadow(String part, boolean shadow) {
+        return textStyle(textPart(part), p -> p.textShadow = shadow);
+    }
+
+    /** Lets every text part be seen through blocks. */
+    public MotionDisplay seeThrough(boolean seeThrough) {
+        return textStyle(MotionEngine.ALL_PARTS, p -> p.seeThrough = seeThrough);
+    }
+
+    /** Lets one text part be seen through blocks. */
+    public MotionDisplay seeThrough(String part, boolean seeThrough) {
+        return textStyle(textPart(part), p -> p.seeThrough = seeThrough);
+    }
+
+    /** Aligns the lines of every text part. {@code CENTER} is the default. */
+    public MotionDisplay alignment(TextDisplay.TextAlignment alignment) {
+        Objects.requireNonNull(alignment, "alignment");
+        return textStyle(MotionEngine.ALL_PARTS, p -> p.alignment = alignment);
+    }
+
+    /** Aligns the lines of one text part. */
+    public MotionDisplay alignment(String part, TextDisplay.TextAlignment alignment) {
+        Objects.requireNonNull(alignment, "alignment");
+        return textStyle(textPart(part), p -> p.alignment = alignment);
+    }
+
+    /**
+     * Draws a round shadow on the ground under every part. Radius is 0 to 64 blocks, 0 is no shadow.
+     * Strength is 0 or more, 1 is the default.
+     * @throws IllegalArgumentException if a number is out of range
+     */
+    public MotionDisplay shadow(float radius, float strength) {
+        return shadow(MotionEngine.ALL_PARTS, radius, strength);
+    }
+
+    /** Shadow of one part. */
+    public MotionDisplay shadow(String part, float radius, float strength) {
+        return shadow(index(part), radius, strength);
+    }
+
+    /**
+     * Swaps the item of every item part.
+     * @throws IllegalArgumentException if the display has no item part
+     */
+    public MotionDisplay item(ItemStack item) {
+        return item(MotionEngine.ALL_PARTS, item);
+    }
+
+    /** Swaps the item of one item part. */
+    public MotionDisplay item(String part, ItemStack item) {
+        int index = index(part);
+        if (state.parts[index].kind != PartState.ITEM) {
+            throw new IllegalArgumentException("part '" + part + "' is not an item part");
+        }
+        return item(index, item);
+    }
+
+    /**
+     * Swaps the block of every block part.
+     * @throws IllegalArgumentException if the display has no block part
+     */
+    public MotionDisplay block(BlockData block) {
+        return block(MotionEngine.ALL_PARTS, block);
+    }
+
+    /** Swaps the block of one block part. */
+    public MotionDisplay block(String part, BlockData block) {
+        int index = index(part);
+        if (state.parts[index].kind != PartState.BLOCK) {
+            throw new IllegalArgumentException("part '" + part + "' is not a block part");
+        }
+        return block(index, block);
+    }
+
+    private MotionDisplay lineWidth(int part, int width) {
+        if (width < 1) {
+            throw new IllegalArgumentException("line width must be at least 1, got " + width);
+        }
+        return textStyle(part, p -> p.lineWidth = width);
+    }
+
+    private MotionDisplay textOpacity(int part, int alpha) {
+        if (alpha < 0 || alpha > 255) {
+            throw new IllegalArgumentException("text opacity is 0 to 255, got " + alpha);
+        }
+        return textStyle(part, p -> p.textOpacity = alpha);
+    }
+
+    // only the text parts take it, the others stay as they are
+    private MotionDisplay textStyle(int part, Consumer<PartState> change) {
+        requireAlive();
+        engine.submit(() -> engine.look(state, part, p -> {
+            if (p.kind == PartState.TEXT) {
+                change.accept(p);
+            }
+        }));
+        return this;
+    }
+
+    private MotionDisplay shadow(int part, float radius, float strength) {
+        if (!(radius >= 0f && radius <= MAX_SHADOW_RADIUS)) {
+            throw new IllegalArgumentException("shadow radius is 0 to " + MAX_SHADOW_RADIUS + ", got " + radius);
+        }
+        if (!(strength >= 0f && strength <= Float.MAX_VALUE)) {
+            throw new IllegalArgumentException("shadow strength must be 0 or more, got " + strength);
+        }
+        requireAlive();
+        engine.submit(() -> engine.look(state, part, p -> {
+            if (p.isDisplay()) {
+                p.shadowRadius = radius;
+                p.shadowStrength = strength;
+            }
+        }));
+        return this;
+    }
+
+    private MotionDisplay item(int part, ItemStack item) {
+        Objects.requireNonNull(item, "item");
+        if (part == MotionEngine.ALL_PARTS && !hasKind(PartState.ITEM)) {
+            throw new IllegalArgumentException("this display has no item part");
+        }
+        requireAlive();
+        var converted = SpigotConversionUtil.fromBukkitItemStack(item);
+        engine.submit(() -> engine.content(state, part, PartState.ITEM, p -> p.item = converted));
+        return this;
+    }
+
+    private MotionDisplay block(int part, BlockData block) {
+        Objects.requireNonNull(block, "block");
+        if (part == MotionEngine.ALL_PARTS && !hasKind(PartState.BLOCK)) {
+            throw new IllegalArgumentException("this display has no block part");
+        }
+        requireAlive();
+        int blockState = SpigotConversionUtil.fromBukkitBlockData(block).getGlobalId();
+        engine.submit(() -> engine.content(state, part, PartState.BLOCK, p -> p.blockState = blockState));
+        return this;
+    }
+
+    private boolean hasKind(int kind) {
+        for (PartState part : state.parts) {
+            if (part.kind == kind) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private MotionDisplay background(int part, Color color) {

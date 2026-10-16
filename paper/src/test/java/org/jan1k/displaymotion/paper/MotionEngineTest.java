@@ -13,6 +13,7 @@ import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.TextDisplay;
 import org.bukkit.plugin.Plugin;
 import org.jan1k.displaymotion.Animation;
 import org.jan1k.displaymotion.Animations;
@@ -32,6 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MotionEngineTest {
@@ -212,6 +214,55 @@ class MotionEngineTest {
         assertEquals(List.of("meta"), kinds(packets));
         assertEquals((byte) 0x40, value(packets.getFirst(), 0));
         assertEquals(Color.ORANGE.asRGB(), value(packets.getFirst(), 22));
+    }
+
+    @Test
+    void shadowIsSentToViewersRightAway() {
+        MotionDisplay display = display();
+        tick();
+        tick();
+
+        display.shadow(3f, 0.5f);
+        List<Packet> packets = tick();
+
+        assertEquals(List.of("meta"), kinds(packets));
+        assertEquals(3f, value(packets.getFirst(), 18));
+        assertEquals(0.5f, value(packets.getFirst(), 19));
+    }
+
+    @Test
+    void badStyleValuesAndWrongPartsThrow() {
+        MotionDisplay display = display();
+
+        assertThrows(IllegalArgumentException.class, () -> display.shadow(65f, 1f));
+        assertThrows(IllegalArgumentException.class, () -> display.shadow(-1f, 1f));
+        assertThrows(IllegalArgumentException.class, () -> display.shadow("main", 1f, Float.NaN));
+        assertThrows(IllegalArgumentException.class, () -> display.shadow("nope", 1f, 1f));
+        assertThrows(IllegalArgumentException.class, () -> display.lineWidth("main", 50));
+        assertThrows(IllegalArgumentException.class, () -> display.textOpacity("main", 50));
+        assertThrows(IllegalArgumentException.class, () -> display.textShadow("main", true));
+        assertThrows(IllegalArgumentException.class, () -> display.seeThrough("main", true));
+        assertThrows(IllegalArgumentException.class, () -> display.alignment("main", TextDisplay.TextAlignment.LEFT));
+        assertThrows(IllegalArgumentException.class, () -> display.lineWidth(0));
+        assertThrows(IllegalArgumentException.class, () -> display.textOpacity(256));
+        assertThrows(IllegalArgumentException.class, () -> display.textOpacity(-1));
+        assertThrows(IllegalArgumentException.class, () -> display.item("main", null));
+        assertThrows(IllegalArgumentException.class, () -> display.block("nope", null));
+    }
+
+    @Test
+    void textStyleOnABlockOnlyDisplayDoesNothing() {
+        MotionDisplay display = display();
+        tick();
+        tick();
+
+        display.textShadow(true).lineWidth(50);
+
+        for (Packet packet : tick()) {
+            for (EntityData<?> entry : packet.data()) {
+                assertTrue(entry.getIndex() < 24, "text slot on a block part");
+            }
+        }
     }
 
     @Test

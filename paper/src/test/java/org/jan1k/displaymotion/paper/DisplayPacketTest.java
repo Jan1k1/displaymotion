@@ -8,6 +8,7 @@ import com.github.retrooper.packetevents.wrapper.PacketWrapper;
 import io.netty.buffer.ByteBuf;
 import net.kyori.adventure.text.Component;
 import io.netty.buffer.Unpooled;
+import org.bukkit.entity.TextDisplay;
 import org.jan1k.displaymotion.Affine;
 import org.jan1k.displaymotion.Decomposer;
 import org.jan1k.displaymotion.Pose;
@@ -65,7 +66,7 @@ class DisplayPacketTest {
 
         List<EntityData<?>> data = readBack(44, new DisplayPacket().spawn(part, 48, 0));
 
-        assertEquals(15, data.size());
+        assertEquals(17, data.size());
         assertEquals(0, value(data, 10));
         assertEquals(1, value(data, 9));
         assertEquals(0.75f, value(data, 17));
@@ -92,7 +93,7 @@ class DisplayPacketTest {
 
         List<EntityData<?>> data = readBack(46, new DisplayPacket().look(part));
 
-        assertEquals(4, data.size());
+        assertEquals(6, data.size());
         assertEquals((byte) 0x40, value(data, 0));
         assertEquals((byte) 3, value(data, 15));
         assertEquals(15 << 4 | 15 << 20, value(data, 16));
@@ -106,8 +107,62 @@ class DisplayPacketTest {
 
         List<EntityData<?>> data = readBack(48, new DisplayPacket().look(part));
 
-        assertEquals(5, data.size());
+        assertEquals(10, data.size());
         assertEquals(0, value(data, 25));
+        assertEquals(200, value(data, 24));
+        assertEquals((byte) -1, value(data, 26));
+        assertEquals((byte) 0, value(data, 27));
+    }
+
+    @Test
+    void textStyleIsInTheLookPacket() {
+        PartState part = PartState.text("label", 49, -1, Component.text("hi"), Pose.IDENTITY);
+        part.lineWidth = 80;
+        part.textOpacity = 128;
+        part.textShadow = true;
+        part.seeThrough = true;
+        part.alignment = TextDisplay.TextAlignment.RIGHT;
+
+        List<EntityData<?>> data = readBack(49, new DisplayPacket().look(part));
+
+        assertEquals(80, value(data, 24));
+        assertEquals((byte) 128, value(data, 26));
+        assertEquals((byte) 0x13, value(data, 27));
+    }
+
+    @Test
+    void shadowIsInTheLookPacket() {
+        PartState part = block(50, 1, Pose.IDENTITY);
+        part.shadowRadius = 2.5f;
+        part.shadowStrength = 0.5f;
+
+        List<EntityData<?>> data = readBack(50, new DisplayPacket().look(part));
+
+        assertEquals(2.5f, value(data, 18));
+        assertEquals(0.5f, value(data, 19));
+    }
+
+    @Test
+    void swappedBlockIsInTheContentPacket() {
+        PartState part = block(51, 1, Pose.IDENTITY);
+        part.blockState = 99;
+
+        List<EntityData<?>> data = readBack(51, new DisplayPacket().content(part));
+
+        assertEquals(99, value(data, 23));
+    }
+
+    @Test
+    void textFlagsMatchTheClientBits() {
+        PartState part = PartState.text("label", 52, -1, Component.text("hi"), Pose.IDENTITY);
+        assertEquals(0, part.textFlags());
+        part.alignment = TextDisplay.TextAlignment.LEFT;
+        assertEquals(0x08, part.textFlags());
+        part.textShadow = true;
+        assertEquals(0x09, part.textFlags());
+        part.alignment = TextDisplay.TextAlignment.CENTER;
+        part.seeThrough = true;
+        assertEquals(0x03, part.textFlags());
     }
 
     @Test

@@ -2,6 +2,7 @@ package org.jan1k.displaymotion.paper;
 
 import com.github.retrooper.packetevents.protocol.item.ItemStack;
 import net.kyori.adventure.text.Component;
+import org.bukkit.entity.TextDisplay;
 import org.jan1k.displaymotion.Affine;
 import org.jan1k.displaymotion.Decomposer;
 import org.jan1k.displaymotion.Pose;
@@ -16,15 +17,21 @@ final class PartState {
     static final int GROUP = 3;
     static final int NPC = 4;
     static final int DEFAULT_BACKGROUND = 0x40000000;
+    static final int DEFAULT_LINE_WIDTH = 200;
+    static final int SHADOW_FLAG = 0x01;
+    static final int SEE_THROUGH_FLAG = 0x02;
+    static final int ALIGN_LEFT_FLAG = 0x08;
+    static final int ALIGN_RIGHT_FLAG = 0x10;
 
     final String name;
     final int entityId;
     final UUID uuid = UUID.randomUUID();
     final int parent;
     final int kind;
-    final ItemStack item;
+    // item and blockState can be swapped later, engine thread
+    ItemStack item;
     final int itemTransform;
-    final int blockState;
+    int blockState;
     final float sizeX;
     final float sizeY;
     final float sizeZ;
@@ -45,6 +52,13 @@ final class PartState {
     int brightness = -1;
     int billboard;
     int background = DEFAULT_BACKGROUND;
+    float shadowRadius;
+    float shadowStrength = 1f;
+    int lineWidth = DEFAULT_LINE_WIDTH;
+    int textOpacity = 255;
+    boolean textShadow;
+    boolean seeThrough;
+    TextDisplay.TextAlignment alignment = TextDisplay.TextAlignment.CENTER;
     // small extras that players far away dont get at all, see MotionDisplay.lod
     boolean detail;
     final Resize size = new Resize();
@@ -149,6 +163,16 @@ final class PartState {
     // a display entity with a transform, a mannequin has none of the display data
     boolean isDisplay() {
         return kind != GROUP && kind != NPC;
+    }
+
+    // the style flags byte of a text display
+    int textFlags() {
+        int flags = (textShadow ? SHADOW_FLAG : 0) | (seeThrough ? SEE_THROUGH_FLAG : 0);
+        return switch (alignment) {
+            case LEFT -> flags | ALIGN_LEFT_FLAG;
+            case RIGHT -> flags | ALIGN_RIGHT_FLAG;
+            default -> flags;
+        };
     }
 
     boolean isBlock() {

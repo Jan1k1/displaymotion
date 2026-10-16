@@ -518,6 +518,20 @@ final class MotionEngine {
         }
     }
 
+    // swaps the item or block of the parts of this kind and tells the viewers
+    void content(DisplayState display, int part, int kind, Consumer<PartState> change) {
+        if (display.removed) {
+            return;
+        }
+        for (int i = 0; i < display.parts.length; i++) {
+            PartState state = display.parts[i];
+            if ((part == ALL_PARTS || part == i) && state.kind == kind) {
+                change.accept(state);
+                sendPart(display, state, packet.content(state));
+            }
+        }
+    }
+
     void text(DisplayState display, int part, Component text) {
         if (display.removed) {
             return;
