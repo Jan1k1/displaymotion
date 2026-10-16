@@ -486,9 +486,10 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
     }
 
     private MotionDisplay text(Player player) {
-        return motion.text(player.getLocation().add(0, 2, 0), Component.text("displaymotion", NamedTextColor.GOLD))
+        return motion.text(player.getLocation().add(0, 2, 0), Component.empty())
                 .billboard(Display.Billboard.CENTER)
-                .play(SHOW_TEXT);
+                .play(SHOW_TEXT)
+                .type(Component.text("Made with ", NamedTextColor.WHITE).append(Component.text("displaymotion", NamedTextColor.GOLD)), 2);
     }
 
     // right click presses it and counts, left click breaks it
