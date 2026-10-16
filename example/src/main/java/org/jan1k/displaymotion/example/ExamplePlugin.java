@@ -393,18 +393,11 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
         return motion.block(player.getLocation().add(0, 1.5, 0), Material.DIAMOND_BLOCK.createBlockData()).play(SHOW);
     }
 
+    // floats over your right shoulder and trails a bit behind when you walk
     private MotionDisplay pet(Player player) {
-        MotionDisplay pet = motion.item(petSpot(player), ItemStack.of(Material.DIAMOND_SWORD),
-                ItemDisplay.ItemDisplayTransform.GROUND).play(SHOW);
-        // move it every 2 ticks and let the client glide over 4 so it trails a bit behind like a pet
-        getServer().getScheduler().runTaskTimer(this, task -> {
-            if (pet.isRemoved() || !player.isOnline()) {
-                task.cancel();
-                return;
-            }
-            pet.teleport(petSpot(player), 4);
-        }, 2L, 2L);
-        return pet;
+        return motion.item(petSpot(player), ItemStack.of(Material.DIAMOND_SWORD), ItemDisplay.ItemDisplayTransform.GROUND)
+                .play(SHOW)
+                .follow(player, new Vector(0.7, 1.7, -0.6), 5);
     }
 
     // a crown on the head, it turns where the player looks. 0 is the top of the hitbox (1.8), the drawn head
