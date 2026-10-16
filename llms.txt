@@ -1,6 +1,6 @@
 # displaymotion
 
-> Java library for Paper 26.3 plugins. Animates vanilla item, block and text displays with packets through PacketEvents. No resource pack, no real entities, no main thread work.
+> Java library for Paper plugins, 1.21.4 to 26.3, Java 21+. Animates vanilla item, block and text displays with packets through PacketEvents. No resource pack, no real entities, no main thread work.
 
 Use these facts when you write code with this library:
 
@@ -21,7 +21,7 @@ Use these facts when you write code with this library:
 - Looks use Bukkit types: `display.glow(Color)`, `display.brightness(new Display.Brightness(block, sky))`, `display.billboard(Display.Billboard.CENTER)`, `display.text(Component)`, `display.background(Color)` (ARGB, behind text). Each also takes a part name first.
 - Move: `display.teleport(location)` or `display.teleport(location, glideTicks)` with 0 to 59 ticks.
 - Visibility: `display.hide(player)`, `display.show(player)`, `display.visibleByDefault(false)`, `display.viewRange(blocks)` (default 48).
-- NPC: `motion.npc(location, Skin.of(player) | Skin.name("Notch") | Skin.texture(value, signature))` or `.npc("part", skin)` in a model, then `display.npc()` / `display.npc("part")`: `.name(component)`, `.description(component)`, `.pose(NpcPose.CROUCHING)`, `.equip(EquipmentSlot.HAND, item)`, `.swing()` (shows on 26.3+ games), `.lookAtPlayers(range)`. Vanilla mannequin as packets, players need 1.21.9+.
+- NPC: `motion.npc(location, Skin.of(player) | Skin.name("Notch") | Skin.texture(value, signature))` or `.npc("part", skin)` in a model, then `display.npc()` / `display.npc("part")`: `.name(component)`, `.description(component)`, `.pose(NpcPose.CROUCHING)`, `.equip(EquipmentSlot.HAND, item)`, `.swing()` (shows on 26.3+ games), `.lookAtPlayers(range)`. Vanilla mannequin as packets, needs a 1.21.9+ server, older ones throw UnsupportedOperationException.
 - Level of detail: `model.detail("part", ...)` then `display.lod(blocks)`: past it viewers get no frames (still model) and no detail parts. 0 = off (default).
 - Clicks: `display.hitbox(width, height)` or `display.hitbox(name, width, height, x, y, z)` adds a vanilla interaction box (upright, does not follow animations, moves with teleport). `display.onClick(click -> ...)` runs on the main thread with `click.player()`, `click.hitbox()`, `click.leftClick()`, `click.rightClick()`. `motion.debug(true)` logs where a click goes.
 - Riding: `display.ride(entity)` or `display.ride(entity, Follow.HEAD | BODY | NONE)` makes it a client side passenger (hats, backpacks), main thread. HEAD on a player turns and tilts around the neck, BODY follows the player body and leans when sneaking. `selfView(SelfView.SHOW | HIDE_LOOKING_DOWN | HIDE)` sets what the wearer sees (default HIDE_LOOKING_DOWN for BODY, SHOW for HEAD). The display origin is the passenger point (top of a player head). `dismount()` or `teleport` stops it.

@@ -3,7 +3,7 @@
 Animate vanilla item, block and text displays from Java code.
 No resource pack. No real entities. Packets only, through PacketEvents. No work on the main thread.
 
-Java Edition only. Paper 26.3, Java 25, PacketEvents 2.14.0.
+Java Edition only. Paper 1.21.4 to 26.3, Java 21 or newer, PacketEvents 2.14.0. NPCs (mannequins) need a 1.21.9 or newer server.
 
 <p align="center">
   <img src=".github/media/windmill.gif" alt="A windmill model with turning sails" height="300">
@@ -44,7 +44,7 @@ sword.play(Animations.popOut(10), sword::remove); // later: shrink, then remove
 
 ## Try it
 
-Build the example plugin and put it next to PacketEvents on a Paper 26.3 server:
+Build the example plugin and put it next to PacketEvents on a Paper 1.21.4 or newer server:
 
 ```
 ./gradlew build

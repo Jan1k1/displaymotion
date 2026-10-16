@@ -2,7 +2,7 @@
 
 This page builds a small plugin from zero. At the end, a sword spins and floats above you when you type a command.
 
-You need Paper 26.3, Java 25 and the PacketEvents plugin (2.14.0 or newer) on the server. PacketEvents is a separate plugin. The server owner installs it. You do not put it in your jar.
+You need Paper 1.21.4 or newer (26.x works too), Java 21 or newer and the PacketEvents plugin (2.14.0 or newer) on the server. Mannequin NPCs need Paper 1.21.9 or newer, on older servers `npc(...)` throws an `UnsupportedOperationException`. PacketEvents is a separate plugin. The server owner installs it. You do not put it in your jar.
 
 ## What is displaymotion?
 
@@ -34,7 +34,7 @@ repositories {
 }
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:26.3.build.180-stable")
+    compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
     compileOnly("com.github.retrooper:packetevents-spigot:2.14.0")
     implementation("com.github.Jan1k1.displaymotion:displaymotion-paper:v0.2.0")
 }
@@ -61,7 +61,7 @@ Make the file `src/main/resources/plugin.yml`:
 name: MyPlugin
 version: "1.0"
 main: your.plugin.MyPlugin
-api-version: "26.3"
+api-version: "1.21.4"
 depend: [packetevents]
 commands:
   sword:
@@ -125,7 +125,7 @@ That is all. The library removes every display when your plugin disables.
 ## 4. Build and run
 
 1. Run `./gradlew shadowJar`. The jar is in `build/libs/`.
-2. Copy the jar to the `plugins` folder of a Paper 26.3 server. Put the PacketEvents jar there too.
+2. Copy the jar to the `plugins` folder of a Paper 1.21.4 or newer server. Put the PacketEvents jar there too.
 3. Start the server and join.
 4. Type `/sword`.
 
