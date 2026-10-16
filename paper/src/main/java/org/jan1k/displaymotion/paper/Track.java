@@ -6,8 +6,11 @@ final class Track {
 
     final Frames frames;
     final Runnable onEnd;
-    long step = -1; // first step lands on frame 0
+    double clock = -1; // first step lands on frame 0
     int frame;
+    // a slow display sits between two frames, how far it is on the way to the next one
+    int ahead = -1;
+    float between;
     boolean running = true;
     boolean moved = true;
     // crossfade: the track it fades out of keeps playing until the fade is done

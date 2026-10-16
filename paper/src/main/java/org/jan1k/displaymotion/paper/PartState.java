@@ -47,6 +47,7 @@ final class PartState {
     int background = DEFAULT_BACKGROUND;
     // small extras that players far away dont get at all, see MotionDisplay.lod
     boolean detail;
+    final Resize size = new Resize();
 
     // only for NPC parts, the mannequin data. engine thread
     Skin skin;

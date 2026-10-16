@@ -980,14 +980,13 @@ final class MotionEngine {
             }
             // a short animation can end before its fade is done, the fade still has to finish
             if (track.from != null) {
-                fade(track);
+                fade(display, track);
                 running = true;
             }
             if (!track.running) {
                 continue;
             }
-            int next = track.frames.frameAt(++track.step);
-            if (next < 0) {
+            if (!advance(display, track, t)) {
                 track.running = false;
                 if (t == 0) {
                     display.handle.playing = false;
@@ -997,14 +996,13 @@ final class MotionEngine {
                 }
                 continue;
             }
-            String[] events = track.frames.eventsAt(next);
-            if (events.length > 0 && display.handle.hearsEvents()) {
-                String part = t == 0 ? null : display.parts[t - 1].name;
-                mainThread.accept(() -> display.handle.reached(part, events));
-            }
-            track.moved |= next != track.frame;
-            track.frame = next;
             running = true;
+        }
+        display.size.step();
+        running |= display.size.busy();
+        for (PartState part : display.parts) {
+            part.size.step();
+            running |= part.size.busy();
         }
         display.active = running;
 
@@ -1044,16 +1042,56 @@ final class MotionEngine {
         }
     }
 
-    // the old animation keeps going under the new one until the fade is over
-    private static void fade(Track track) {
-        Track from = track.from;
-        if (from.running) {
-            int next = from.frames.frameAt(++from.step);
+    // moves a track on by the speed of its display. a fast one passes more then one frame in a step and each
+    // of them still gets its events, a slow one stays between two frames. false when it ran past its end
+    private boolean advance(DisplayState display, Track track, int t) {
+        long was = (long) Math.floor(track.clock);
+        track.clock += display.speed;
+        long now = (long) Math.floor(track.clock);
+        for (long step = was + 1; step <= now; step++) {
+            int next = track.frames.frameAt(step);
             if (next < 0) {
-                from.running = false;
-            } else {
-                from.frame = next;
+                return false;
             }
+            if (t >= 0) {
+                String[] events = track.frames.eventsAt(next);
+                if (events.length > 0 && display.handle.hearsEvents()) {
+                    String part = t == 0 ? null : display.parts[t - 1].name;
+                    mainThread.accept(() -> display.handle.reached(part, events));
+                }
+            }
+            track.moved |= next != track.frame;
+            track.frame = next;
+        }
+        float between = (float) (track.clock - now);
+        int ahead = between > 0f && now >= 0 ? track.frames.frameAt(now + 1) : -1;
+        if (ahead < 0) {
+            between = 0f;
+        }
+        track.moved |= between != track.between || between > 0f && ahead != track.ahead;
+        track.between = between;
+        track.ahead = ahead;
+        return true;
+    }
+
+    void speed(DisplayState display, double speed) {
+        display.speed = speed;
+    }
+
+    void scale(DisplayState display, int part, float size, int ticks) {
+        if (display.removed) {
+            return;
+        }
+        int steps = Math.max(1, Math.round(ticks / (float) Frames.STEP_TICKS));
+        (part == ALL_PARTS ? display.size : display.parts[part].size).to(size, steps);
+        display.active = true;
+    }
+
+    // the old animation keeps going under the new one until the fade is over
+    private void fade(DisplayState display, Track track) {
+        Track from = track.from;
+        if (from.running && !advance(display, from, -1)) {
+            from.running = false;
         }
         track.moved = true;
         if (++track.fadeStep >= track.fadeSteps) {
@@ -1364,6 +1402,14 @@ final class MotionEngine {
     private static boolean anyRunning(DisplayState display) {
         for (Track track : display.tracks) {
             if (track != null && track.running) {
+                return true;
+            }
+        }
+        if (display.size.busy()) {
+            return true;
+        }
+        for (PartState part : display.parts) {
+            if (part.size.busy()) {
                 return true;
             }
         }

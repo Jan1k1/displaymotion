@@ -33,6 +33,12 @@ public final class MotionDisplay {
     public static final int MAX_TELEPORT_TICKS = 59;
     /** The longest {@link #crossfade(Animation, int)}. */
     public static final int MAX_FADE_TICKS = 200;
+    /** The biggest size for {@link #scale(float)}. */
+    public static final float MAX_SCALE = 32f;
+    /** The longest a {@link #scale(float, int)} change can take. */
+    public static final int MAX_SCALE_TICKS = 200;
+    /** The fastest speed for {@link #speed(double)}. */
+    public static final double MAX_SPEED = 10.0;
     /** Where {@link #follow(Entity)} puts it: a bit above and behind, like a pet. */
     public static final Vector DEFAULT_FOLLOW_OFFSET = new Vector(0.0, 1.6, -1.2);
     public static final int DEFAULT_FOLLOW_GLIDE = 4;
@@ -105,6 +111,7 @@ public final class MotionDisplay {
 
     volatile boolean playing;
     private volatile boolean visibleByDefault = true;
+    private volatile double speed = 1.0;
     private volatile boolean removed;
 
     MotionDisplay(MotionEngine engine, Location location, PartState[] parts, double range) {
@@ -179,6 +186,60 @@ public final class MotionDisplay {
         if (ticks < 0 || ticks > MAX_FADE_TICKS) {
             throw new IllegalArgumentException("a crossfade is 0 to " + MAX_FADE_TICKS + " ticks, got " + ticks);
         }
+    }
+
+    /**
+     * Makes the whole display bigger or smaller around its location, on top of what plays. 1 is the normal size,
+     * 2 twice as big, 0.5 half. Hitboxes and seats keep their size.
+     */
+    public MotionDisplay scale(float size) {
+        return scale(size, 0);
+    }
+
+    /** Same as {@link #scale(float)} but it grows or shrinks smoothly over {@code ticks}. */
+    public MotionDisplay scale(float size, int ticks) {
+        return scale(MotionEngine.ALL_PARTS, size, ticks);
+    }
+
+    /** The size of one part. Its children grow with it. */
+    public MotionDisplay scale(String part, float size) {
+        return scale(part, size, 0);
+    }
+
+    /** The size of one part, changed smoothly over {@code ticks}. */
+    public MotionDisplay scale(String part, float size, int ticks) {
+        return scale(index(part), size, ticks);
+    }
+
+    private MotionDisplay scale(int part, float size, int ticks) {
+        if (!(size >= 0f && size <= MAX_SCALE)) {
+            throw new IllegalArgumentException("size is 0 to " + MAX_SCALE + ", got " + size);
+        }
+        if (ticks < 0 || ticks > MAX_SCALE_TICKS) {
+            throw new IllegalArgumentException("a size change takes 0 to " + MAX_SCALE_TICKS + " ticks, got " + ticks);
+        }
+        requireAlive();
+        engine.submit(() -> engine.scale(state, part, size, ticks));
+        return this;
+    }
+
+    /**
+     * How fast animations play on this display. 1 is normal, 0.5 half as fast, 2 twice as fast and 0 holds them
+     * where they are. A slow animation still moves smoothly, it blends between its frames.
+     */
+    public MotionDisplay speed(double speed) {
+        if (!(speed >= 0.0 && speed <= MAX_SPEED)) {
+            throw new IllegalArgumentException("speed is 0 to " + MAX_SPEED + ", got " + speed);
+        }
+        requireAlive();
+        this.speed = speed;
+        engine.submit(() -> engine.speed(state, speed));
+        return this;
+    }
+
+    /** The speed set with {@link #speed(double)}, 1 by default. */
+    public double speed() {
+        return speed;
     }
 
     /** Freezes every part on its current pose. */

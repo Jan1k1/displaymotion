@@ -48,6 +48,8 @@ final class DisplayState {
     boolean ownHidden;
     float pivot;
     float drop;
+    final Resize size = new Resize();
+    double speed = 1.0;
 
     double range;
     int index;

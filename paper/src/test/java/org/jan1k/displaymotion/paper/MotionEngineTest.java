@@ -112,6 +112,82 @@ class MotionEngineTest {
     }
 
     @Test
+    void halfSpeedTakesTwiceAsLongAndStillGrowsEveryStep() {
+        List<Float> scales = popInScales(0.5);
+
+        assertEquals(20, scales.size());
+        for (int i = 1; i < scales.size(); i++) {
+            assertTrue(scales.get(i) > scales.get(i - 1));
+        }
+        assertEquals(1f, scales.getLast(), 1e-6f);
+    }
+
+    @Test
+    void doubleSpeedTakesHalfAsLong() {
+        List<Float> scales = popInScales(2.0);
+
+        assertEquals(5, scales.size());
+        assertEquals(1f, scales.getLast(), 1e-6f);
+    }
+
+    @Test
+    void speedZeroHoldsThePose() {
+        assertEquals(List.of(), popInScales(0.0));
+    }
+
+    @Test
+    void scaleGrowsSmoothlyToTheNewSize() {
+        MotionDisplay display = display();
+        tick();
+        tick();
+
+        display.scale(2f, 20);
+        List<Float> scales = new ArrayList<>();
+        for (int i = 0; i < 40; i++) {
+            for (Packet packet : tick()) {
+                scales.add(((Vector3f) value(packet, 12)).x);
+            }
+        }
+
+        assertEquals(10, scales.size());
+        for (int i = 1; i < scales.size(); i++) {
+            assertTrue(scales.get(i) > scales.get(i - 1));
+        }
+        assertEquals(2f, scales.getLast(), 1e-6f);
+    }
+
+    @Test
+    void scaleWorksOnTopOfAnAnimation() {
+        MotionDisplay display = display().scale(3f);
+        display.play(Animations.popIn(20));
+        tick();
+        tick();
+
+        List<Float> scales = new ArrayList<>();
+        for (int i = 0; i < 40; i++) {
+            for (Packet packet : tick()) {
+                scales.add(((Vector3f) value(packet, 12)).x);
+            }
+        }
+
+        assertEquals(3f, scales.getLast(), 1e-5f);
+    }
+
+    private List<Float> popInScales(double speed) {
+        MotionDisplay display = display().speed(speed);
+        display.play(Animations.popIn(20));
+        tick();
+        tick();
+        List<Float> scales = new ArrayList<>();
+        for (int i = 0; i < 60; i++) {
+            for (Packet packet : tick()) {
+                scales.add(((Vector3f) value(packet, 12)).x);
+            }
+        }
+        return scales;
+    }
+
+    @Test
     void removeSendsOneDestroy() {
         MotionDisplay display = display();
         tick();

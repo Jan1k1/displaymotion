@@ -18,6 +18,7 @@ final class Composer {
     private final float[] ownLocal = new float[Affine.SIZE];
     private final float[] frame = new float[Affine.SIZE];
     private final float[] fading = new float[Affine.SIZE];
+    private final float[] next = new float[Affine.SIZE];
     private final float[] local = new float[Affine.SIZE];
     private final float[] current = new float[Decomposer.SIZE];
     private final float[] ownCurrent = new float[Decomposer.SIZE];
@@ -25,12 +26,17 @@ final class Composer {
 
     void compose(DisplayState display, boolean everything) {
         Track whole = display.tracks[0];
-        boolean rootMoved = everything || whole != null && whole.moved;
+        boolean rootMoved = everything || whole != null && whole.moved || display.size.moved;
         if (whole != null) {
             frameOf(whole, root);
         } else {
             Affine.identity(root, 0);
         }
+        float size = display.size.now;
+        if (size != 1f) {
+            Affine.scale(root, 0, size, size, size);
+        }
+        display.size.moved = false;
         boolean posed = display.turn != 0f || display.tilt != 0f || display.drop != 0f;
         if (posed) {
             posed(display, display.turn, display.tilt, turn);
@@ -53,10 +59,11 @@ final class Composer {
             PartState part = parts[i];
             Track track = display.tracks[i + 1];
             boolean needed = part.parent < 0 ? rootMoved : dirty[part.parent];
-            needed |= everything || track != null && track.moved;
+            needed |= everything || track != null && track.moved || part.size.moved;
             dirty[i] = needed;
             part.changes = 0;
             part.ownChanges = 0;
+            part.size.moved = false;
             if (!needed) {
                 continue;
             }
@@ -66,6 +73,9 @@ final class Composer {
             if (track != null) {
                 frameOf(track, frame);
                 Affine.multiply(part.world, 0, frame, 0, part.world, 0);
+            }
+            if (part.size.now != 1f) {
+                Affine.scale(part.world, 0, part.size.now, part.size.now, part.size.now);
             }
             if (!part.isDisplay()) {
                 continue;
@@ -106,15 +116,26 @@ final class Composer {
     // a track in a crossfade is a mix of the old and the new matrix. blending matrices squashes a big turn
     // a little in the middle, for the usual short fades between two poses you cant see it
     private void frameOf(Track track, float[] out) {
-        track.frames.copyTo(track.frame, out, 0);
+        poseOf(track, out);
         Track from = track.from;
         if (from == null) {
             return;
         }
-        from.frames.copyTo(from.frame, fading, 0);
-        float w = track.weight();
+        poseOf(from, fading);
+        mix(fading, out, track.weight(), out);
+    }
+
+    private void poseOf(Track track, float[] out) {
+        track.frames.copyTo(track.frame, out, 0);
+        if (track.between > 0f) {
+            track.frames.copyTo(track.ahead, next, 0);
+            mix(out, next, track.between, out);
+        }
+    }
+
+    private static void mix(float[] a, float[] b, float w, float[] out) {
         for (int i = 0; i < Affine.SIZE; i++) {
-            out[i] = fading[i] + (out[i] - fading[i]) * w;
+            out[i] = a[i] + (b[i] - a[i]) * w;
         }
     }
 
