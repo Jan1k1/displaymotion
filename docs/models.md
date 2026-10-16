@@ -88,6 +88,14 @@ lamp.brightness("sign", new Display.Brightness(15, 15));
 lamp.billboard("sign", Display.Billboard.CENTER);
 lamp.text("sign", Component.text("Open"));
 lamp.background("sign", Color.fromARGB(0, 0, 0, 0));   // no dark box behind the text
+lamp.shadow("light", 1.5f, 0.8f);                      // round shadow on the ground
+lamp.lineWidth("sign", 120);
+lamp.textOpacity("sign", 200);
+lamp.textShadow("sign", true);
+lamp.seeThrough("sign", true);
+lamp.alignment("sign", TextDisplay.TextAlignment.LEFT);
+lamp.item("icon", new ItemStack(Material.DIAMOND));     // swap the item of an item part
+lamp.block("base", Material.GOLD_BLOCK.createBlockData());
 ```
 
 - `glow` draws a colored outline. Use `null` to turn it off. Text parts do not glow.
@@ -95,6 +103,9 @@ lamp.background("sign", Color.fromARGB(0, 0, 0, 0));   // no dark box behind the
 - `billboard` makes the part turn to the player. `CENTER` turns in every direction.
 - `text` changes the text of a text part while it is shown.
 - `background` changes the box behind a text. Alpha 0 means no box.
+- `shadow(radius, strength)` draws a round shadow under a part. Radius is 0 to 64 (0 is none), strength is 0 or more (1 is the default).
+- `lineWidth` (default 200), `textOpacity` (0 to 255), `textShadow`, `seeThrough` and `alignment` style text parts. Without a part name they only change the text parts. With a part name, a part that is not text throws `IllegalArgumentException`.
+- `item` and `block` swap what an item or block part shows. With a part name, the wrong kind of part throws `IllegalArgumentException`. Without a name, every part of that kind changes, and a display with none throws.
 
 ## Mannequin NPCs
 
