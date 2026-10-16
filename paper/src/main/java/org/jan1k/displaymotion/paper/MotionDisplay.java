@@ -11,6 +11,7 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
 import org.jan1k.displaymotion.Animation;
+import org.jan1k.displaymotion.Ease;
 import org.jan1k.displaymotion.Frames;
 
 import java.util.HashMap;
@@ -21,6 +22,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import java.util.function.LongFunction;
 
 /**
  * A spawned display or model. It is not a real entity, only packets.
@@ -34,6 +36,8 @@ public final class MotionDisplay {
     /** Where {@link #follow(Entity)} puts it: a bit above and behind, like a pet. */
     public static final Vector DEFAULT_FOLLOW_OFFSET = new Vector(0.0, 1.6, -1.2);
     public static final int DEFAULT_FOLLOW_GLIDE = 4;
+    // a counting number changes every this many ticks, every tick would be a lot of packets for little
+    private static final int COUNT_EVERY_TICKS = 2;
     /** The biggest hitbox side, in blocks. */
     public static final float MAX_HITBOX_SIZE = 16f;
 
@@ -293,6 +297,75 @@ public final class MotionDisplay {
         requireAlive();
         engine.submit(() -> engine.text(state, part, text));
         return this;
+    }
+
+    /**
+     * Types the text one char at a time, a char every {@code ticksPerChar}. Colors and styles stay.
+     * Same as {@link #type(String, Component, int)} on every text part.
+     */
+    public MotionDisplay type(Component text, int ticksPerChar) {
+        return type(MotionEngine.ALL_PARTS, text, ticksPerChar, null);
+    }
+
+    /** Types the text into one text part, a char every {@code ticksPerChar}. */
+    public MotionDisplay type(String part, Component text, int ticksPerChar) {
+        return type(textPart(part), text, ticksPerChar, null);
+    }
+
+    /** Same as {@link #type(String, Component, int)}, and runs {@code onEnd} on the main thread when the last char shows. */
+    public MotionDisplay type(String part, Component text, int ticksPerChar, Runnable onEnd) {
+        return type(textPart(part), text, ticksPerChar, onEnd);
+    }
+
+    private MotionDisplay type(int part, Component text, int ticksPerChar, Runnable onEnd) {
+        ModelBuilder.checkText(text);
+        if (ticksPerChar < 1) {
+            throw new IllegalArgumentException("ticks per char must be 1 or more, got " + ticksPerChar);
+        }
+        if (part == MotionEngine.ALL_PARTS && !hasText()) {
+            throw new IllegalArgumentException("this display has no text part");
+        }
+        requireAlive();
+        TextCut cut = new TextCut(text);
+        int ticks = Math.max(1, cut.length() * ticksPerChar);
+        checkTextTicks(ticks);
+        engine.submit(() -> engine.animateText(state, part, ticks, ticksPerChar,
+                tick -> tick / ticksPerChar + 1 >= cut.length() ? text : cut.first(tick / ticksPerChar + 1), onEnd));
+        return this;
+    }
+
+    /**
+     * Counts a number up (or down) in a text part over {@code ticks}, fast at first and slow at the end.
+     * {@code format} turns the number into the text, for example {@code n -> Component.text(n + " coins")}.
+     */
+    public MotionDisplay count(String part, long from, long to, int ticks, LongFunction<Component> format) {
+        int index = textPart(part);
+        Objects.requireNonNull(format, "format");
+        if (ticks < 1) {
+            throw new IllegalArgumentException("ticks must be 1 or more, got " + ticks);
+        }
+        checkTextTicks(ticks);
+        requireAlive();
+        engine.submit(() -> engine.animateText(state, index, ticks, COUNT_EVERY_TICKS, tick -> {
+            float t = Math.min(1f, tick / (float) ticks);
+            float eased = Ease.OUT.apply(t);
+            return format.apply(from + Math.round((to - from) * (double) eased));
+        }, null));
+        return this;
+    }
+
+    private int textPart(String part) {
+        int index = index(part);
+        if (state.parts[index].kind != PartState.TEXT) {
+            throw new IllegalArgumentException("part '" + part + "' is not a text part");
+        }
+        return index;
+    }
+
+    private static void checkTextTicks(int ticks) {
+        if (ticks > Frames.MAX_TICKS) {
+            throw new IllegalArgumentException("a text animation can be at most " + Frames.MAX_TICKS + " ticks, got " + ticks);
+        }
     }
 
     private boolean hasText() {

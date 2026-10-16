@@ -5,6 +5,7 @@ import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import com.github.retrooper.packetevents.protocol.player.ClientVersion;
 import com.github.retrooper.packetevents.util.Vector3f;
 import com.github.retrooper.packetevents.wrapper.PacketWrapper;
+import net.kyori.adventure.text.Component;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.embedded.EmbeddedChannel;
@@ -536,6 +537,32 @@ class MotionEngineTest {
 
     private static Animation still(float x) {
         return Animation.keyframes().at(0, Pose.IDENTITY.withOffset(x, 0f, 0f)).at(200, Pose.IDENTITY.withOffset(x, 0f, 0f)).build();
+    }
+
+    @Test
+    void typingSendsOneTextPerCharAndAHandSetTextStopsIt() {
+        PartState[] parts = {PartState.text("main", ENTITY, -1, Component.text("x"), Pose.IDENTITY)};
+        MotionDisplay sign = new MotionDisplay(engine, new Location(world(), 0, 0, 0), parts, 48);
+        engine.submit(() -> engine.add(sign.state()));
+        tick();
+        tick();
+
+        sign.type(Component.text("Hello"), 2);
+        int updates = 0;
+        for (int i = 0; i < 12; i++) {
+            updates += kinds(tick()).stream().filter(kind -> kind.equals("meta")).count();
+        }
+        assertEquals(5, updates);
+
+        sign.type(Component.text("Bye bye"), 2);
+        tick();
+        sign.text(Component.text("done"));
+        tick();
+        int after = 0;
+        for (int i = 0; i < 12; i++) {
+            after += kinds(tick()).size();
+        }
+        assertEquals(0, after);
     }
 
     @Test

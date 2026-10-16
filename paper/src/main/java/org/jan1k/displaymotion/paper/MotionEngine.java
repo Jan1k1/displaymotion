@@ -78,6 +78,7 @@ final class MotionEngine {
     private final List<Viewer> viewerList = new ArrayList<>();
     private final List<Viewer> dirty = new ArrayList<>();
     private final Map<Animation, Frames> baked = new WeakHashMap<>();
+    private final List<TextJob> texts = new ArrayList<>();
     // read from netty threads when a click comes in, so it has to be concurrent
     private final Map<Integer, Hitbox> clickable = new ConcurrentHashMap<>();
     // vehicle entity id to our entity ids that ride it, read from netty threads too
@@ -513,9 +514,15 @@ final class MotionEngine {
         if (display.removed) {
             return;
         }
+        // a text set by hand wins over a typing or counting that still runs there
+        texts.removeIf(job -> job.display == display && (part == ALL_PARTS || job.part == part || job.part == ALL_PARTS));
+        setText(display, part, text);
+    }
+
+    private void setText(DisplayState display, int part, Component text) {
         for (int i = 0; i < display.parts.length; i++) {
             PartState state = display.parts[i];
-            if ((part == ALL_PARTS || part == i) && state.kind == PartState.TEXT) {
+            if ((part == ALL_PARTS || part == i) && state.kind == PartState.TEXT && !text.equals(state.text)) {
                 state.text = text;
                 sendPart(display, state, packet.content(state));
             }
@@ -714,7 +721,42 @@ final class MotionEngine {
         if (tick % Frames.STEP_TICKS == 0) {
             step();
         }
+        stepTexts();
         flush();
+    }
+
+    // a text that changes over time, like typing or counting. it runs here every tick, not on the main thread
+    record TextJob(DisplayState display, int part, int ticks, int every, java.util.function.IntFunction<Component> frame,
+                   Runnable onEnd, int[] tick) {
+    }
+
+    void animateText(DisplayState display, int part, int ticks, int every, java.util.function.IntFunction<Component> frame, Runnable onEnd) {
+        if (display.removed) {
+            return;
+        }
+        texts.removeIf(job -> job.display == display && job.part == part);
+        texts.add(new TextJob(display, part, ticks, every, frame, onEnd, new int[]{0}));
+        setText(display, part, frame.apply(0));
+    }
+
+    private void stepTexts() {
+        for (int i = texts.size() - 1; i >= 0; i--) {
+            TextJob job = texts.get(i);
+            if (job.display.removed) {
+                texts.remove(i);
+                continue;
+            }
+            int now = ++job.tick[0];
+            if (now >= job.ticks) {
+                texts.remove(i);
+                setText(job.display, job.part, job.frame.apply(job.ticks));
+                if (job.onEnd != null) {
+                    mainThread.accept(job.onEnd);
+                }
+            } else if (now % job.every == 0) {
+                setText(job.display, job.part, job.frame.apply(now));
+            }
+        }
     }
 
     private void drainCommands() {
