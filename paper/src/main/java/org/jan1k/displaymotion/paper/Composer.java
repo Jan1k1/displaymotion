@@ -67,7 +67,7 @@ final class Composer {
                 frameOf(track, frame);
                 Affine.multiply(part.world, 0, frame, 0, part.world, 0);
             }
-            if (!part.hasEntity()) {
+            if (!part.isDisplay()) {
                 continue;
             }
             System.arraycopy(part.world, 0, local, 0, Affine.SIZE);

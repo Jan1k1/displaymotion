@@ -160,6 +160,15 @@ public final class ModelBuilder {
         return this;
     }
 
+    /**
+     * Adds a mannequin, the vanilla player shaped entity, with this skin. It stands at the display location
+     * and faces where the display looks, its pose and parent are not used. Control it with {@link MotionDisplay#npc(String)}.
+     */
+    public ModelBuilder npc(String name, Skin skin) {
+        Objects.requireNonNull(skin, "skin");
+        return add(name, Pose.IDENTITY, null, (entityId, parent) -> PartState.npc(name, entityId, parent, skin));
+    }
+
     public MotionDisplay spawn() {
         if (spawned) {
             throw new IllegalStateException("this model was already spawned, make a new one with motion.model(location)");

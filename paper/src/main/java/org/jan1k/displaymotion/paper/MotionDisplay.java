@@ -796,6 +796,20 @@ public final class MotionDisplay {
         return Math.max(-limit, Math.min(limit, value));
     }
 
+    /** The mannequin of a display made with {@link DisplayMotion#npc(Location, Skin)}. */
+    public Npc npc() {
+        return npc(DisplayMotion.MAIN_PART);
+    }
+
+    /** The mannequin part with this name. */
+    public Npc npc(String part) {
+        int index = index(part);
+        if (state.parts[index].kind != PartState.NPC) {
+            throw new IllegalArgumentException("part '" + part + "' is not a mannequin");
+        }
+        return new Npc(this, engine, state, index);
+    }
+
     /** Lets this player see the display, even when it is not visible by default. */
     public MotionDisplay show(Player player) {
         return visibility(player, true);

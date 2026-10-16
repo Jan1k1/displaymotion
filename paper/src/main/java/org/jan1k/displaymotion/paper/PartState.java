@@ -14,6 +14,7 @@ final class PartState {
     static final int BLOCK = 1;
     static final int TEXT = 2;
     static final int GROUP = 3;
+    static final int NPC = 4;
     static final int DEFAULT_BACKGROUND = 0x40000000;
 
     final String name;
@@ -46,6 +47,17 @@ final class PartState {
     int background = DEFAULT_BACKGROUND;
     // small extras that players far away dont get at all, see MotionDisplay.lod
     boolean detail;
+
+    // only for NPC parts, the mannequin data. engine thread
+    Skin skin;
+    Component npcName;
+    Component description;
+    NpcPose npcPose = NpcPose.STANDING;
+    final java.util.Map<com.github.retrooper.packetevents.protocol.player.EquipmentSlot, ItemStack> equipment = new java.util.EnumMap<>(
+            com.github.retrooper.packetevents.protocol.player.EquipmentSlot.class);
+    double lookRange;
+    // what each viewer was last told the head looks at, yaw and pitch
+    final java.util.Map<Viewer, float[]> looks = new java.util.HashMap<>();
 
     private PartState(String name, int entityId, int parent, int kind, ItemStack item, int itemTransform,
                       int blockState, Component text, Pose pose) {
@@ -118,6 +130,12 @@ final class PartState {
         return new PartState(name, -1, parent, GROUP, null, 0, 0, null, pose);
     }
 
+    static PartState npc(String name, int entityId, int parent, Skin skin) {
+        PartState npc = new PartState(name, entityId, parent, NPC, null, 0, 0, null, Pose.IDENTITY);
+        npc.skin = skin;
+        return npc;
+    }
+
     static PartState text(String name, int entityId, int parent, Component text, Pose pose) {
         return new PartState(name, entityId, parent, TEXT, null, 0, 0, text, pose);
     }
@@ -125,6 +143,11 @@ final class PartState {
     // groups are just a pivot, nothing gets spawned for them
     boolean hasEntity() {
         return kind != GROUP;
+    }
+
+    // a display entity with a transform, a mannequin has none of the display data
+    boolean isDisplay() {
+        return kind != GROUP && kind != NPC;
     }
 
     boolean isBlock() {

@@ -604,6 +604,44 @@ class MotionEngineTest {
     }
 
     @Test
+    void mannequinGetsItsOwnDataAndNoDisplaySlots() {
+        MotionDisplay npc = npcDisplay();
+        npc.npc().name(Component.text("Guide"));
+
+        tick();
+        List<Packet> packets = tick();
+
+        Packet data = packets.stream().filter(p -> p.kind().equals("meta")).findFirst().orElseThrow();
+        assertTrue(data.data().stream().anyMatch(entry -> entry.getIndex() == 17), "the skin is in slot 17");
+        assertTrue(data.data().stream().noneMatch(entry -> entry.getIndex() == 11 || entry.getIndex() == 12), "no display transform " + data);
+    }
+
+    @Test
+    void mannequinLooksAtACloseViewerOnlyWhenItMoved() {
+        MotionDisplay npc = npcDisplay();
+        tick();
+        tick();
+        viewerAt(5);
+        tick();
+
+        npc.npc().lookAtPlayers(10);
+        List<String> first = new ArrayList<>(kinds(tick()));
+        first.addAll(kinds(tick()));
+        List<String> again = new ArrayList<>(kinds(tick()));
+        again.addAll(kinds(tick()));
+
+        assertTrue(first.contains("rotation"), "it turns to the viewer " + first);
+        assertFalse(again.contains("rotation"), "nothing new to send " + again);
+    }
+
+    private MotionDisplay npcDisplay() {
+        PartState[] parts = {PartState.npc("main", ENTITY, -1, Skin.name("Notch"))};
+        MotionDisplay npc = new MotionDisplay(engine, new Location(world(), 0, 0, 0), parts, 48);
+        engine.submit(() -> engine.add(npc.state()));
+        return npc;
+    }
+
+    @Test
     void newViewerGetsThePassengersRightAfterTheSpawn() {
         MotionDisplay display = display();
         engine.submit(() -> engine.ride(display.state(), VEHICLE, new int[0], WORLD, 0, 0, 0, 0f));

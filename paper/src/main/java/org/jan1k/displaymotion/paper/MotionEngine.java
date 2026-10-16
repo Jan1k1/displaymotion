@@ -12,7 +12,10 @@ import com.github.retrooper.packetevents.protocol.world.Location;
 import com.github.retrooper.packetevents.wrapper.PacketWrapper;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerBundle;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDestroyEntities;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityAnimation;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityHeadLook;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityMetadata;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityRotation;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSetPassengers;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityTeleport;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSpawnEntity;
@@ -60,6 +63,10 @@ final class MotionEngine {
     private static final int HITBOX_HEIGHT_SLOT = 9;
     private static final int HITBOX_RESPONSE_SLOT = 10;
     private static final int[] NO_IDS = new int[0];
+    private static final double EYE_HEIGHT = 1.62;
+    private static final double CROUCH_EYE_HEIGHT = 1.27;
+    // less then this is not worth a packet
+    private static final float LOOK_STEP = 2f;
     // the client blends a turn over this many ticks, so a riding display turns smooth and not in steps
     private static final int RIDE_TURN_TICKS = 1;
 
@@ -79,6 +86,7 @@ final class MotionEngine {
     private final List<Viewer> dirty = new ArrayList<>();
     private final Map<Animation, Frames> baked = new WeakHashMap<>();
     private final List<TextJob> texts = new ArrayList<>();
+    private final List<DisplayState> lookers = new ArrayList<>();
     // read from netty threads when a click comes in, so it has to be concurrent
     private final Map<Integer, Hitbox> clickable = new ConcurrentHashMap<>();
     // vehicle entity id to our entity ids that ride it, read from netty threads too
@@ -500,7 +508,7 @@ final class MotionEngine {
             if (part == ALL_PARTS || part == i) {
                 PartState state = display.parts[i];
                 change.accept(state);
-                sendPart(display, state, packet.look(state));
+                sendPart(display, state, state.kind == PartState.NPC ? NpcPackets.data(state) : packet.look(state));
             }
         }
         // billboard decides if a part can have a culling box so check boxes again
@@ -529,7 +537,7 @@ final class MotionEngine {
         }
     }
 
-    private void sendPart(DisplayState display, PartState part, DisplayPacket update) {
+    private void sendPart(DisplayState display, PartState part, PacketWrapper<?> update) {
         List<Viewer> targets = display.viewers;
         if (display.fresh || targets.isEmpty() || !part.hasEntity()) {
             return;
@@ -575,7 +583,7 @@ final class MotionEngine {
         // smoothing time has to be set before the move, same bundle so client sees both at once
         if (ticks != oldTicks) {
             for (PartState part : display.parts) {
-                if (!part.hasEntity()) {
+                if (!part.isDisplay()) {
                     continue;
                 }
                 sendToAll(kept, encode(packet.move(part, ticks), channel), false);
@@ -640,7 +648,7 @@ final class MotionEngine {
         List<Viewer> targets = display.viewers;
         if (!targets.isEmpty()) {
             for (PartState part : display.parts) {
-                if (!part.hasEntity()) {
+                if (!part.isDisplay()) {
                     continue;
                 }
                 sendToAll(targets, encode(packet.range(part, display.clientRange()), targets.getFirst().channel), false);
@@ -682,6 +690,7 @@ final class MotionEngine {
         for (DisplayState display : viewer.visible) {
             display.viewers.remove(viewer);
             display.far.remove(viewer);
+            forgetLooks(display, viewer);
         }
         viewer.visible.clear();
         viewer.drop();
@@ -733,7 +742,97 @@ final class MotionEngine {
             step();
         }
         stepTexts();
+        if (tick % Frames.STEP_TICKS == 0) {
+            stepLooks();
+        }
         flush();
+    }
+
+    void npc(DisplayState display, int part, Consumer<PartState> change, boolean equipment) {
+        if (display.removed) {
+            return;
+        }
+        PartState npc = display.parts[part];
+        change.accept(npc);
+        sendPart(display, npc, equipment ? NpcPackets.equipment(npc) : NpcPackets.data(npc));
+    }
+
+    void npcSwing(DisplayState display, int part, boolean offHand) {
+        if (display.removed) {
+            return;
+        }
+        PartState npc = display.parts[part];
+        sendPart(display, npc, new WrapperPlayServerEntityAnimation(npc.entityId, offHand
+                ? WrapperPlayServerEntityAnimation.EntityAnimationType.SWING_OFF_HAND
+                : WrapperPlayServerEntityAnimation.EntityAnimationType.SWING_MAIN_ARM));
+    }
+
+    void npcLook(DisplayState display, int part, double range) {
+        if (display.removed) {
+            return;
+        }
+        display.parts[part].lookRange = range;
+        if (range > 0 && !lookers.contains(display)) {
+            lookers.add(display);
+        }
+    }
+
+    // each viewer gets its own turn of the head, so everyone sees the npc look at them. only sent when it moved
+    // a bit, a player standing still costs nothing
+    private void stepLooks() {
+        for (int d = lookers.size() - 1; d >= 0; d--) {
+            DisplayState display = lookers.get(d);
+            boolean any = false;
+            for (PartState npc : display.parts) {
+                if (npc.kind != PartState.NPC || (npc.lookRange <= 0 && npc.looks.isEmpty())) {
+                    continue;
+                }
+                any |= npc.lookRange > 0;
+                if (display.removed) {
+                    continue;
+                }
+                for (Viewer viewer : display.viewers) {
+                    look(display, npc, viewer);
+                }
+            }
+            if (!any || display.removed) {
+                lookers.remove(d);
+            }
+        }
+    }
+
+    private void look(DisplayState display, PartState npc, Viewer viewer) {
+        double dx = viewer.x - display.x;
+        double dy = viewer.y + EYE_HEIGHT - (display.y + (npc.npcPose == NpcPose.CROUCHING ? CROUCH_EYE_HEIGHT : EYE_HEIGHT));
+        double dz = viewer.z - display.z;
+        double flat = Math.sqrt(dx * dx + dz * dz);
+        float yaw;
+        float pitch;
+        if (npc.lookRange > 0 && flat * flat + dy * dy <= npc.lookRange * npc.lookRange && flat > 1e-3) {
+            yaw = (float) Math.toDegrees(-Math.atan2(dx, dz));
+            pitch = (float) Math.toDegrees(-Math.atan2(dy, flat));
+        } else {
+            yaw = display.yaw;
+            pitch = 0f;
+        }
+        float[] last = npc.looks.get(viewer);
+        if (last != null && Math.abs(wrap(yaw - last[0])) < LOOK_STEP && Math.abs(pitch - last[1]) < LOOK_STEP) {
+            return;
+        }
+        if (last == null && yaw == display.yaw && pitch == 0f) {
+            return;
+        }
+        npc.looks.put(viewer, new float[]{yaw, pitch});
+        queue(viewer, encode(new WrapperPlayServerEntityRotation(npc.entityId, yaw, pitch, true), viewer.channel));
+        queue(viewer, encode(new WrapperPlayServerEntityHeadLook(npc.entityId, yaw), viewer.channel));
+    }
+
+    private static void forgetLooks(DisplayState display, Viewer viewer) {
+        for (PartState part : display.parts) {
+            if (part.kind == PartState.NPC) {
+                part.looks.remove(viewer);
+            }
+        }
     }
 
     // a text that changes over time, like typing or counting. it runs here every tick, not on the main thread
@@ -846,7 +945,7 @@ final class MotionEngine {
         for (DisplayState display : viewer.visible) {
             freshen(display);
             for (PartState part : display.parts) {
-                if (!part.hasEntity()) {
+                if (!part.isDisplay()) {
                     continue;
                 }
                 float[] values = viewer.id.equals(display.wearer) ? part.own : part.sent;
@@ -1004,6 +1103,15 @@ final class MotionEngine {
             if (part.detail) {
                 queue(viewer, encode(new WrapperPlayServerSpawnEntity(part.entityId, part.uuid, entityType(part), at, display.yaw, 0, null), viewer.channel));
             }
+            if (part.kind == PartState.NPC) {
+                if (part.detail) {
+                    queue(viewer, encode(NpcPackets.data(part), viewer.channel));
+                    if (!part.equipment.isEmpty()) {
+                        queue(viewer, encode(NpcPackets.equipment(part), viewer.channel));
+                    }
+                }
+                continue;
+            }
             queue(viewer, encode(wearer ? packet.spawn(part, part.own, display.clientRange(), display.moveTicks)
                     : packet.spawn(part, display.clientRange(), display.moveTicks), viewer.channel));
         }
@@ -1096,7 +1204,8 @@ final class MotionEngine {
                         entityType(part),
                         new Location(display.x, display.y, display.z, display.yaw, display.pitch), display.yaw, 0, null);
                 buffers[i * 2] = encode(spawn, viewer.channel);
-                buffers[i * 2 + 1] = encode(packet.spawn(part, display.clientRange(), display.moveTicks), viewer.channel);
+                buffers[i * 2 + 1] = encode(part.kind == PartState.NPC ? NpcPackets.data(part)
+                        : packet.spawn(part, display.clientRange(), display.moveTicks), viewer.channel);
             }
             for (int i = 0; i < hitboxes.size(); i++) {
                 int slot = (parts.length + i) * 2;
@@ -1118,12 +1227,17 @@ final class MotionEngine {
                 continue;
             }
             // the wearer gets its own transform in the data packet after each spawn
-            if (wearer && i % 2 == 1 && i / 2 < display.parts.length) {
+            if (wearer && i % 2 == 1 && i / 2 < display.parts.length && display.parts[i / 2].isDisplay()) {
                 PartState part = display.parts[i / 2];
                 queue(viewer, encode(packet.spawn(part, part.own, display.clientRange(), display.moveTicks), viewer.channel));
                 continue;
             }
             queue(viewer, ByteBufHelper.retainedDuplicate(buffers[i]));
+        }
+        for (PartState part : display.parts) {
+            if (part.kind == PartState.NPC && !part.equipment.isEmpty() && !(far && part.detail)) {
+                queue(viewer, encode(NpcPackets.equipment(part), viewer.channel));
+            }
         }
         // after the spawn, the client ignores passengers it does not know yet
         if (display.vehicle >= 0) {
@@ -1142,6 +1256,7 @@ final class MotionEngine {
         viewer.visible.remove(display);
         display.viewers.remove(viewer);
         display.far.remove(viewer);
+        forgetLooks(display, viewer);
     }
 
     private void queue(Viewer viewer, Object buffer) {
@@ -1243,6 +1358,7 @@ final class MotionEngine {
         return switch (part.kind) {
             case PartState.BLOCK -> EntityTypes.BLOCK_DISPLAY;
             case PartState.TEXT -> EntityTypes.TEXT_DISPLAY;
+            case PartState.NPC -> EntityTypes.MANNEQUIN;
             default -> EntityTypes.ITEM_DISPLAY;
         };
     }

@@ -125,6 +125,14 @@ public final class DisplayMotion {
         return model(location).block(MAIN_PART, block, Pose.IDENTITY).spawn();
     }
 
+    /**
+     * Spawns a mannequin NPC with this skin, facing where the location looks. Its single part is {@code main},
+     * control it with {@link MotionDisplay#npc()}. It needs players on 1.21.9 or newer.
+     */
+    public MotionDisplay npc(Location location, Skin skin) {
+        return model(location).npc(MAIN_PART, skin).spawn();
+    }
+
     /** Spawns one text display. The text grows up from the location. */
     public MotionDisplay text(Location location, Component text) {
         return model(location).text(MAIN_PART, text, Pose.IDENTITY).spawn();
