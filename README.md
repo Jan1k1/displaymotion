@@ -5,6 +5,11 @@ No resource pack. No real entities. Packets only, through PacketEvents. No work 
 
 Java Edition only. Paper 26.3, Java 25, PacketEvents 2.14.0.
 
+<p align="center">
+  <img src=".github/media/windmill.gif" alt="A windmill model with turning sails" height="300">
+  <img src=".github/media/leaderboard.gif" alt="A leaderboard where the scores count up" height="300">
+</p>
+
 ```java
 DisplayMotion motion = DisplayMotion.create(plugin); // once, in onEnable
 
