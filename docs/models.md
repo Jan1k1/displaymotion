@@ -96,6 +96,27 @@ lamp.background("sign", Color.fromARGB(0, 0, 0, 0));   // no dark box behind the
 - `text` changes the text of a text part while it is shown.
 - `background` changes the box behind a text. Alpha 0 means no box.
 
+## Mannequin NPCs
+
+Since 1.21.9 vanilla has a mannequin: a player shaped entity with any skin. displaymotion sends it as packets like the displays, so it is not a real entity on the server and costs nothing there.
+
+```java
+MotionDisplay guide = motion.npc(location, Skin.of(player));     // or Skin.name("Notch"), Skin.texture(value, signature)
+guide.npc()
+        .name(Component.text("Guide", NamedTextColor.GOLD))
+        .equip(EquipmentSlot.HAND, ItemStack.of(Material.DIAMOND_SWORD))
+        .pose(NpcPose.CROUCHING)
+        .lookAtPlayers();                                          // each player sees it look at them, 8 blocks
+
+guide.npc().swing();                                               // one hit with the main hand
+```
+
+- In a model, add it with `.npc("name", skin)` and get it with `display.npc("name")`. It stands at the display location and faces where the display looks. Text, items and blocks of the same model move and animate around it as usual.
+- `Skin.name("Notch")` is looked up by the players' games, so it works on offline mode servers. `Skin.of(player)` copies the skin a player has now.
+- Poses: `STANDING`, `CROUCHING`, `SWIMMING`, `GLIDING`, `SLEEPING`.
+- `lookAtPlayers(range)` sends each player their own head turn, only when it changes. Farther players see it look ahead.
+- `hitbox`, `onClick`, `teleport`, `follow`, `ride`, `glow`, `lod` and per player visibility work like on any display. Players need a 1.21.9 or newer game to see a mannequin.
+
 ## Level of detail
 
 Big models cost the players' games fps, also when they are far away and too small to see well. `lod` saves that:
