@@ -96,6 +96,24 @@ lamp.background("sign", Color.fromARGB(0, 0, 0, 0));   // no dark box behind the
 - `text` changes the text of a text part while it is shown.
 - `background` changes the box behind a text. Alpha 0 means no box.
 
+## Level of detail
+
+Big models cost the players' games fps, also when they are far away and too small to see well. `lod` saves that:
+
+```java
+MotionDisplay windmill = motion.model(location)
+        .block("tower", ...)
+        .block("window", ...)
+        .detail("window")             // small extras
+        .spawn()
+        .lod(24);                     // past 24 blocks
+```
+
+- Players farther than the lod get no animation frames. They see the model stand still, and get no packets for it.
+- Parts marked with `detail(...)` are not spawned for them at all, so their game has fewer entities to draw.
+- When they come closer they get the current pose and the detail parts at once.
+- `lod(0)` turns it off, that is the default. Mark parts as detail after you add them.
+
 ## Clicks
 
 A display has no hitbox, so players click through it. Give it one with `hitbox`, then listen with `onClick`:
