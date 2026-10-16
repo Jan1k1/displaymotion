@@ -242,7 +242,7 @@ public final class BlockbenchModel implements ImportedModel {
 
     /** Plays one of the model's animations. Groups it does not move go back to their rest pose. */
     @Override
-    public void play(MotionDisplay display, String animation) {
+    public void play(MotionDisplay display, String animation, int fadeTicks) {
         Clip clip = clips.get(Objects.requireNonNull(animation, "animation"));
         if (clip == null) {
             throw new IllegalArgumentException("no animation named '" + animation + "', there are " + clips.keySet());
@@ -253,7 +253,12 @@ public final class BlockbenchModel implements ImportedModel {
                 continue;
             }
             Channels channels = clip.bones().get(node.uuid());
-            display.play(node.name(), channels == null ? REST : boneAnimation(node, clip, channels, scale));
+            Animation bone = channels == null ? REST : boneAnimation(node, clip, channels, scale);
+            if (fadeTicks > 0) {
+                display.crossfade(node.name(), bone, fadeTicks);
+            } else {
+                display.play(node.name(), bone);
+            }
         }
     }
 

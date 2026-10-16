@@ -184,7 +184,7 @@ public final class BdengineModel implements ImportedModel {
 
     /** Plays one of the model's animations, looping. */
     @Override
-    public void play(MotionDisplay display, String animation) {
+    public void play(MotionDisplay display, String animation, int fadeTicks) {
         Integer id = clips.get(Objects.requireNonNull(animation, "animation"));
         if (id == null) {
             throw new IllegalArgumentException("no animation named '" + animation + "', there are " + clips.keySet());
@@ -198,7 +198,11 @@ public final class BdengineModel implements ImportedModel {
         length = Math.max(length, MIN_LOOP_TICKS);
         for (Node node : nodes) {
             if (node.animated()) {
-                display.play(node.name(), clip(node, id, length));
+                if (fadeTicks > 0) {
+                    display.crossfade(node.name(), clip(node, id, length), fadeTicks);
+                } else {
+                    display.play(node.name(), clip(node, id, length));
+                }
             }
         }
     }

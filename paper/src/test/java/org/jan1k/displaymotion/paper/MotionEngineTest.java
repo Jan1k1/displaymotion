@@ -13,6 +13,7 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
+import org.jan1k.displaymotion.Animation;
 import org.jan1k.displaymotion.Animations;
 import org.jan1k.displaymotion.Pose;
 import org.junit.jupiter.api.AfterEach;
@@ -485,6 +486,56 @@ class MotionEngineTest {
         assertEquals(0f, scale.x);
         assertEquals(0f, scale.y);
         assertEquals(0f, scale.z);
+    }
+
+    @Test
+    void crossfadeMovesOverInsteadOfJumping() {
+        MotionDisplay display = display();
+        display.play(still(0f));
+        tick();
+        tick();
+
+        display.crossfade(still(1f), 10);
+        List<Float> xs = new ArrayList<>();
+        for (int i = 0; i < 16; i++) {
+            for (Packet packet : tick()) {
+                if (packet.kind().equals("meta")) {
+                    xs.add(((Vector3f) value(packet, 11)).x);
+                }
+            }
+        }
+
+        // the centered block starts at -0.5 and ends at 0.5, with steps in between and never back
+        assertTrue(xs.size() >= 4, "it took steps, got " + xs);
+        for (int i = 1; i < xs.size(); i++) {
+            assertTrue(xs.get(i) >= xs.get(i - 1), "never goes back " + xs);
+        }
+        assertTrue(xs.getFirst() < 0f, "the first step is still near the old place " + xs);
+        assertEquals(0.5f, xs.getLast(), 1e-5f);
+    }
+
+    @Test
+    void crossfadeFinishesEvenWhenTheNewAnimationIsShort() {
+        MotionDisplay display = display();
+        display.play(still(0f));
+        tick();
+        tick();
+
+        display.crossfade(Animation.keyframes().at(0, Pose.IDENTITY.withOffset(1f, 0f, 0f)).build(), 20);
+        float x = 0f;
+        for (int i = 0; i < 30; i++) {
+            for (Packet packet : tick()) {
+                if (packet.kind().equals("meta")) {
+                    x = ((Vector3f) value(packet, 11)).x;
+                }
+            }
+        }
+
+        assertEquals(0.5f, x, 1e-5f);
+    }
+
+    private static Animation still(float x) {
+        return Animation.keyframes().at(0, Pose.IDENTITY.withOffset(x, 0f, 0f)).at(200, Pose.IDENTITY.withOffset(x, 0f, 0f)).build();
     }
 
     @Test

@@ -30,7 +30,12 @@ public interface ImportedModel {
     MotionDisplay spawn(DisplayMotion motion, Location at, float scale);
 
     /** Plays one of its animations on a display spawned from this model. */
-    void play(MotionDisplay display, String animation);
+    default void play(MotionDisplay display, String animation) {
+        play(display, animation, 0);
+    }
+
+    /** Same, but fades into it from what plays now over {@code fadeTicks}, see {@link MotionDisplay#crossfade(org.jan1k.displaymotion.Animation, int)}. */
+    void play(MotionDisplay display, String animation, int fadeTicks);
 
     /** Names of the animations in the file. */
     List<String> animations();

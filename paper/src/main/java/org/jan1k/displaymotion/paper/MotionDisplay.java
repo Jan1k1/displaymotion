@@ -28,6 +28,8 @@ import java.util.function.Consumer;
 public final class MotionDisplay {
 
     public static final int MAX_TELEPORT_TICKS = 59;
+    /** The longest {@link #crossfade(Animation, int)}. */
+    public static final int MAX_FADE_TICKS = 200;
     /** The biggest hitbox side, in blocks. */
     public static final float MAX_HITBOX_SIZE = 16f;
 
@@ -131,6 +133,33 @@ public final class MotionDisplay {
         check(animation);
         engine.submit(() -> engine.play(state, track, animation, onEnd));
         return this;
+    }
+
+    /**
+     * Plays on the whole display and fades into it from what plays now over {@code ticks}, so a switch
+     * from walking to waving is soft and not a jump. With nothing playing before, it fades in from the rest pose.
+     */
+    public MotionDisplay crossfade(Animation animation, int ticks) {
+        checkFade(ticks);
+        check(animation);
+        playing = true;
+        engine.submit(() -> engine.play(state, 0, animation, null, ticks));
+        return this;
+    }
+
+    /** Same as {@link #crossfade(Animation, int)} on one part. */
+    public MotionDisplay crossfade(String part, Animation animation, int ticks) {
+        int track = track(part);
+        checkFade(ticks);
+        check(animation);
+        engine.submit(() -> engine.play(state, track, animation, null, ticks));
+        return this;
+    }
+
+    private static void checkFade(int ticks) {
+        if (ticks < 0 || ticks > MAX_FADE_TICKS) {
+            throw new IllegalArgumentException("a crossfade is 0 to " + MAX_FADE_TICKS + " ticks, got " + ticks);
+        }
     }
 
     /** Freezes every part on its current pose. */

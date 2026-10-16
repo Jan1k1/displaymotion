@@ -22,6 +22,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.plugin.Plugin;
 import org.jan1k.displaymotion.Animation;
 import org.jan1k.displaymotion.Frames;
+import org.jan1k.displaymotion.Pose;
 import org.jan1k.displaymotion.Decomposer;
 
 import java.util.ArrayList;
@@ -52,6 +53,7 @@ final class MotionEngine {
     private static final long TICK_MILLIS = 50L;
     private static final long MIN_TICK_GAP_NANOS = TimeUnit.MILLISECONDS.toNanos(25);
     private static final int INLINE_BAKE_TICKS = 600; // bigger ones bake on a seperate thread
+    private static final Frames REST_FRAMES = Frames.bake(Animation.keyframes().at(0, Pose.IDENTITY).build());
     private static final int LOUD_ERRORS = 10;
     private static final long QUIET_LOG_NANOS = TimeUnit.MINUTES.toNanos(1);
     private static final int HITBOX_WIDTH_SLOT = 8;
@@ -440,6 +442,10 @@ final class MotionEngine {
     }
 
     void play(DisplayState display, int track, Animation animation, Runnable onEnd) {
+        play(display, track, animation, onEnd, 0);
+    }
+
+    void play(DisplayState display, int track, Animation animation, Runnable onEnd, int fadeTicks) {
         if (display.removed) {
             return;
         }
@@ -450,7 +456,7 @@ final class MotionEngine {
                 frames = Frames.bake(animation);
                 baked.put(animation, frames);
             }
-            start(display, track, frames, onEnd);
+            start(display, track, frames, onEnd, fadeTicks);
             return;
         }
         CompletableFuture.supplyAsync(() -> Frames.bake(animation), ForkJoinPool.commonPool())
@@ -462,7 +468,7 @@ final class MotionEngine {
                     submitQuietly(() -> {
                         baked.put(animation, result);
                         if (display.requests[track] == request && !display.removed) {
-                            start(display, track, result, onEnd);
+                            start(display, track, result, onEnd, fadeTicks);
                         }
                     });
                 });
@@ -815,7 +821,15 @@ final class MotionEngine {
         boolean running = false;
         for (int t = 0; t < tracks.length; t++) {
             Track track = tracks[t];
-            if (track == null || !track.running) {
+            if (track == null) {
+                continue;
+            }
+            // a short animation can end before its fade is done, the fade still has to finish
+            if (track.from != null) {
+                fade(track);
+                running = true;
+            }
+            if (!track.running) {
                 continue;
             }
             int next = track.frames.frameAt(++track.step);
@@ -854,14 +868,42 @@ final class MotionEngine {
         sendChanges(display, Frames.STEP_TICKS);
     }
 
-    private void start(DisplayState display, int track, Frames frames, Runnable onEnd) {
-        display.tracks[track] = new Track(frames, onEnd);
+    private void start(DisplayState display, int track, Frames frames, Runnable onEnd, int fadeTicks) {
+        Track previous = display.tracks[track];
+        if (fadeTicks > 0) {
+            // nothing played there yet, so it fades in from the rest pose
+            Track from = previous != null ? previous : new Track(REST_FRAMES, null);
+            from.from = null;
+            if (previous == null) {
+                from.running = false;
+            }
+            display.tracks[track] = new Track(frames, onEnd, from, Math.max(1, Math.round(fadeTicks / (float) Frames.STEP_TICKS)));
+        } else {
+            display.tracks[track] = new Track(frames, onEnd);
+        }
         display.active = true;
         if (track == 0) {
             display.handle.playing = true;
         }
         if (display.fresh) {
             composer.compose(display, true);
+        }
+    }
+
+    // the old animation keeps going under the new one until the fade is over
+    private static void fade(Track track) {
+        Track from = track.from;
+        if (from.running) {
+            int next = from.frames.frameAt(++from.step);
+            if (next < 0) {
+                from.running = false;
+            } else {
+                from.frame = next;
+            }
+        }
+        track.moved = true;
+        if (++track.fadeStep >= track.fadeSteps) {
+            track.from = null;
         }
     }
 
