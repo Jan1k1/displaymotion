@@ -140,6 +140,21 @@ MotionDisplay crown = motion.model(player.getLocation())
 - `dismount()` or `teleport(...)` stops riding. Call `ride` on the main thread.
 - When the player dies, the display waits and comes back with them. When a mob dies, the display stays where it was.
 
+## Following
+
+`follow` makes a display float after an entity. Unlike riding it trails a bit behind, which looks alive for pets, drones and floating names:
+
+```java
+pet.follow(player);                                        // above and behind, glides over 4 ticks
+pet.follow(player, new Vector(0.7, 1.7, -0.6), 5);         // over the right shoulder, a bit slower
+pet.unfollow();
+```
+
+- The offset turns with the body: x to the right, y up, z forward (negative is behind).
+- Every 2 ticks it moves to the new spot and the players' games glide it there, so the server sends little.
+- `teleport` or `unfollow` stops it. When the target dies, a player keeps it after respawn, a mob leaves it where it was.
+- Call it on the main thread.
+
 ## Seats
 
 Players can sit on a model. Mark the places with `seat`, then put the player there with `sit`, for example on a right click:
