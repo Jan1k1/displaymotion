@@ -115,7 +115,7 @@ guide.npc().swing();                                               // one hit wi
 - `Skin.name("Notch")` is looked up by the players' games, so it works on offline mode servers. `Skin.of(player)` copies the skin a player has now.
 - Poses: `STANDING`, `CROUCHING`, `SWIMMING`, `GLIDING`, `SLEEPING`.
 - `lookAtPlayers(range)` sends each player their own head turn, only when it changes. Farther players see it look ahead.
-- `hitbox`, `onClick`, `teleport`, `follow`, `ride`, `glow`, `lod` and per player visibility work like on any display. Players need a 1.21.9 or newer game to see a mannequin.
+- `hitbox`, `onClick`, `teleport`, `follow`, `ride`, `glow`, `lod` and per player visibility work like on any display. Players need a 1.21.9 or newer game to see a mannequin. Games older than 26.3 do not show the swing.
 
 ## Level of detail
 
