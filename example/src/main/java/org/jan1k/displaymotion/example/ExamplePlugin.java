@@ -3,6 +3,8 @@ package org.jan1k.displaymotion.example;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
@@ -28,6 +30,7 @@ import org.jan1k.displaymotion.Animation;
 import org.jan1k.displaymotion.Animations;
 import org.jan1k.displaymotion.Ease;
 import org.jan1k.displaymotion.Pose;
+import org.jan1k.displaymotion.example.DisplayOptions.Part;
 import org.jan1k.displaymotion.paper.DisplayMotion;
 import org.jan1k.displaymotion.paper.Follow;
 import org.jan1k.displaymotion.paper.Leaderboard;
@@ -39,11 +42,18 @@ import org.jan1k.displaymotion.paper.ImportedModel;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 public final class ExamplePlugin extends JavaPlugin implements Listener {
 
@@ -74,6 +84,8 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
     private final Map<UUID, Leaderboard> boards = new HashMap<>();
     private final Map<UUID, BukkitTask> boardTasks = new HashMap<>();
     private DisplayMotion motion;
+    private List<String> itemNames;
+    private List<String> blockNames;
 
     @Override
     public void onEnable() {
@@ -122,20 +134,20 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
     private void registerCommand() {
         LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("displaymotion")
                 .requires(source -> source.getSender().hasPermission("displaymotion.use"))
-                .executes(context -> show(context.getSource(), this::sword))
-                .then(Commands.literal("sword").executes(context -> show(context.getSource(), this::sword)))
-                .then(Commands.literal("block").executes(context -> show(context.getSource(), this::block)))
-                .then(Commands.literal("windmill").executes(context -> show(context.getSource(), player -> windmill(inFront(player, 6)))))
-                .then(Commands.literal("text").executes(context -> show(context.getSource(), this::text)))
-                .then(Commands.literal("pet").executes(context -> show(context.getSource(), this::pet)))
-                .then(Commands.literal("hat").executes(context -> show(context.getSource(), this::hat)))
-                .then(Commands.literal("backpack").executes(context -> show(context.getSource(), this::backpack)))
+                .executes(context -> show(context.getSource(), EnumSet.of(Part.ITEM), false, (player, options) -> sword(player), ""))
+                .then(spawns("sword", EnumSet.of(Part.ITEM), this::sword))
+                .then(spawns("block", EnumSet.of(Part.BLOCK), this::block))
+                .then(spawns("windmill", EnumSet.of(Part.BLOCK), player -> windmill(inFront(player, 6))))
+                .then(spawns("text", EnumSet.of(Part.TEXT), true, this::text))
+                .then(spawns("pet", EnumSet.of(Part.ITEM), this::pet))
+                .then(spawns("hat", EnumSet.of(Part.BLOCK, Part.ITEM), this::hat))
+                .then(spawns("backpack", EnumSet.of(Part.BLOCK), this::backpack))
                 .then(Commands.literal("selfview").executes(context -> selfView(context.getSource())))
                 .then(Commands.literal("leaderboard").executes(context -> leaderboard(context.getSource())))
                 .then(Commands.literal("ease").executes(context -> easings(context.getSource())))
-                .then(Commands.literal("npc").executes(context -> show(context.getSource(), player -> npc(player, inFront(player, 4)))))
-                .then(Commands.literal("bench").executes(context -> show(context.getSource(), player -> bench(inFront(player, 3)))))
-                .then(Commands.literal("button").executes(context -> show(context.getSource(), player -> button(inFront(player, 3)))))
+                .then(spawns("npc", EnumSet.of(Part.TEXT), player -> npc(player, inFront(player, 4))))
+                .then(spawns("bench", EnumSet.of(Part.BLOCK), player -> bench(inFront(player, 3))))
+                .then(spawns("button", EnumSet.of(Part.BLOCK, Part.TEXT), player -> button(inFront(player, 3))))
                 .then(Commands.literal("showcase").executes(context -> showcase(context.getSource())))
                 .then(Commands.literal("debug").executes(context -> debug(context.getSource())))
                 .then(Commands.literal("stop").executes(context -> stop(context.getSource())));
@@ -150,48 +162,108 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
         root.then(effect).then(killEffect);
 
         // drop any .bbmodel (blockbench) or .bdengine (bdengine) file into plugins/displaymotion-example/models
+        // after the file: an animation name, then options. no animation is fine, options start at the first key:value
         root.then(Commands.literal("model")
                 .then(Commands.argument("file", StringArgumentType.word())
                         .suggests((context, builder) -> {
                             modelFiles().forEach(builder::suggest);
                             return builder.buildFuture();
                         })
-                        .executes(context -> showModel(context.getSource(), StringArgumentType.getString(context, "file"), null))
-                        .then(Commands.argument("animation", StringArgumentType.word())
+                        .executes(context -> showModel(context.getSource(), StringArgumentType.getString(context, "file"), ""))
+                        .then(Commands.argument("animation and options", StringArgumentType.greedyString())
                                 .suggests((context, builder) -> {
-                                    ImportedModel model = loadModel(StringArgumentType.getString(context, "file"));
-                                    if (model != null) {
-                                        model.animations().forEach(builder::suggest);
+                                    String typed = builder.getRemaining();
+                                    if (typed.indexOf(' ') < 0 && typed.indexOf(':') < 0) {
+                                        ImportedModel model = loadModel(StringArgumentType.getString(context, "file"));
+                                        if (model != null) {
+                                            model.animations().forEach(builder::suggest);
+                                        }
                                     }
-                                    return builder.buildFuture();
+                                    return suggestOptions(EnumSet.allOf(Part.class), builder);
                                 })
                                 .executes(context -> showModel(context.getSource(),
                                         StringArgumentType.getString(context, "file"),
-                                        StringArgumentType.getString(context, "animation"))))));
+                                        StringArgumentType.getString(context, "animation and options"))))));
 
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
                 event.registrar().register(root.build(), "spawn an animated display", List.of("dm")));
     }
 
-    private int show(CommandSourceStack source, Function<Player, MotionDisplay> spawn) {
+    // /dm <name> [options], the options are key:value words, see DisplayOptions
+    private LiteralArgumentBuilder<CommandSourceStack> spawns(String name, Set<Part> parts, Function<Player, MotionDisplay> spawn) {
+        return spawns(name, parts, false, (player, options) -> spawn.apply(player));
+    }
+
+    // ownText: the spawn already writes the text: option itself
+    private LiteralArgumentBuilder<CommandSourceStack> spawns(String name, Set<Part> parts, boolean ownText,
+                                                              BiFunction<Player, DisplayOptions, MotionDisplay> spawn) {
+        return Commands.literal(name)
+                .executes(context -> show(context.getSource(), parts, ownText, spawn, ""))
+                .then(Commands.argument("options", StringArgumentType.greedyString())
+                        .suggests((context, builder) -> suggestOptions(parts, builder))
+                        .executes(context -> show(context.getSource(), parts, ownText, spawn,
+                                StringArgumentType.getString(context, "options"))));
+    }
+
+    private CompletableFuture<Suggestions> suggestOptions(Set<Part> parts, SuggestionsBuilder builder) {
+        String typed = builder.getRemaining();
+        SuggestionsBuilder last = builder.createOffset(builder.getStart() + DisplayOptions.lastTokenStart(typed));
+        DisplayOptions.suggest(typed, parts, this::materialNames).forEach(last::suggest);
+        return last.buildFuture();
+    }
+
+    private List<String> materialNames(Part part) {
+        if (itemNames == null) {
+            itemNames = names(Material::isItem);
+            blockNames = names(Material::isBlock);
+        }
+        return part == Part.ITEM ? itemNames : blockNames;
+    }
+
+    private static List<String> names(Predicate<Material> kind) {
+        return Arrays.stream(Material.values())
+                .filter(material -> !material.isLegacy() && kind.test(material))
+                .map(material -> material.name().toLowerCase(Locale.ROOT))
+                .sorted()
+                .toList();
+    }
+
+    private int show(CommandSourceStack source, Set<Part> parts, boolean ownText,
+                     BiFunction<Player, DisplayOptions, MotionDisplay> spawn, String rawOptions) {
         if (!(source.getSender() instanceof Player player)) {
             source.getSender().sendPlainMessage("players only");
             return 0;
         }
+        DisplayOptions.Parsed parsed = DisplayOptions.parse(rawOptions);
         MotionDisplay old = displays.remove(player.getUniqueId());
         if (old != null) {
             old.remove();
         }
+        List<String> problems = new ArrayList<>(parsed.errors());
         try {
-            displays.put(player.getUniqueId(), spawn.apply(player));
+            MotionDisplay display = spawn.apply(player, parsed.options());
+            displays.put(player.getUniqueId(), display);
+            DisplayOptions toApply = ownText ? parsed.options().withoutText() : parsed.options();
+            problems.addAll(toApply.apply(display, parts));
         } catch (UnsupportedOperationException e) {
             player.sendPlainMessage(e.getMessage());
             return 0;
         }
+        for (String problem : problems) {
+            player.sendMessage(Component.text(problem, NamedTextColor.RED));
+        }
         return Command.SINGLE_SUCCESS;
     }
 
-    private int showModel(CommandSourceStack source, String file, String animation) {
+    private int showModel(CommandSourceStack source, String file, String rest) {
+        String animation = null;
+        String options = rest.strip();
+        int space = options.indexOf(' ');
+        String first = space < 0 ? options : options.substring(0, space);
+        if (!first.isEmpty() && first.indexOf(':') < 0) {
+            animation = first;
+            options = space < 0 ? "" : options.substring(space + 1);
+        }
         ImportedModel model = loadModel(file);
         if (model == null) {
             source.getSender().sendPlainMessage("cant read models/" + file + ", is it a .bbmodel or .bdengine file?");
@@ -201,14 +273,14 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
             source.getSender().sendPlainMessage("no animation " + animation + ", there is " + model.animations());
             return 0;
         }
-        return show(source, player -> {
+        String clip = animation != null ? animation : model.animations().stream().findFirst().orElse(null);
+        return show(source, EnumSet.allOf(Part.class), false, (player, parsed) -> {
             MotionDisplay display = model.spawn(motion, inFront(player, 5));
-            String clip = animation != null ? animation : model.animations().stream().findFirst().orElse(null);
             if (clip != null) {
                 model.play(display, clip);
             }
             return display.play(Animations.popIn(15));
-        });
+        }, options);
     }
 
     private List<String> modelFiles() {
@@ -511,11 +583,14 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
         return spot;
     }
 
-    private MotionDisplay text(Player player) {
+    private MotionDisplay text(Player player, DisplayOptions options) {
+        Component message = options.text() != null
+                ? Component.text(options.text(), NamedTextColor.WHITE)
+                : Component.text("Made with ", NamedTextColor.WHITE).append(Component.text("displaymotion", NamedTextColor.GOLD));
         return motion.text(player.getLocation().add(0, 2, 0), Component.empty())
                 .billboard(Display.Billboard.CENTER)
                 .play(SHOW_TEXT)
-                .type(Component.text("Made with ", NamedTextColor.WHITE).append(Component.text("displaymotion", NamedTextColor.GOLD)), 2);
+                .type(message, 2);
     }
 
     // right click presses it and counts, left click breaks it
