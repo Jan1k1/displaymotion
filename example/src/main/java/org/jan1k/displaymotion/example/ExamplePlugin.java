@@ -21,6 +21,9 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.EntityDismountEvent;
+import org.bukkit.event.player.PlayerAnimationEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -83,6 +86,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
     private final Map<UUID, BukkitTask> showcaseTasks = new HashMap<>();
     private final Map<UUID, Leaderboard> boards = new HashMap<>();
     private final Map<UUID, BukkitTask> boardTasks = new HashMap<>();
+    private final Map<UUID, DragonRide> rides = new HashMap<>();
     private DisplayMotion motion;
     private List<String> itemNames;
     private List<String> blockNames;
@@ -100,6 +104,9 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
+        for (DragonRide ride : List.copyOf(rides.values())) {
+            ride.remove();
+        }
         if (motion != null) {
             motion.close();
         }
@@ -125,10 +132,53 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
         killEffects.remove(event.getPlayer().getUniqueId());
         clearShowcase(event.getPlayer().getUniqueId());
         clearBoard(event.getPlayer().getUniqueId());
+        clearRide(event.getPlayer().getUniqueId());
         MotionDisplay display = displays.remove(event.getPlayer().getUniqueId());
         if (display != null) {
             display.remove();
         }
+    }
+
+    // left click while you ride it: roar and fire
+    @EventHandler
+    public void onSwing(PlayerAnimationEvent event) {
+        DragonRide ride = riding(event.getPlayer());
+        if (ride != null) {
+            ride.roar();
+        }
+    }
+
+    // no breaking or placing blocks from up there by accident
+    @EventHandler(ignoreCancelled = false)
+    public void onInteract(PlayerInteractEvent event) {
+        if (riding(event.getPlayer()) != null) {
+            event.setCancelled(true);
+        }
+    }
+
+    // sneak is the vanilla way off, here it lands first and then lets you off
+    @EventHandler
+    public void onDismount(EntityDismountEvent event) {
+        if (event.getEntity() instanceof Player player && event.isCancellable()) {
+            DragonRide ride = riding(player);
+            if (ride != null && ride.keepOn()) {
+                event.setCancelled(true);
+            }
+        }
+    }
+
+    private DragonRide riding(Player player) {
+        DragonRide ride = rides.get(player.getUniqueId());
+        return ride != null && ride.rider() == player ? ride : null;
+    }
+
+    private boolean clearRide(UUID id) {
+        DragonRide ride = rides.get(id);
+        if (ride == null) {
+            return false;
+        }
+        ride.remove();
+        return true;
     }
 
     private void registerCommand() {
@@ -394,11 +444,15 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 .executes(context -> dragon(context.getSource(), Dragon.Kind.FIRE, false, false))
                 .then(Commands.literal("build").executes(context -> dragon(context.getSource(), Dragon.Kind.FIRE, true, false)))
                 .then(Commands.literal("three").executes(context -> dragon(context.getSource(), Dragon.Kind.FIRE, false, true)));
+        LiteralArgumentBuilder<CommandSourceStack> ride = Commands.literal("ride")
+                .executes(context -> ride(context.getSource(), Dragon.Kind.FIRE));
         for (Dragon.Kind kind : Dragon.Kind.values()) {
             dragon.then(Commands.literal(kind.name().toLowerCase(Locale.ROOT))
                     .executes(context -> dragon(context.getSource(), kind, false, false)));
+            ride.then(Commands.literal(kind.name().toLowerCase(Locale.ROOT))
+                    .executes(context -> ride(context.getSource(), kind)));
         }
-        return dragon;
+        return dragon.then(ride);
     }
 
     private int dragon(CommandSourceStack source, Dragon.Kind kind, boolean build, boolean three) {
@@ -417,6 +471,22 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
         }
         showcases.put(id, spawned);
         player.sendPlainMessage((three ? "dragons" : "dragon") + " spawned, /dm stop removes it");
+        return Command.SINGLE_SUCCESS;
+    }
+
+    // /dm dragon ride [fire|ice|ender]: look where to fly, forward is faster, jump climbs, nothing glides,
+    // left click roars fire, sneak lands it and lets you off
+    private int ride(CommandSourceStack source, Dragon.Kind kind) {
+        if (!(source.getSender() instanceof Player player)) {
+            source.getSender().sendPlainMessage("players only");
+            return 0;
+        }
+        UUID id = player.getUniqueId();
+        clearShowcase(id);
+        clearRide(id);
+        player.leaveVehicle();
+        rides.put(id, DragonRide.start(this, motion, player, kind, () -> rides.remove(id)));
+        player.sendPlainMessage("look where to fly, W faster, space up, left click fire, sneak to land");
         return Command.SINGLE_SUCCESS;
     }
 
@@ -508,7 +578,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
             source.getSender().sendPlainMessage("players only");
             return 0;
         }
-        boolean showcase = clearShowcase(player.getUniqueId()) | clearBoard(player.getUniqueId());
+        boolean showcase = clearShowcase(player.getUniqueId()) | clearBoard(player.getUniqueId()) | clearRide(player.getUniqueId());
         MotionDisplay old = displays.remove(player.getUniqueId());
         if (old == null && !showcase) {
             player.sendPlainMessage("nothing to remove");
