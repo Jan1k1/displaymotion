@@ -1,5 +1,6 @@
 package org.jan1k.displaymotion.example;
 
+import org.jan1k.displaymotion.Affine;
 import org.jan1k.displaymotion.Frames;
 import org.jan1k.displaymotion.paper.ModelBuilder;
 import org.junit.jupiter.api.Test;
@@ -50,5 +51,26 @@ class DragonTest {
             assertEquals(start.roll(), end.roll(), 0.5f, piece.name());
             assertEquals(start.y(), end.y(), 0.05f, piece.name());
         }
+    }
+
+    @Test
+    void everyBoneHasARidePose() {
+        for (Dragon.Piece piece : Dragon.design(Dragon.Kind.FIRE, false, 0, 1).pieces()) {
+            if (piece.isBone()) {
+                DragonRide.pose(piece.name());
+            }
+        }
+    }
+
+    // the dragon turns around you, so the seat point has to stay where it is
+    @Test
+    void theSeatStaysPutWhenItTurns() {
+        DragonRide.Flight flight = new DragonRide.Flight(0f, 0f, 0f, 1f, 0f, 1f, 0.5f, -20f, -25f, 130f, 2f, 10f, 5f, 0f, 0f, 1000f);
+        float[] m = new float[Affine.SIZE];
+        Affine.fromPose(DragonRide.root(flight), m, 0);
+        Dragon.Vec s = DragonRide.SEAT;
+        assertEquals(0f, m[0] * s.x() + m[3] * s.y() + m[6] * s.z() + m[9], 1e-4f);
+        assertEquals(0f, m[1] * s.x() + m[4] * s.y() + m[7] * s.z() + m[10], 1e-4f);
+        assertEquals(0f, m[2] * s.x() + m[5] * s.y() + m[8] * s.z() + m[11], 1e-4f);
     }
 }
