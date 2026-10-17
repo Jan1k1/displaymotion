@@ -47,10 +47,13 @@ final class Dragon {
     static final int BEAT = 34;
     static final float RADIUS = 10f;
     static final float HEIGHT = 9f;
+    static final int FLAMES = 140;
 
     private static final Pose HIDDEN = Pose.IDENTITY.withScale(0f);
     private static final Display.Brightness LIT = new Display.Brightness(15, 15);
     private static final Map<String, Design> DESIGNS = new ConcurrentHashMap<>();
+    private static final Map<Kind, List<Animation>> BREATHS = new ConcurrentHashMap<>();
+    private static final Animation OUT = new Motion(2, 0, t -> HIDDEN);
 
     enum Kind {
         FIRE(Material.POLISHED_BLACKSTONE, Material.NETHERITE_BLOCK, Material.GOLD_BLOCK, Material.WAXED_CUT_COPPER,
@@ -138,16 +141,7 @@ final class Dragon {
         List<MotionDisplay> models = new ArrayList<>();
         for (int model = 0; model < 2; model++) {
             List<Piece> pieces = design.model(model);
-            ModelBuilder builder = motion.model(at);
-            for (Piece piece : pieces) {
-                if (piece.isBone()) {
-                    builder.group(piece.name(), piece.pose(), piece.parent());
-                } else {
-                    Material block = !build && piece.lit() != null ? piece.lit() : piece.block();
-                    builder.block(piece.name(), block.createBlockData(), piece.pose(), piece.parent());
-                }
-            }
-            MotionDisplay display = builder.spawn().play(design.root());
+            MotionDisplay display = model(motion, at, pieces, build).play(design.root());
             if (size != 1f) {
                 display.scale(size);
             }
@@ -196,6 +190,45 @@ final class Dragon {
             }
         });
         return models;
+    }
+
+    // for riding: no life of its own, the ride moves every bone itself. the flames wait hidden for a roar
+    static List<MotionDisplay> saddled(DisplayMotion motion, Location at, Kind kind) {
+        Design design = design(kind, false, 0, 1);
+        MotionDisplay body = model(motion, at, design.model(0), false);
+        MotionDisplay fire = model(motion, at, design.model(1), false).brightness(LIT);
+        for (Piece piece : design.model(1)) {
+            if (piece.model() == 1) {
+                fire.play(piece.name(), OUT);
+            }
+        }
+        body.shadow("pelvis", 3f, 0.8f);
+        light(body, design);
+        return List.of(body, fire);
+    }
+
+    // one breath of fire, tick 0 is the start of the roar like in its life
+    static List<Animation> breath(Kind kind) {
+        return BREATHS.computeIfAbsent(kind, k -> {
+            List<Animation> flames = new ArrayList<>();
+            for (int i = 0; i < FLAMES; i++) {
+                flames.add(new Motion(FIRE_END + 20, 0, flame(k, i)));
+            }
+            return flames;
+        });
+    }
+
+    private static MotionDisplay model(DisplayMotion motion, Location at, List<Piece> pieces, boolean build) {
+        ModelBuilder builder = motion.model(at);
+        for (Piece piece : pieces) {
+            if (piece.isBone()) {
+                builder.group(piece.name(), piece.pose(), piece.parent());
+            } else {
+                Material block = !build && piece.lit() != null ? piece.lit() : piece.block();
+                builder.block(piece.name(), block.createBlockData(), piece.pose(), piece.parent());
+            }
+        }
+        return builder.spawn();
     }
 
     private static void light(MotionDisplay body, Design design) {
@@ -527,12 +560,12 @@ final class Dragon {
     }
 
     // wings open and the chest up while it roars
-    private static float roar(float c) {
+    static float roar(float c) {
         return snap(c, 0, 10) * (1f - s(c, 54, 66));
     }
 
     // 1 while it breathes fire, fades in and out
-    private static float fire(float c) {
+    static float fire(float c) {
         return s(c, FIRE, FIRE + 6) * (1f - s(c, FIRE_END - 6, FIRE_END));
     }
 
@@ -575,30 +608,30 @@ final class Dragon {
     }
 
     // 0 before from, 1 after to, smooth in between
-    private static float s(float t, float from, float to) {
+    static float s(float t, float from, float to) {
         float u = Math.clamp((t - from) / (to - from), 0f, 1f);
         return u * u * u * (u * (u * 6f - 15f) + 10f);
     }
 
     // like s but it shoots a bit past 1 and settles, for moves that should snap
-    private static float snap(float t, float from, float to) {
+    static float snap(float t, float from, float to) {
         float u = Math.clamp((t - from) / (to - from), 0f, 1f) - 1f;
         return 1f + 2.4f * u * u * u + 1.4f * u * u;
     }
 
     // 0 outside, 1 in the middle
-    private static float bump(float t, float from, float to) {
+    static float bump(float t, float from, float to) {
         if (t <= from || t >= to) {
             return 0f;
         }
         return (float) Math.sin((t - from) / (to - from) * Math.PI);
     }
 
-    private static float wave(float t, float ticks) {
+    static float wave(float t, float ticks) {
         return (float) Math.sin(t / ticks * 2 * Math.PI);
     }
 
-    private static Pose turn(float pitch, float yaw, float roll) {
+    static Pose turn(float pitch, float yaw, float roll) {
         return Pose.IDENTITY.withRotation(pitch, yaw, roll);
     }
 
@@ -647,6 +680,18 @@ final class Dragon {
 
         Vec lerp(Vec to, float k) {
             return plus(to.minus(this).times(k));
+        }
+
+        // turns it like a pose does: roll first, then pitch, then yaw
+        Vec turned(float pitch, float yaw, float roll) {
+            double c = Math.toRadians(roll);
+            float x1 = (float) (x * Math.cos(c) - y * Math.sin(c));
+            float y1 = (float) (x * Math.sin(c) + y * Math.cos(c));
+            double b = Math.toRadians(pitch);
+            float y2 = (float) (y1 * Math.cos(b) - z * Math.sin(b));
+            float z2 = (float) (y1 * Math.sin(b) + z * Math.cos(b));
+            double a = Math.toRadians(yaw);
+            return new Vec((float) (x1 * Math.cos(a) + z2 * Math.sin(a)), y2, (float) (-x1 * Math.sin(a) + z2 * Math.cos(a)));
         }
 
         // undoes a pose rotation, the pose turns yaw first, then pitch, then roll
@@ -722,7 +767,7 @@ final class Dragon {
                 }
                 pieces.add(new Piece(d.name(), d.parent(), d.block(), lit.get(d.name()), bright.contains(d.name()), d.pose(), animation, 0));
             }
-            for (int i = 0; i < 140; i++) {
+            for (int i = 0; i < FLAMES; i++) {
                 Function<Float, Pose> flame = flame(kind, i);
                 pieces.add(new Piece("flame_" + i, "head", kind.flames[i % kind.flames.length], null, false, Pose.IDENTITY,
                         life(c -> flame.apply(c), true), 1));
