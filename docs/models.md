@@ -128,7 +128,7 @@ guide.npc().swing();                                               // one hit wi
 - Poses: `STANDING`, `CROUCHING`, `SWIMMING`, `GLIDING`, `SLEEPING`.
 - `size(size)` changes the mannequin body size, clamped to 0.0625 to 16 (1 is normal). Display `scale` does not touch the mannequin body.
 - `lookAtPlayers(range)` sends each player their own head turn, only when it changes. Farther players see it look ahead.
-- `hitbox`, `onClick`, `teleport`, `follow`, `ride`, `glow`, `lod` and per player visibility work like on any display. Mannequins need a 1.21.9 or newer server and game, `npc(...)` throws an `UnsupportedOperationException` on older servers. Games older than 26.3 do not show the swing.
+- `hitbox`, `onClick`, `teleport`, `moveTo`, `follow`, `ride`, `glow`, `lod` and per player visibility work like on any display. Mannequins need a 1.21.9 or newer server and game, `npc(...)` throws an `UnsupportedOperationException` on older servers. Games older than 26.3 do not show the swing.
 
 ## Level of detail
 
@@ -204,8 +204,9 @@ pet.unfollow();
 
 - The offset turns with the body: x to the right, y up, z forward (negative is behind).
 - Every 2 ticks it moves to the new spot and the players' games glide it there, so the server sends little.
-- `teleport` or `unfollow` stops it. When the target dies, a player keeps it after respawn, a mob leaves it where it was.
+- `teleport`, `moveTo` or `unfollow` stops it. When the target dies, a player keeps it after respawn, a mob leaves it where it was.
 - Call it on the main thread.
+- To glide a display to a fixed spot instead of an entity, use `display.moveTo(location, ticks)` or `display.moveTo(location, ticks, ease)`. It keeps its rotation, and a new `moveTo`, `teleport` or `follow` stops the old one.
 
 ## Seats
 

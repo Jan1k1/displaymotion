@@ -17,6 +17,7 @@ import org.bukkit.entity.TextDisplay;
 import org.bukkit.plugin.Plugin;
 import org.jan1k.displaymotion.Animation;
 import org.jan1k.displaymotion.Animations;
+import org.jan1k.displaymotion.Ease;
 import org.jan1k.displaymotion.Pose;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -779,6 +780,49 @@ class MotionEngineTest {
         assertEquals(List.of("destroy"), kinds(tick()));
         viewerAt(0);
         assertTrue(kinds(tick()).contains("scale 2.5"));
+    }
+
+    @Test
+    void moveToGlidesWithEaseAndKeepsRotation() {
+        assertEquals(2.0, MotionEngine.lerp(2.0, 10.0, 0, 4, Ease.LINEAR), 1e-6);
+        assertEquals(6.0, MotionEngine.lerp(2.0, 10.0, 2, 4, Ease.LINEAR), 1e-6);
+        assertEquals(2.0 + 8.0 * Ease.OUT.apply(0.5f), MotionEngine.lerp(2.0, 10.0, 2, 4, Ease.OUT), 1e-6);
+        assertEquals(10.0, MotionEngine.lerp(2.0, 10.0, 4, 4, Ease.ELASTIC_OUT), 1e-9);
+
+        PartState[] parts = {PartState.block("main", ENTITY, -1, 1, Pose.IDENTITY)};
+        MotionDisplay display = new MotionDisplay(engine, new Location(world(), 0, 0, 0, 90f, 15f), parts, 48);
+        engine.submit(() -> engine.add(display.state()));
+        tick();
+        tick();
+
+        display.moveTo(new Location(world(), 10, 2, -4, 180f, 45f), 8, Ease.OUT);
+        List<Double> xs = new ArrayList<>();
+        for (int i = 0; i < 12; i++) {
+            for (Packet packet : tick()) {
+                if (packet.kind().equals("teleport")) {
+                    xs.add(display.location().getX());
+                }
+            }
+        }
+
+        assertEquals(4, xs.size());
+        for (int i = 1; i < xs.size(); i++) {
+            assertTrue(xs.get(i) > xs.get(i - 1));
+        }
+        assertEquals(10.0, display.location().getX(), 1e-6);
+        assertEquals(2.0, display.location().getY(), 1e-6);
+        assertEquals(-4.0, display.location().getZ(), 1e-6);
+        assertEquals(90f, display.location().getYaw());
+        assertEquals(15f, display.location().getPitch());
+
+        display.moveTo(new Location(world(), 20, 0, 0), 8);
+        tick();
+        tick();
+        display.moveTo(new Location(world(), 4, 0, 0), 4);
+        for (int i = 0; i < 6; i++) {
+            tick();
+        }
+        assertEquals(4.0, display.location().getX(), 1e-6);
     }
 
     private MotionDisplay npcDisplay() {

@@ -24,6 +24,7 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.Plugin;
 import org.jan1k.displaymotion.Animation;
+import org.jan1k.displaymotion.Ease;
 import org.jan1k.displaymotion.Frames;
 import org.jan1k.displaymotion.Pose;
 import org.jan1k.displaymotion.Decomposer;
@@ -270,6 +271,7 @@ final class MotionEngine {
         if (display.removed) {
             return;
         }
+        display.glideSteps = 0;
         if (display.vehicle >= 0) {
             dismount(display, false);
         }
@@ -560,6 +562,33 @@ final class MotionEngine {
     }
 
     void teleport(DisplayState display, UUID world, double x, double y, double z, float yaw, float pitch, int ticks) {
+        display.glideSteps = 0;
+        move(display, world, x, y, z, yaw, pitch, ticks);
+    }
+
+    // client teleport_duration is linear and caps at 59 ticks, so step the ease here every 2 ticks
+    void glide(DisplayState display, double x, double y, double z, int ticks, Ease ease) {
+        if (display.removed) {
+            return;
+        }
+        display.fromX = display.x;
+        display.fromY = display.y;
+        display.fromZ = display.z;
+        display.toX = x;
+        display.toY = y;
+        display.toZ = z;
+        display.glideSteps = Math.max(1, Math.round(ticks / (float) Frames.STEP_TICKS));
+        display.glideStep = 0;
+        display.glideEase = ease;
+        display.active = true;
+    }
+
+    // last step snaps to the exact spot so float math doesnt leave it a hair off
+    static double lerp(double from, double to, int step, int steps, Ease ease) {
+        return step >= steps ? to : from + (to - from) * ease.apply(step / (float) steps);
+    }
+
+    private void move(DisplayState display, UUID world, double x, double y, double z, float yaw, float pitch, int ticks) {
         if (display.removed) {
             return;
         }
@@ -1027,20 +1056,32 @@ final class MotionEngine {
             part.size.step();
             running |= part.size.busy();
         }
+        boolean gliding = display.glideStep < display.glideSteps;
+        if (gliding) {
+            display.glideStep++;
+            running |= display.glideStep < display.glideSteps;
+        }
         display.active = running;
 
-        if (display.viewers.isEmpty()) {
+        if (!display.viewers.isEmpty()) {
+            composer.compose(display, display.stale);
+            display.stale = false;
+            sendChanges(display, Frames.STEP_TICKS);
+        } else {
             display.stale = true;
             for (Track track : tracks) {
                 if (track != null) {
                     track.moved = false;
                 }
             }
-            return;
         }
-        composer.compose(display, display.stale);
-        display.stale = false;
-        sendChanges(display, Frames.STEP_TICKS);
+        if (gliding) {
+            double x = lerp(display.fromX, display.toX, display.glideStep, display.glideSteps, display.glideEase);
+            double y = lerp(display.fromY, display.toY, display.glideStep, display.glideSteps, display.glideEase);
+            double z = lerp(display.fromZ, display.toZ, display.glideStep, display.glideSteps, display.glideEase);
+            display.handle.movedTo(x, y, z);
+            move(display, display.world, x, y, z, display.yaw, display.pitch, Frames.STEP_TICKS);
+        }
     }
 
     private void start(DisplayState display, int track, Frames frames, Runnable onEnd, int fadeTicks) {
@@ -1436,7 +1477,7 @@ final class MotionEngine {
                 return true;
             }
         }
-        if (display.size.busy()) {
+        if (display.size.busy() || display.glideStep < display.glideSteps) {
             return true;
         }
         for (PartState part : display.parts) {

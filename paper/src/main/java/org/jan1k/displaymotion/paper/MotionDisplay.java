@@ -661,6 +661,48 @@ public final class MotionDisplay {
         engine.submit(() -> engine.teleport(state, world, x, y, z, yaw, pitch, ticks));
     }
 
+    /** Glides the whole display from where it is now to {@code to} over {@code ticks}, keeping its rotation. */
+    public MotionDisplay moveTo(Location to, int ticks) {
+        return moveTo(to, ticks, Ease.LINEAR);
+    }
+
+    /**
+     * Glides the whole display from where it is now to {@code to} over {@code ticks} with {@code ease},
+     * keeping its rotation. A new {@code moveTo}, {@link #teleport(Location)} or {@link #follow(Entity)} stops the old one.
+     */
+    public MotionDisplay moveTo(Location to, int ticks, Ease ease) {
+        Objects.requireNonNull(to, "location");
+        Objects.requireNonNull(ease, "ease");
+        if (to.getWorld() == null || !to.getWorld().getUID().equals(location.getWorld().getUID())) {
+            throw new IllegalArgumentException("location must be in the same world");
+        }
+        if (ticks < 1 || ticks > Frames.MAX_TICKS) {
+            throw new IllegalArgumentException("ticks must be 1 to " + Frames.MAX_TICKS + ", got " + ticks);
+        }
+        requireAlive();
+        if (vehicle != null) {
+            vehicle = null;
+            engine.riding.remove(this);
+            engine.submit(() -> engine.dismount(state, false));
+        }
+        if (followed != null) {
+            unfollow();
+        }
+        double x = to.getX();
+        double y = to.getY();
+        double z = to.getZ();
+        engine.submit(() -> engine.glide(state, x, y, z, ticks, ease));
+        return this;
+    }
+
+    void movedTo(double x, double y, double z) {
+        Location at = location;
+        location = new Location(at.getWorld(), x, y, z, at.getYaw(), at.getPitch());
+        if (!seatEntities.isEmpty()) {
+            engine.mainThread.accept(this::moveSeats);
+        }
+    }
+
     /** Floats after the entity like a pet: a bit above and behind it. Same as {@code follow(target, DEFAULT_FOLLOW_OFFSET, DEFAULT_FOLLOW_GLIDE)}. */
     public MotionDisplay follow(Entity target) {
         return follow(target, DEFAULT_FOLLOW_OFFSET, DEFAULT_FOLLOW_GLIDE);

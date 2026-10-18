@@ -1,5 +1,7 @@
 package org.jan1k.displaymotion.paper;
 
+import org.jan1k.displaymotion.Ease;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -50,6 +52,15 @@ final class DisplayState {
     float drop;
     final Resize size = new Resize();
     double speed = 1.0;
+    double fromX;
+    double fromY;
+    double fromZ;
+    double toX;
+    double toY;
+    double toZ;
+    int glideSteps;
+    int glideStep;
+    Ease glideEase = Ease.LINEAR;
 
     double range;
     int index;
