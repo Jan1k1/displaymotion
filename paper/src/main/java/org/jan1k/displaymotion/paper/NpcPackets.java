@@ -2,6 +2,7 @@ package org.jan1k.displaymotion.paper;
 
 import com.github.retrooper.packetevents.PacketEvents;
 import com.github.retrooper.packetevents.manager.server.ServerVersion;
+import com.github.retrooper.packetevents.protocol.attribute.Attributes;
 import com.github.retrooper.packetevents.protocol.component.builtin.item.ItemSwingAnimation;
 import com.github.retrooper.packetevents.protocol.entity.data.EntityData;
 import com.github.retrooper.packetevents.protocol.entity.data.EntityDataTypes;
@@ -13,6 +14,7 @@ import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEn
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityEquipment;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityMetadata;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSwingAnimation;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerUpdateAttributes;
 import io.github.retrooper.packetevents.util.SpigotConversionUtil;
 import org.bukkit.inventory.ItemStack;
 
@@ -71,6 +73,12 @@ final class NpcPackets {
             items.add(new Equipment(entry.getKey(), entry.getValue()));
         }
         return new WrapperPlayServerEntityEquipment(npc.entityId, items);
+    }
+
+    // display scale is in the metadata, a mannequin has no transform so it takes the living entity scale attribute
+    static WrapperPlayServerUpdateAttributes scale(PartState npc) {
+        return new WrapperPlayServerUpdateAttributes(npc.entityId, List.of(
+                new WrapperPlayServerUpdateAttributes.Property(Attributes.SCALE, npc.npcSize, List.of())));
     }
 
     static EquipmentSlot slot(org.bukkit.inventory.EquipmentSlot slot) {

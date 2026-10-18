@@ -68,6 +68,7 @@ final class PartState {
     Component npcName;
     Component description;
     NpcPose npcPose = NpcPose.STANDING;
+    float npcSize = 1f;
     final java.util.Map<com.github.retrooper.packetevents.protocol.player.EquipmentSlot, ItemStack> equipment = new java.util.EnumMap<>(
             com.github.retrooper.packetevents.protocol.player.EquipmentSlot.class);
     double lookRange;

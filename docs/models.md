@@ -117,6 +117,7 @@ guide.npc()
         .name(Component.text("Guide", NamedTextColor.GOLD))
         .equip(EquipmentSlot.HAND, ItemStack.of(Material.DIAMOND_SWORD))
         .pose(NpcPose.CROUCHING)
+        .size(1.5f)                                                // 0.0625 to 16, 1 is normal
         .lookAtPlayers();                                          // each player sees it look at them, 8 blocks
 
 guide.npc().swing();                                               // one hit with the main hand
@@ -125,6 +126,7 @@ guide.npc().swing();                                               // one hit wi
 - In a model, add it with `.npc("name", skin)` and get it with `display.npc("name")`. It stands at the display location and faces where the display looks. Text, items and blocks of the same model move and animate around it as usual.
 - `Skin.name("Notch")` is looked up by the players' games, so it works on offline mode servers. `Skin.of(player)` copies the skin a player has now.
 - Poses: `STANDING`, `CROUCHING`, `SWIMMING`, `GLIDING`, `SLEEPING`.
+- `size(size)` changes the mannequin body size, clamped to 0.0625 to 16 (1 is normal). Display `scale` does not touch the mannequin body.
 - `lookAtPlayers(range)` sends each player their own head turn, only when it changes. Farther players see it look ahead.
 - `hitbox`, `onClick`, `teleport`, `follow`, `ride`, `glow`, `lod` and per player visibility work like on any display. Mannequins need a 1.21.9 or newer server and game, `npc(...)` throws an `UnsupportedOperationException` on older servers. Games older than 26.3 do not show the swing.
 

@@ -275,6 +275,10 @@ final class DisplayOptions {
         return copy;
     }
 
+    Float size() {
+        return size;
+    }
+
     String text() {
         return text;
     }

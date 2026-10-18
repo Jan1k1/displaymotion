@@ -761,6 +761,26 @@ class MotionEngineTest {
         assertFalse(again.contains("rotation"), "nothing new to send " + again);
     }
 
+    @Test
+    void mannequinSizeClampsAndSendsToCurrentAndNewViewers() {
+        MotionDisplay npc = npcDisplay();
+        tick();
+        tick();
+
+        assertThrows(IllegalArgumentException.class, () -> npc.npc().size(Float.NaN));
+        npc.npc().size(0f);
+        assertEquals(List.of("scale 0.0625"), kinds(tick()));
+        npc.npc().size(50f);
+        assertEquals(List.of("scale 16.0"), kinds(tick()));
+        npc.npc().size(2.5f);
+        assertEquals(List.of("scale 2.5"), kinds(tick()));
+
+        viewerAt(200);
+        assertEquals(List.of("destroy"), kinds(tick()));
+        viewerAt(0);
+        assertTrue(kinds(tick()).contains("scale 2.5"));
+    }
+
     private MotionDisplay npcDisplay() {
         PartState[] parts = {PartState.npc("main", ENTITY, -1, Skin.name("Notch"))};
         MotionDisplay npc = new MotionDisplay(engine, new Location(world(), 0, 0, 0), parts, 48);
@@ -869,6 +889,11 @@ class MotionEngineTest {
                     packets.add(new Packet("passengers " + java.util.Arrays.toString(riders), vehicle, List.of()));
                 } else if (id == PacketType.Play.Server.ENTITY_ROTATION.getId(version)) {
                     packets.add(new Packet("rotation", reader.readVarInt(), List.of()));
+                } else if (id == PacketType.Play.Server.UPDATE_ATTRIBUTES.getId(version)) {
+                    int entity = reader.readVarInt();
+                    reader.readVarInt();
+                    reader.readVarInt();
+                    packets.add(new Packet("scale " + reader.readDouble(), entity, List.of()));
                 } else if (id == PacketType.Play.Server.DESTROY_ENTITIES.getId(version)) {
                     reader.readVarInt();
                     packets.add(new Packet("destroy", reader.readVarInt(), List.of()));

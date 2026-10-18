@@ -15,6 +15,10 @@ public final class Npc {
 
     /** How far players can be for {@link #lookAtPlayers(double)} by default. */
     public static final double DEFAULT_LOOK_RANGE = 8.0;
+    /** The smallest {@link #size(float)}, same as vanilla. */
+    public static final float MIN_SIZE = 0.0625f;
+    /** The biggest {@link #size(float)}, same as vanilla. */
+    public static final float MAX_SIZE = 16f;
 
     private final MotionDisplay display;
     private final MotionEngine engine;
@@ -43,6 +47,16 @@ public final class Npc {
     public Npc pose(NpcPose pose) {
         Objects.requireNonNull(pose, "pose");
         submit(() -> engine.npc(state, part, npc -> npc.npcPose = pose, false));
+        return this;
+    }
+
+    /** The body size of the mannequin, clamped to 0.0625 to 16. 1 is normal. */
+    public Npc size(float size) {
+        if (Float.isNaN(size)) {
+            throw new IllegalArgumentException("size must be a number, got " + size);
+        }
+        float clamped = Math.clamp(size, MIN_SIZE, MAX_SIZE);
+        submit(() -> engine.npcSize(state, part, clamped));
         return this;
     }
 

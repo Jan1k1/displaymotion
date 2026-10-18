@@ -771,6 +771,15 @@ final class MotionEngine {
         sendPart(display, npc, equipment ? NpcPackets.equipment(npc) : NpcPackets.data(npc));
     }
 
+    void npcSize(DisplayState display, int part, float size) {
+        if (display.removed) {
+            return;
+        }
+        PartState npc = display.parts[part];
+        npc.npcSize = size;
+        sendPart(display, npc, NpcPackets.scale(npc));
+    }
+
     void npcSwing(DisplayState display, int part, boolean offHand) {
         if (display.removed) {
             return;
@@ -815,7 +824,7 @@ final class MotionEngine {
 
     private void look(DisplayState display, PartState npc, Viewer viewer) {
         double dx = viewer.x - display.x;
-        double dy = viewer.y + EYE_HEIGHT - (display.y + (npc.npcPose == NpcPose.CROUCHING ? CROUCH_EYE_HEIGHT : EYE_HEIGHT));
+        double dy = viewer.y + EYE_HEIGHT - (display.y + (npc.npcPose == NpcPose.CROUCHING ? CROUCH_EYE_HEIGHT : EYE_HEIGHT) * npc.npcSize);
         double dz = viewer.z - display.z;
         double flat = Math.sqrt(dx * dx + dz * dz);
         float yaw;
@@ -1159,6 +1168,9 @@ final class MotionEngine {
                     if (!part.equipment.isEmpty()) {
                         queue(viewer, encode(NpcPackets.equipment(part), viewer.channel));
                     }
+                    if (part.npcSize != 1f) {
+                        queue(viewer, encode(NpcPackets.scale(part), viewer.channel));
+                    }
                 }
                 continue;
             }
@@ -1285,8 +1297,13 @@ final class MotionEngine {
             queue(viewer, ByteBufHelper.retainedDuplicate(buffers[i]));
         }
         for (PartState part : display.parts) {
-            if (part.kind == PartState.NPC && !part.equipment.isEmpty() && !(far && part.detail)) {
-                queue(viewer, encode(NpcPackets.equipment(part), viewer.channel));
+            if (part.kind == PartState.NPC && !(far && part.detail)) {
+                if (!part.equipment.isEmpty()) {
+                    queue(viewer, encode(NpcPackets.equipment(part), viewer.channel));
+                }
+                if (part.npcSize != 1f) {
+                    queue(viewer, encode(NpcPackets.scale(part), viewer.channel));
+                }
             }
         }
         // after the spawn, the client ignores passengers it does not know yet

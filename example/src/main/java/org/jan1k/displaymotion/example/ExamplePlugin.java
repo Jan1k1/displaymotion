@@ -196,7 +196,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 .then(Commands.literal("leaderboard").executes(context -> leaderboard(context.getSource())))
                 .then(Commands.literal("ease").executes(context -> easings(context.getSource())))
                 .then(dragons())
-                .then(spawns("npc", EnumSet.of(Part.TEXT), player -> npc(player, inFront(player, 4))))
+                .then(spawns("npc", EnumSet.of(Part.TEXT), false, (player, options) -> npc(player, inFront(player, 4), options)))
                 .then(spawns("bench", EnumSet.of(Part.BLOCK), player -> bench(inFront(player, 3))))
                 .then(spawns("button", EnumSet.of(Part.BLOCK, Part.TEXT), player -> button(inFront(player, 3))))
                 .then(Commands.literal("showcase").executes(context -> showcase(context.getSource())))
@@ -386,7 +386,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
     }
 
     // a mannequin with your skin that looks at you, right click it and it waves and says hello
-    private MotionDisplay npc(Player player, Location at) {
+    private MotionDisplay npc(Player player, Location at, DisplayOptions options) {
         MotionDisplay guide = motion.model(at)
                 .npc("guide", Skin.of(player))
                 .text("speech", Component.empty(), Pose.IDENTITY.withOffset(0f, 2.55f, 0f).withScale(0.8f))
@@ -397,6 +397,9 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 .name(Component.text("Guide", NamedTextColor.GOLD))
                 .equip(org.bukkit.inventory.EquipmentSlot.HAND, ItemStack.of(Material.DIAMOND_SWORD))
                 .lookAtPlayers();
+        if (options.size() != null) {
+            guide.npc("guide").size(options.size());
+        }
         guide.onClick(click -> {
             guide.npc("guide").swing();
             guide.type("speech", Component.text("Hello, " + click.player().getName() + "!", NamedTextColor.WHITE), 2);
