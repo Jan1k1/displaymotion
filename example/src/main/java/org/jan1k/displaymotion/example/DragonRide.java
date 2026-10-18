@@ -30,6 +30,7 @@ import org.jan1k.displaymotion.paper.MotionDisplay;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.Function;
 
 import static org.jan1k.displaymotion.example.Dragon.bump;
@@ -53,10 +54,14 @@ final class DragonRide {
     private static final float CRUISE = 0.55f;
     private static final float FAST = 1.15f;
     private static final float SLOW = 0.12f;
+    private static final float BOOST_SPEED = 1.8f;
+    private static final float BOOST_FOLD = 0.35f;
     private static final float MAX_TURN = 4.5f;
     private static final float BANK = 32f;
     private static final float BEAT_RATE = (float) (2 * Math.PI / Dragon.BEAT);
     private static final int TAKE_OFF = 16;
+    private static final int BOOST_TICKS = 30;
+    private static final int BOOST_COOLDOWN = 80;
     private static final int STAY = 120;
     private static final int SHRINK = 20;
     private static final double CAMERA = 9.0;
@@ -76,6 +81,8 @@ final class DragonRide {
     private Mode mode = Mode.START;
     private int modeTicks;
     private int ticks;
+    private int boostTicks;
+    private int boostCooldown;
     private boolean letGo;
     private boolean sneaking;
     private double cameraWas = Double.NaN;
@@ -280,12 +287,14 @@ final class DragonRide {
         boolean forward = input != null && input.isForward();
         boolean back = input != null && input.isBackward();
         boolean jump = input != null && input.isJump();
+        boost(input);
+        boolean boosting = boostTicks > 0;
 
         // turn speed eases in and out, a sharp look to the side still gives a soft curve
         turnRate += (Math.clamp(off * 0.09f, -MAX_TURN, MAX_TURN) - turnRate) * 0.15f;
         heading = wrap(heading + turnRate);
-        float wantSpeed = forward ? FAST : back ? SLOW : CRUISE;
-        speed += (wantSpeed - speed) * (wantSpeed > speed ? 0.03f : 0.06f);
+        float wantSpeed = (forward ? FAST : back ? SLOW : CRUISE) * (boosting ? BOOST_SPEED : 1f);
+        speed += (wantSpeed - speed) * (boosting ? 0.12f : wantSpeed > speed ? 0.03f : 0.06f);
 
         // a few degrees around level count as level, or you could never fly straight
         float pitch = eye.getPitch();
@@ -301,7 +310,7 @@ final class DragonRide {
         wantClimb = Math.max(Math.clamp(wantClimb, -0.9f, 0.6f), Math.min(0.6f, (floor - (float) y) * 0.12f));
         climb += (wantClimb - climb) * 0.1f;
 
-        flap += ((gliding ? 0.12f : 1f) - flap) * 0.05f;
+        flap += ((boosting ? 0.15f : gliding ? 0.12f : 1f) - flap) * (boosting ? 0.12f : 0.05f);
         float wantRate = gliding ? 0.55f : 1f + 0.9f * Math.max(0f, climb / 0.6f) + 0.25f * Math.max(0f, (speed - CRUISE) / (FAST - CRUISE));
         rate += (BEAT_RATE * wantRate - rate) * 0.05f;
         brake += ((back ? 0.6f : 0f) - brake) * 0.08f;
@@ -309,6 +318,29 @@ final class DragonRide {
         look += (Math.clamp(pitch * 0.3f, -15f, 20f) - look) * 0.2f;
         steer();
         move();
+    }
+
+    private void boost(Input input) {
+        if (boostTicks > 0) {
+            boostTicks--;
+            if (boostTicks == 0) {
+                boostCooldown = BOOST_COOLDOWN;
+            }
+        } else if (boostCooldown > 0) {
+            boostCooldown--;
+            if (rider != null && !sneaking) {
+                rider.sendActionBar(boostCooldown == 0
+                        ? Component.empty()
+                        : Component.text(cooldownText(boostCooldown), NamedTextColor.GRAY));
+            }
+        } else if (input != null && input.isSprint()) {
+            boostTicks = BOOST_TICKS;
+            world.playSound(seatSpot(), Sound.ENTITY_ENDER_DRAGON_FLAP, 1.5f, 1.2f);
+        }
+    }
+
+    static String cooldownText(int ticks) {
+        return String.format(Locale.ROOT, "boost: %.1fs", ticks / 20f);
     }
 
     private void land() {
@@ -404,7 +436,8 @@ final class DragonRide {
     private void steer() {
         boolean flying = mode == Mode.FLY || mode == Mode.LAND;
         air += ((flying ? 1f : 0f) - air) * (flying ? 0.1f : 0.15f);
-        fold += ((flying ? 0f : 1f) - fold) * (flying ? 0.15f : 0.06f);
+        float wantFold = !flying ? 1f : boostTicks > 0 ? BOOST_FOLD : 0f;
+        fold += (wantFold - fold) * (flying ? 0.15f : 0.06f);
         bank += (Math.clamp(-turnRate / MAX_TURN, -1f, 1f) - bank) * 0.12f;
         bodyPitch += (Math.clamp(-climb * 45f, -28f, 32f) * air - bodyPitch) * 0.12f;
     }

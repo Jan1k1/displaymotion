@@ -1,5 +1,6 @@
 package org.jan1k.displaymotion.example;
 
+import org.bukkit.Material;
 import org.jan1k.displaymotion.Affine;
 import org.jan1k.displaymotion.Frames;
 import org.jan1k.displaymotion.paper.ModelBuilder;
@@ -10,6 +11,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DragonTest {
@@ -72,5 +74,19 @@ class DragonTest {
         assertEquals(0f, m[0] * s.x() + m[3] * s.y() + m[6] * s.z() + m[9], 1e-4f);
         assertEquals(0f, m[1] * s.x() + m[4] * s.y() + m[7] * s.z() + m[10], 1e-4f);
         assertEquals(0f, m[2] * s.x() + m[5] * s.y() + m[8] * s.z() + m[11], 1e-4f);
+    }
+
+    @Test
+    void landingGroundAndBoostCooldown() {
+        assertTrue(DragonRide.solidGround(Material.STONE, true, false));
+        assertFalse(DragonRide.solidGround(Material.AIR, false, false));
+        assertFalse(DragonRide.solidGround(Material.SHORT_GRASS, false, false));
+        assertFalse(DragonRide.solidGround(Material.OAK_LEAVES, true, false));
+        assertFalse(DragonRide.solidGround(Material.WATER, false, true));
+        assertFalse(DragonRide.solidGround(Material.LAVA, false, true));
+        assertTrue(DragonRide.unlandable(Material.OAK_LEAVES, false));
+        assertTrue(DragonRide.unlandable(Material.WATER, true));
+        assertEquals("boost: 4.0s", DragonRide.cooldownText(80));
+        assertEquals("boost: 1.5s", DragonRide.cooldownText(30));
     }
 }
