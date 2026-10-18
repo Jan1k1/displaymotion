@@ -1,15 +1,19 @@
 package org.jan1k.displaymotion.example;
 
 import io.papermc.paper.entity.TeleportFlag;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.HeightMap;
 import org.bukkit.Input;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
@@ -73,6 +77,7 @@ final class DragonRide {
     private int modeTicks;
     private int ticks;
     private boolean letGo;
+    private boolean sneaking;
     private double cameraWas = Double.NaN;
 
     private double x;
@@ -172,7 +177,14 @@ final class DragonRide {
         if (letGo || rider == null) {
             return false;
         }
-        land();
+        if (!sneaking && mode != Mode.LAND && mode != Mode.LANDED) {
+            sneaking = true;
+            if (canLand()) {
+                land();
+            } else {
+                rider.sendActionBar(Component.text("find solid ground", NamedTextColor.RED));
+            }
+        }
         return true;
     }
 
@@ -217,6 +229,8 @@ final class DragonRide {
         Input input = rider == null ? null : rider.getCurrentInput();
         if (input != null && input.isSneak()) {
             keepOn();
+        } else {
+            sneaking = false;
         }
         switch (mode) {
             case START -> start();
@@ -422,6 +436,30 @@ final class DragonRide {
 
     private double ground(double atX, double atZ) {
         return world.getHighestBlockYAt((int) Math.floor(atX), (int) Math.floor(atZ), HeightMap.MOTION_BLOCKING) + 1;
+    }
+
+    private boolean canLand() {
+        int bx = (int) Math.floor(x);
+        int bz = (int) Math.floor(z);
+        for (int by = (int) Math.floor(y); by >= world.getMinHeight(); by--) {
+            Block block = world.getBlockAt(bx, by, bz);
+            Material type = block.getType();
+            if (unlandable(type, block.isLiquid())) {
+                return false;
+            }
+            if (solidGround(type, block.isSolid(), block.isLiquid())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static boolean unlandable(Material type, boolean liquid) {
+        return liquid || type == Material.WATER || type == Material.LAVA || type.name().endsWith("_LEAVES");
+    }
+
+    static boolean solidGround(Material type, boolean solid, boolean liquid) {
+        return solid && !unlandable(type, liquid) && type != Material.AIR && !type.name().endsWith("_AIR");
     }
 
     private Flight flight() {
