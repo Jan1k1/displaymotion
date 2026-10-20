@@ -5,6 +5,7 @@ You do not need this page to use the library. Read it if you want to know why it
 ## Threads
 
 - **Main thread:** every 10 ticks it copies the online players (position, world, connection). Events for quit, teleport, respawn and world change only queue a note. Nothing else runs there.
+- **Your callbacks:** `onEnd`, `onEvent` and the `type` end run on the thread that owns the display location, `onClick` on the thread that owns the player who clicked. On Paper both are the main thread. The timers use the region schedulers, not `Bukkit.getScheduler()`.
 - **Motion thread:** one per plugin, every 50 ms. It runs your commands, decides who sees what, steps animations every 2 ticks and builds the packets.
 - **Network threads:** each player gets one task and one bundle per tick.
 - `MotionDisplay` methods only queue a command. They are safe from any thread.

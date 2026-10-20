@@ -160,7 +160,7 @@ coins.count("main", 0, 1500, 40, n -> Component.text(n + " coins", NamedTextColo
 - Colors and styles stay while it types. A model with more text parts takes the part name first: `type("title", text, 2)`.
 - Counting starts fast and slows down at the end. It can count down too.
 - Both run on the motion thread, not the main thread. Setting the text by hand stops them.
-- `type(part, text, ticksPerChar, onEnd)` runs code on the main thread when the last char shows.
+- `type(part, text, ticksPerChar, onEnd)` runs code when the last char shows, on the thread that owns the display location (the main thread on Paper).
 
 ## A leaderboard that moves
 

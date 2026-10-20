@@ -100,13 +100,13 @@ A pose never changes. Every `with...` call returns a new pose.
 
 ```java
 display.play(show);                         // whole display, replaces what plays now
-display.play(Animations.popOut(10), display::remove);   // runs remove on the main thread at the end
+display.play(Animations.popOut(10), display::remove);   // runs remove at the end
 display.play("hub", Animations.turn(0f, 0f, 360f, 60).loop());   // one part of a model
 display.stop();
 ```
 
 - `play(animation)` plays on the whole display. If something plays already, it is replaced.
-- `play(animation, onEnd)` also runs code when the animation ends. This is how you remove a display after it shrinks.
+- `play(animation, onEnd)` also runs code when the animation ends. This is how you remove a display after it shrinks. It runs on the thread that owns the display location. On Paper that is the main thread.
 - `play("part", animation)` plays on one part of a [model](models.md). The children of that part follow it.
 - `stop()` freezes the display where it is.
 - `isPlaying()` tells you if an animation plays on the whole display.
@@ -162,7 +162,7 @@ button.play("cap", PRESS);
 - `event(tick, name)` works on any animation, also on presets: `Animations.spin(40).event(20, "half")`.
 - The tick counts from the start of that animation. After `then`, the ticks of the second part move back by the length of the first part, so the event stays at the same moment.
 - In a loop the event comes again every round.
-- `onEvent` runs on the main thread, so the Bukkit API is safe there. `event.part()` is the part the animation plays on, or `null` for the whole display.
+- `onEvent` runs on the thread that owns the display location. On Paper that is the main thread, so the Bukkit API is safe there. `event.part()` is the part the animation plays on, or `null` for the whole display.
 - One handler per display. A new `onEvent` replaces the old one.
 - Events land on the frame that shows their tick. A frame is 2 ticks, so an event can come up to 1 tick early or late.
 

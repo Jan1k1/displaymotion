@@ -166,7 +166,7 @@ chest.onClick(click -> {
 - The box is a vanilla Interaction entity, sent with packets like the display. Players need no mod.
 - `hitbox(width, height)` puts the bottom center of the box at the display location. Its name is `main`.
 - For more boxes, give each one a name and an offset: `hitbox("lid", 0.8f, 0.3f, 0, 0.6, 0)`. The offset turns with the display.
-- `onClick` runs on the main thread, so you can use the Bukkit API there. `click.player()` is who clicked, `click.hitbox()` is the name of the box, `click.leftClick()` is true for a left click.
+- `onClick` runs on the thread that owns the player who clicked. On Paper that is the main thread, so you can use the Bukkit API there. `click.player()` is who clicked, `click.hitbox()` is the name of the box, `click.leftClick()` is true for a left click.
 - The box stays upright and does not follow animations. It moves with `teleport`.
 - Only players who see the display can click it. Clicks from too far away are ignored.
 
