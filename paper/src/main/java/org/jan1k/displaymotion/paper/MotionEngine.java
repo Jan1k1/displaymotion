@@ -567,10 +567,11 @@ final class MotionEngine {
     }
 
     // client teleport_duration is linear and caps at 59 ticks, so step the ease here every 2 ticks
-    void glide(DisplayState display, double x, double y, double z, int ticks, Ease ease) {
+    void glide(DisplayState display, double x, double y, double z, int ticks, Ease ease, int id) {
         if (display.removed) {
             return;
         }
+        display.glideId = id;
         display.fromX = display.x;
         display.fromY = display.y;
         display.fromZ = display.z;
@@ -1079,7 +1080,7 @@ final class MotionEngine {
             double x = lerp(display.fromX, display.toX, display.glideStep, display.glideSteps, display.glideEase);
             double y = lerp(display.fromY, display.toY, display.glideStep, display.glideSteps, display.glideEase);
             double z = lerp(display.fromZ, display.toZ, display.glideStep, display.glideSteps, display.glideEase);
-            display.handle.movedTo(x, y, z);
+            display.handle.movedTo(display.glideId, x, y, z);
             move(display, display.world, x, y, z, display.yaw, display.pitch, Frames.STEP_TICKS);
         }
     }

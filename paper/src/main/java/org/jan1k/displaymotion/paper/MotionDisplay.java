@@ -81,6 +81,10 @@ public final class MotionDisplay {
 
     private final MotionEngine engine;
     private volatile Location location;
+    // a glide step on the motion thread can land right after a teleport and put location() back on the glide,
+    // so every move gets a number and only the newest glide can write it
+    private final Object moveLock = new Object();
+    private int moves;
     private final DisplayState state;
     private final Map<String, Integer> partIndex = new HashMap<>();
     private final List<String> parts;
@@ -648,7 +652,7 @@ public final class MotionDisplay {
 
     private void place(Location to, int ticks) {
         Location copy = to.clone();
-        location = copy;
+        moved(copy);
         if (!seatEntities.isEmpty()) {
             engine.mainThread.accept(this::moveSeats);
         }
@@ -691,13 +695,29 @@ public final class MotionDisplay {
         double x = to.getX();
         double y = to.getY();
         double z = to.getZ();
-        engine.submit(() -> engine.glide(state, x, y, z, ticks, ease));
+        int glide;
+        synchronized (moveLock) {
+            glide = ++moves;
+        }
+        engine.submit(() -> engine.glide(state, x, y, z, ticks, ease, glide));
         return this;
     }
 
-    void movedTo(double x, double y, double z) {
-        Location at = location;
-        location = new Location(at.getWorld(), x, y, z, at.getYaw(), at.getPitch());
+    private void moved(Location at) {
+        synchronized (moveLock) {
+            moves++;
+            location = at;
+        }
+    }
+
+    void movedTo(int glide, double x, double y, double z) {
+        synchronized (moveLock) {
+            if (glide != moves) {
+                return;
+            }
+            Location at = location;
+            location = new Location(at.getWorld(), x, y, z, at.getYaw(), at.getPitch());
+        }
         if (!seatEntities.isEmpty()) {
             engine.mainThread.accept(this::moveSeats);
         }
@@ -832,7 +852,7 @@ public final class MotionDisplay {
         RidePose pose = selfPose(vehicle, at, poseOf(vehicle, at));
         at.setYaw(pose.yaw());
         at.setPitch(0f);
-        location = at.clone();
+        moved(at.clone());
         remember(at, pose);
         int id = vehicle.getEntityId();
         int[] passengers = vehicle.getPassengers().stream().mapToInt(Entity::getEntityId).toArray();

@@ -58,6 +58,7 @@ final class DisplayState {
     double toX;
     double toY;
     double toZ;
+    int glideId;
     int glideSteps;
     int glideStep;
     Ease glideEase = Ease.LINEAR;

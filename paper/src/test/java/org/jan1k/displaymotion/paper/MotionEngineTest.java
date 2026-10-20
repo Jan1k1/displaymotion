@@ -825,6 +825,29 @@ class MotionEngineTest {
         assertEquals(4.0, display.location().getX(), 1e-6);
     }
 
+    @Test
+    void lateGlideStepDoesNotUndoTeleport() {
+        PartState[] parts = {PartState.block("main", ENTITY, -1, 1, Pose.IDENTITY)};
+        MotionDisplay display = new MotionDisplay(engine, new Location(world(), 0, 0, 0), parts, 48);
+        engine.submit(() -> engine.add(display.state()));
+        tick();
+        tick();
+        display.moveTo(new Location(world(), 20, 0, 0), 8);
+        tick();
+        tick();
+        int glide = display.state().glideId;
+
+        display.teleport(new Location(world(), -5, 1, 3));
+        display.movedTo(glide, 7, 0, 0);
+        assertEquals(-5.0, display.location().getX(), 1e-6);
+
+        for (int i = 0; i < 8; i++) {
+            tick();
+        }
+        assertEquals(-5.0, display.location().getX(), 1e-6);
+        assertEquals(1.0, display.location().getY(), 1e-6);
+    }
+
     private MotionDisplay npcDisplay() {
         PartState[] parts = {PartState.npc("main", ENTITY, -1, Skin.name("Notch"))};
         MotionDisplay npc = new MotionDisplay(engine, new Location(world(), 0, 0, 0), parts, 48);

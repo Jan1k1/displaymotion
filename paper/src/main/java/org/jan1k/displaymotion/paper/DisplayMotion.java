@@ -151,7 +151,6 @@ public final class DisplayMotion {
         return model(location).text(MAIN_PART, text, Pose.IDENTITY).spawn();
     }
 
-    /** Starts a model made of many parts. Add parts, then call {@link ModelBuilder#spawn()}. */
     /**
      * Starts a leaderboard here, facing where the location looks. Rows go down from it.
      * Fill it with {@link Leaderboard#update(java.util.List)}. Main thread only.
@@ -166,6 +165,7 @@ public final class DisplayMotion {
         return effects;
     }
 
+    /** Starts a model made of many parts. Add parts, then call {@link ModelBuilder#spawn()}. */
     public ModelBuilder model(Location location) {
         World world = requireWorld(location);
         return new ModelBuilder(this, location.clone(), world);
