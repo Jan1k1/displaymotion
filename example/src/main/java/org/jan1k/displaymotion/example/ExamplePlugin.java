@@ -190,6 +190,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 .then(spawns("windmill", EnumSet.of(Part.BLOCK), player -> windmill(inFront(player, 6))))
                 .then(spawns("text", EnumSet.of(Part.TEXT), true, this::text))
                 .then(spawns("pet", EnumSet.of(Part.ITEM), this::pet))
+                .then(spawns("path", EnumSet.of(Part.ITEM), this::path))
                 .then(spawns("hat", EnumSet.of(Part.BLOCK, Part.ITEM), this::hat))
                 .then(spawns("backpack", EnumSet.of(Part.BLOCK), this::backpack))
                 .then(Commands.literal("selfview").executes(context -> selfView(context.getSource())))
@@ -608,6 +609,20 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
         return motion.item(petSpot(player), ItemStack.of(Material.DIAMOND_SWORD), ItemDisplay.ItemDisplayTransform.GROUND)
                 .play(SHOW)
                 .follow(player, new Vector(0.7, 1.7, -0.6), 5);
+    }
+
+    // flies one loop around you on a smooth curve, up and down on the way, and stops in front of you again
+    private MotionDisplay path(Player player) {
+        Location center = player.getLocation();
+        List<Location> loop = new ArrayList<>();
+        for (int i = 1; i <= 6; i++) {
+            double angle = i * Math.PI / 3;
+            Vector around = forward(center, 3f * (float) Math.cos(angle)).add(sideways(center, 3f * (float) Math.sin(angle)));
+            loop.add(center.clone().add(around).add(0, 1.5 + Math.sin(angle * 2) * 1.2, 0));
+        }
+        return motion.item(inFront(player, 3).add(0, 1.5, 0), ItemStack.of(Material.DIAMOND_SWORD), ItemDisplay.ItemDisplayTransform.GROUND)
+                .play(SHOW)
+                .moveAlong(loop, 120, Ease.IN_OUT);
     }
 
     // a crown on the head, it turns where the player looks. 0 is the top of the hitbox (1.8), the drawn head
