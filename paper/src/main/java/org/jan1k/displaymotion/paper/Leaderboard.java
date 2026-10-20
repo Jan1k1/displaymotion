@@ -1,5 +1,6 @@
 package org.jan1k.displaymotion.paper;
 
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
@@ -14,7 +15,6 @@ import org.bukkit.entity.ItemDisplay;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.plugin.Plugin;
-import org.bukkit.scheduler.BukkitTask;
 import org.jan1k.displaymotion.Animation;
 import org.jan1k.displaymotion.Animations;
 import org.jan1k.displaymotion.Ease;
@@ -100,7 +100,7 @@ public final class Leaderboard {
         final MotionDisplay display;
         int rank;
         long to;
-        BukkitTask arrow;
+        ScheduledTask arrow;
 
         Row(MotionDisplay display, int rank, long score) {
             this.display = display;
@@ -260,7 +260,7 @@ public final class Leaderboard {
         if (row.arrow != null) {
             row.arrow.cancel();
         }
-        row.arrow = Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        row.arrow = Bukkit.getRegionScheduler().runDelayed(plugin, origin, task -> {
             if (!row.display.isRemoved()) {
                 row.display.text("arrow", Component.empty());
             }
