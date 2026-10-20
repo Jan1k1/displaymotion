@@ -848,6 +848,44 @@ class MotionEngineTest {
         assertEquals(1.0, display.location().getY(), 1e-6);
     }
 
+    @Test
+    void moveAlongCurvesThroughThePointsAndKeepsRotation() {
+        PartState[] parts = {PartState.block("main", ENTITY, -1, 1, Pose.IDENTITY)};
+        MotionDisplay display = new MotionDisplay(engine, new Location(world(), 0, 0, 0, 90f, 15f), parts, 48);
+        engine.submit(() -> engine.add(display.state()));
+        tick();
+        tick();
+
+        display.moveAlong(List.of(new Location(world(), 5, 1, 5), new Location(world(), 10, 0, 0)), 80);
+        double closest = Double.MAX_VALUE;
+        double furthestZ = 0;
+        int teleports = 0;
+        for (int i = 0; i < 90; i++) {
+            for (Packet packet : tick()) {
+                if (packet.kind().equals("teleport")) {
+                    teleports++;
+                    Location at = display.location();
+                    closest = Math.min(closest, at.toVector().distance(new org.bukkit.util.Vector(5, 1, 5)));
+                    furthestZ = Math.max(furthestZ, at.getZ());
+                }
+            }
+        }
+
+        assertEquals(40, teleports);
+        assertTrue(closest < 0.3, "missed the middle point by " + closest);
+        assertTrue(furthestZ > 4.5);
+        assertEquals(10.0, display.location().getX(), 1e-6);
+        assertEquals(0.0, display.location().getY(), 1e-6);
+        assertEquals(0.0, display.location().getZ(), 1e-6);
+        assertEquals(90f, display.location().getYaw());
+        assertEquals(15f, display.location().getPitch());
+
+        UUID other = UUID.randomUUID();
+        World otherWorld = FakePacketEvents.proxy(World.class, (method, args) -> method.equals("getUID") ? other : null);
+        assertThrows(IllegalArgumentException.class, () -> display.moveAlong(List.of(), 20));
+        assertThrows(IllegalArgumentException.class, () -> display.moveAlong(List.of(new Location(otherWorld, 0, 0, 0)), 20));
+    }
+
     private MotionDisplay npcDisplay() {
         PartState[] parts = {PartState.npc("main", ENTITY, -1, Skin.name("Notch"))};
         MotionDisplay npc = new MotionDisplay(engine, new Location(world(), 0, 0, 0), parts, 48);

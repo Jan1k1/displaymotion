@@ -572,6 +572,7 @@ final class MotionEngine {
             return;
         }
         display.glideId = id;
+        display.glideCurve = null;
         display.fromX = display.x;
         display.fromY = display.y;
         display.fromZ = display.z;
@@ -582,6 +583,35 @@ final class MotionEngine {
         display.glideStep = 0;
         display.glideEase = ease;
         display.active = true;
+    }
+
+    // the curve starts where the display is now, only the motion thread knows that for sure
+    void glideAlong(DisplayState display, double[] points, int ticks, Ease ease, int id) {
+        if (display.removed) {
+            return;
+        }
+        double[] all = new double[points.length + 3];
+        all[0] = display.x;
+        all[1] = display.y;
+        all[2] = display.z;
+        System.arraycopy(points, 0, all, 3, points.length);
+        Curve curve = Curve.through(all);
+        double[] end = curve.end();
+        glide(display, end[0], end[1], end[2], ticks, ease, id);
+        display.glideCurve = curve;
+    }
+
+    private static double[] glideSpot(DisplayState display) {
+        int step = display.glideStep;
+        int steps = display.glideSteps;
+        Ease ease = display.glideEase;
+        if (display.glideCurve != null) {
+            return step >= steps ? display.glideCurve.end() : display.glideCurve.at(ease.apply(step / (float) steps));
+        }
+        return new double[]{
+                lerp(display.fromX, display.toX, step, steps, ease),
+                lerp(display.fromY, display.toY, step, steps, ease),
+                lerp(display.fromZ, display.toZ, step, steps, ease)};
     }
 
     // last step snaps to the exact spot so float math doesnt leave it a hair off
@@ -1077,11 +1107,9 @@ final class MotionEngine {
             }
         }
         if (gliding) {
-            double x = lerp(display.fromX, display.toX, display.glideStep, display.glideSteps, display.glideEase);
-            double y = lerp(display.fromY, display.toY, display.glideStep, display.glideSteps, display.glideEase);
-            double z = lerp(display.fromZ, display.toZ, display.glideStep, display.glideSteps, display.glideEase);
-            display.handle.movedTo(display.glideId, x, y, z);
-            move(display, display.world, x, y, z, display.yaw, display.pitch, Frames.STEP_TICKS);
+            double[] at = glideSpot(display);
+            display.handle.movedTo(display.glideId, at[0], at[1], at[2]);
+            move(display, display.world, at[0], at[1], at[2], display.yaw, display.pitch, Frames.STEP_TICKS);
         }
     }
 

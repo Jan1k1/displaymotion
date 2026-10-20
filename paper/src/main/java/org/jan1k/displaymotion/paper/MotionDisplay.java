@@ -51,6 +51,8 @@ public final class MotionDisplay {
     private static final int COUNT_EVERY_TICKS = 2;
     /** The biggest hitbox side, in blocks. */
     public static final float MAX_HITBOX_SIZE = 16f;
+    /** The most points for {@link #moveAlong(List, int)}. */
+    public static final int MAX_PATH_POINTS = 256;
 
     // a bit more then survival reach, so a click on the far edge of a big box still counts
     private static final double CLICK_REACH = 8.0;
@@ -672,7 +674,8 @@ public final class MotionDisplay {
 
     /**
      * Glides the whole display from where it is now to {@code to} over {@code ticks} with {@code ease},
-     * keeping its rotation. A new {@code moveTo}, {@link #teleport(Location)} or {@link #follow(Entity)} stops the old one.
+     * keeping its rotation. A new {@code moveTo}, {@link #moveAlong(List, int)}, {@link #teleport(Location)} or
+     * {@link #follow(Entity)} stops the old one.
      */
     public MotionDisplay moveTo(Location to, int ticks, Ease ease) {
         Objects.requireNonNull(to, "location");
@@ -680,10 +683,60 @@ public final class MotionDisplay {
         if (to.getWorld() == null || !to.getWorld().getUID().equals(location.getWorld().getUID())) {
             throw new IllegalArgumentException("location must be in the same world");
         }
+        checkGlideTicks(ticks);
+        requireAlive();
+        double x = to.getX();
+        double y = to.getY();
+        double z = to.getZ();
+        int glide = startGlide();
+        engine.submit(() -> engine.glide(state, x, y, z, ticks, ease, glide));
+        return this;
+    }
+
+    /** Glides the whole display along a smooth curve through the points, see {@link #moveAlong(List, int, Ease)}. */
+    public MotionDisplay moveAlong(List<Location> points, int ticks) {
+        return moveAlong(points, ticks, Ease.LINEAR);
+    }
+
+    /**
+     * Glides the whole display from where it is now along a smooth curve through {@code points} over {@code ticks},
+     * keeping its rotation. It ends on the last point. With {@code LINEAR} it moves at the same speed the whole way,
+     * other eases change the speed like on {@link #moveTo(Location, int, Ease)}. Good for flights, cutscenes and
+     * projectiles. A new {@code moveAlong}, {@link #moveTo(Location, int)}, {@link #teleport(Location)} or
+     * {@link #follow(Entity)} stops the old one.
+     * @throws IllegalArgumentException if there are no points, more than {@link #MAX_PATH_POINTS}, or a point is in another world
+     */
+    public MotionDisplay moveAlong(List<Location> points, int ticks, Ease ease) {
+        Objects.requireNonNull(points, "points");
+        Objects.requireNonNull(ease, "ease");
+        if (points.isEmpty() || points.size() > MAX_PATH_POINTS) {
+            throw new IllegalArgumentException("a path has 1 to " + MAX_PATH_POINTS + " points, got " + points.size());
+        }
+        UUID world = location.getWorld().getUID();
+        double[] xyz = new double[points.size() * 3];
+        for (int i = 0; i < points.size(); i++) {
+            Location point = Objects.requireNonNull(points.get(i), "point");
+            if (point.getWorld() == null || !point.getWorld().getUID().equals(world)) {
+                throw new IllegalArgumentException("every point must be in the same world as the display");
+            }
+            xyz[i * 3] = point.getX();
+            xyz[i * 3 + 1] = point.getY();
+            xyz[i * 3 + 2] = point.getZ();
+        }
+        checkGlideTicks(ticks);
+        requireAlive();
+        int glide = startGlide();
+        engine.submit(() -> engine.glideAlong(state, xyz, ticks, ease, glide));
+        return this;
+    }
+
+    private static void checkGlideTicks(int ticks) {
         if (ticks < 1 || ticks > Frames.MAX_TICKS) {
             throw new IllegalArgumentException("ticks must be 1 to " + Frames.MAX_TICKS + ", got " + ticks);
         }
-        requireAlive();
+    }
+
+    private int startGlide() {
         if (vehicle != null) {
             vehicle = null;
             engine.riding.remove(this);
@@ -692,15 +745,9 @@ public final class MotionDisplay {
         if (followed != null) {
             unfollow();
         }
-        double x = to.getX();
-        double y = to.getY();
-        double z = to.getZ();
-        int glide;
         synchronized (moveLock) {
-            glide = ++moves;
+            return ++moves;
         }
-        engine.submit(() -> engine.glide(state, x, y, z, ticks, ease, glide));
-        return this;
     }
 
     private void moved(Location at) {

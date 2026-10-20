@@ -62,6 +62,8 @@ final class DisplayState {
     int glideSteps;
     int glideStep;
     Ease glideEase = Ease.LINEAR;
+    // null for a straight moveTo
+    Curve glideCurve;
 
     double range;
     int index;
