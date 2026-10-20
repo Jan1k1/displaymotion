@@ -46,6 +46,7 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 
@@ -104,8 +105,9 @@ final class MotionEngine {
 
     private volatile Snapshot snapshot = new Snapshot(0L, new PlayerView[0]);
     volatile boolean debug;
-    // tests swap this for Runnable::run, there is no server to schedule on
-    Consumer<Runnable> mainThread;
+    // runs a task on the thread that owns that spot, the main thread on paper and the region thread on folia.
+    // tests swap this for (at, task) -> task.run(), there is no server to schedule on
+    BiConsumer<org.bukkit.Location, Runnable> regionThread;
     private Snapshot seen;
     private Object bundle;
     private long tick;
@@ -121,9 +123,9 @@ final class MotionEngine {
         this.plugin = plugin;
         this.protocol = PacketEvents.getAPI().getProtocolManager();
         this.packet = new DisplayPacket();
-        this.mainThread = task -> {
+        this.regionThread = (at, task) -> {
             if (plugin.isEnabled()) {
-                Bukkit.getScheduler().runTask(plugin, task);
+                Bukkit.getRegionScheduler().execute(plugin, at, task);
             }
         };
         if (scheduled) {
@@ -886,7 +888,7 @@ final class MotionEngine {
         }
     }
 
-    // a text that changes over time, like typing or counting. it runs here every tick, not on the main thread
+    // a text that changes over time, like typing or counting. it runs here every tick, not on the server thread
     record TextJob(DisplayState display, int part, int ticks, int every, java.util.function.IntFunction<Component> frame,
                    Runnable onEnd, int[] tick) {
     }
@@ -912,7 +914,7 @@ final class MotionEngine {
                 texts.remove(i);
                 setText(job.display, job.part, job.frame.apply(job.ticks));
                 if (job.onEnd != null) {
-                    mainThread.accept(job.onEnd);
+                    regionThread.accept(job.display.handle.location(), job.onEnd);
                 }
             } else if (now % job.every == 0) {
                 setText(job.display, job.part, job.frame.apply(now));
@@ -1045,7 +1047,7 @@ final class MotionEngine {
                     display.handle.playing = false;
                 }
                 if (track.onEnd != null) {
-                    mainThread.accept(track.onEnd);
+                    regionThread.accept(display.handle.location(), track.onEnd);
                 }
                 continue;
             }
@@ -1122,7 +1124,7 @@ final class MotionEngine {
                 String[] events = track.frames.eventsAt(next);
                 if (events.length > 0 && display.handle.hearsEvents()) {
                     String part = t == 0 ? null : display.parts[t - 1].name;
-                    mainThread.accept(() -> display.handle.reached(part, events));
+                    regionThread.accept(display.handle.location(), () -> display.handle.reached(part, events));
                 }
             }
             track.moved |= next != track.frame;

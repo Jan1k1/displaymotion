@@ -534,7 +534,7 @@ class MotionEngineTest {
 
     @Test
     void eventsReachTheHandlerWithTheirPart() {
-        engine.mainThread = Runnable::run;
+        engine.regionThread = (at, task) -> task.run();
         List<String> heard = new ArrayList<>();
         MotionDisplay display = display().onEvent(event -> heard.add(event.name() + "@" + event.part()));
 

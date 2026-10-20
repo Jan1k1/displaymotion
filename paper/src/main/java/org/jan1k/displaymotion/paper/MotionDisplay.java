@@ -147,7 +147,8 @@ public final class MotionDisplay {
     }
 
     /**
-     * Same as {@link #play(Animation)}. {@code onEnd} runs once on the main thread when the animation reaches its end.
+     * Same as {@link #play(Animation)}. {@code onEnd} runs once when the animation reaches its end, on the thread
+     * that owns the display location (the main thread on Paper).
      * It never runs for an endless animation, or after {@link #stop()} or a new play.
      */
     public MotionDisplay play(Animation animation, Runnable onEnd) {
@@ -162,7 +163,7 @@ public final class MotionDisplay {
         return play(part, animation, null);
     }
 
-    /** Plays on one part and runs {@code onEnd} on the main thread when it ends. */
+    /** Plays on one part and runs {@code onEnd} on the thread that owns the display location when it ends. */
     public MotionDisplay play(String part, Animation animation, Runnable onEnd) {
         int track = track(part);
         check(animation);
@@ -555,7 +556,10 @@ public final class MotionDisplay {
         return type(textPart(part), text, ticksPerChar, null);
     }
 
-    /** Same as {@link #type(String, Component, int)}, and runs {@code onEnd} on the main thread when the last char shows. */
+    /**
+     * Same as {@link #type(String, Component, int)}, and runs {@code onEnd} when the last char shows,
+     * on the thread that owns the display location (the main thread on Paper).
+     */
     public MotionDisplay type(String part, Component text, int ticksPerChar, Runnable onEnd) {
         return type(textPart(part), text, ticksPerChar, onEnd);
     }
@@ -654,7 +658,7 @@ public final class MotionDisplay {
         Location copy = to.clone();
         moved(copy);
         if (!seatEntities.isEmpty()) {
-            engine.mainThread.accept(this::moveSeats);
+            engine.regionThread.accept(location, this::moveSeats);
         }
         UUID world = copy.getWorld().getUID();
         double x = copy.getX();
@@ -719,7 +723,7 @@ public final class MotionDisplay {
             location = new Location(at.getWorld(), x, y, z, at.getYaw(), at.getPitch());
         }
         if (!seatEntities.isEmpty()) {
-            engine.mainThread.accept(this::moveSeats);
+            engine.regionThread.accept(location, this::moveSeats);
         }
     }
 
@@ -1195,8 +1199,9 @@ public final class MotionDisplay {
     }
 
     /**
-     * Runs when a player left or right clicks one of the hitboxes. It runs on the main thread,
-     * so the Bukkit API is safe there. A new call replaces the old handler, {@code null} removes it.
+     * Runs when a player left or right clicks one of the hitboxes. It runs on the thread that owns that player
+     * (the main thread on Paper), so the Bukkit API is safe for the player there.
+     * A new call replaces the old handler, {@code null} removes it.
      */
     public MotionDisplay onClick(Consumer<Click> handler) {
         requireAlive();
@@ -1206,7 +1211,8 @@ public final class MotionDisplay {
 
     /**
      * Runs when a playing animation reaches an event added with {@link Animation#event(int, String)}.
-     * It runs on the main thread. A new call replaces the old handler, {@code null} removes it.
+     * It runs on the thread that owns the display location (the main thread on Paper).
+     * A new call replaces the old handler, {@code null} removes it.
      */
     public MotionDisplay onEvent(Consumer<DisplayEvent> handler) {
         requireAlive();
@@ -1285,7 +1291,7 @@ public final class MotionDisplay {
             if (Bukkit.isPrimaryThread()) {
                 removeSeats();
             } else {
-                engine.mainThread.accept(this::removeSeats);
+                engine.regionThread.accept(location, this::removeSeats);
             }
         }
         engine.submitQuietly(() -> engine.remove(state));
