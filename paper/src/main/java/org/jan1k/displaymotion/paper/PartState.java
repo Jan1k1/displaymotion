@@ -45,6 +45,10 @@ final class PartState {
     int changes;
     float cullWidth;
     float cullHeight;
+    // at scale 0, so the client has view range 0 for it and does not draw it at all. see Composer.hide
+    boolean hidden;
+    // engine tick when a part that went to scale 0 gets hidden, -1 when nothing waits
+    long hideAfter = -1;
 
     Component text;
     boolean glowing;

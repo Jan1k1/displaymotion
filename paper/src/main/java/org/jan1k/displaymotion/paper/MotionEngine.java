@@ -795,6 +795,8 @@ final class MotionEngine {
     }
 
     private void tick() {
+        // commands run as part of the tick that comes now
+        composer.now = tick + 1;
         drainCommands();
         tick++;
 
@@ -1051,6 +1053,35 @@ final class MotionEngine {
                 }
             }
         }
+        hideCollapsed();
+    }
+
+    // after the steps, so a part that grows again in this step is not hidden first
+    private void hideCollapsed() {
+        List<DisplayState> waiting = composer.hiding;
+        for (int i = waiting.size() - 1; i >= 0; i--) {
+            DisplayState display = waiting.get(i);
+            boolean more = false;
+            for (PartState part : display.parts) {
+                if (part.hideAfter < 0 || display.removed) {
+                    continue;
+                }
+                if (tick < part.hideAfter) {
+                    more = true;
+                    continue;
+                }
+                part.hideAfter = -1;
+                part.hidden = true;
+                List<Viewer> targets = nearViewers(display);
+                if (!display.fresh && !targets.isEmpty()) {
+                    sendToAll(targets, encode(packet.range(part, display.clientRange()), targets.getFirst().channel), false);
+                }
+            }
+            if (!more) {
+                display.hiding = false;
+                waiting.remove(i);
+            }
+        }
     }
 
     private void stepDisplay(DisplayState display) {
@@ -1280,10 +1311,10 @@ final class MotionEngine {
                 continue;
             }
             if (part.changes != 0 && (wearer == null || targets.size() > 1)) {
-                sendToAll(targets, wearer, encode(packet.frame(part, part.changes, duration), targets.getFirst().channel), true);
+                sendToAll(targets, wearer, encode(packet.frame(part, part.changes, duration, display.clientRange()), targets.getFirst().channel), true);
             }
             if (wearer != null && part.ownChanges != 0) {
-                sendToAll(List.of(wearer), null, encode(packet.frame(part, part.own, part.ownChanges, duration), wearer.channel), true);
+                sendToAll(List.of(wearer), null, encode(packet.frame(part, part.own, part.ownChanges, duration, display.clientRange()), wearer.channel), true);
             }
         }
     }

@@ -184,10 +184,81 @@ class MotionEngineTest {
         List<Float> scales = new ArrayList<>();
         for (int i = 0; i < 60; i++) {
             for (Packet packet : tick()) {
-                scales.add(((Vector3f) value(packet, 12)).x);
+                if (has(packet, 12)) {
+                    scales.add(((Vector3f) value(packet, 12)).x);
+                }
             }
         }
         return scales;
+    }
+
+    @Test
+    void partAtScaleZeroIsNotDrawnUntilItGrows() {
+        Animation wait = Animation.keyframes()
+                .at(0, Pose.IDENTITY.withScale(0f))
+                .at(20, Pose.IDENTITY.withScale(0f))
+                .at(30, Pose.IDENTITY, Ease.OUT)
+                .build();
+        display().play(wait);
+        tick();
+        List<Packet> spawn = tick();
+        assertEquals(52f / 64f, (float) value(spawn.get(2), 17), 1e-6f);
+
+        List<Float> ranges = new ArrayList<>();
+        int frames = 0;
+        for (int i = 0; i < 16; i++) {
+            for (Packet packet : tick()) {
+                if (has(packet, 17)) {
+                    ranges.add((float) value(packet, 17));
+                }
+                if (has(packet, 12)) {
+                    frames++;
+                }
+            }
+        }
+        assertEquals(List.of(0f), ranges);
+        assertEquals(0, frames);
+
+        Packet first = null;
+        for (int i = 0; i < 20 && first == null; i++) {
+            for (Packet packet : tick()) {
+                if (first == null && has(packet, 12)) {
+                    first = packet;
+                }
+            }
+        }
+        assertNotNull(first);
+        assertTrue(((Vector3f) value(first, 12)).x > 0f);
+        assertEquals(52f / 64f, (float) value(first, 17), 1e-6f);
+    }
+
+    @Test
+    void hiddenChildGetsNoFramesWhileItsParentMoves() {
+        PartState[] parts = {
+                PartState.block("body", ENTITY, -1, 1, Pose.IDENTITY),
+                PartState.block("flame", ENTITY + 1, 0, 1, Pose.IDENTITY.withScale(0f))};
+        MotionDisplay display = new MotionDisplay(engine, new Location(world(), 0, 0, 0), parts, 48);
+        engine.submit(() -> engine.add(display.state()));
+        display.play(Animations.spin(40));
+        tick();
+        tick();
+        for (int i = 0; i < 6; i++) {
+            tick();
+        }
+
+        int body = 0;
+        int flame = 0;
+        for (int i = 0; i < 20; i++) {
+            for (Packet packet : tick()) {
+                if (packet.entity() == ENTITY) {
+                    body++;
+                } else if (packet.entity() == ENTITY + 1) {
+                    flame++;
+                }
+            }
+        }
+        assertTrue(body >= 9);
+        assertEquals(0, flame);
     }
 
     @Test
@@ -1014,6 +1085,10 @@ class MotionEngineTest {
 
     private static List<String> kinds(List<Packet> packets) {
         return packets.stream().map(Packet::kind).toList();
+    }
+
+    private static boolean has(Packet packet, int slot) {
+        return packet.data().stream().anyMatch(entry -> entry.getIndex() == slot);
     }
 
     private static Object value(Packet packet, int slot) {

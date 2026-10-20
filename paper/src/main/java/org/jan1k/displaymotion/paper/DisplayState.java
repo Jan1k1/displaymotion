@@ -72,6 +72,8 @@ final class DisplayState {
     boolean removed;
     boolean active;
     boolean stale;
+    // in Composer.hiding
+    boolean hiding;
 
     Object[] spawnBuffers;
     Object destroyBuffer;

@@ -14,6 +14,7 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
     static final int RIGHT_ROTATION = 8;
     static final int ALL = TRANSLATION | LEFT_ROTATION | SCALE | RIGHT_ROTATION;
     static final int BOX = 16;
+    static final int VIEW = 32;
 
     private static final int FLAGS_SLOT = 0;
     private static final int START_DELAY_SLOT = 8;
@@ -79,13 +80,13 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
         componentType = EntityDataTypes.ADV_COMPONENT.getId(version);
     }
 
-    DisplayPacket frame(PartState part, int changes, int duration) {
-        return frame(part, part.sent, changes, duration);
+    DisplayPacket frame(PartState part, int changes, int duration, double range) {
+        return frame(part, part.sent, changes, duration, range);
     }
 
     // values is part.sent, or part.own for the player that wears a riding display
-    DisplayPacket frame(PartState part, float[] values, int changes, int duration) {
-        set(part, FRAME, changes, duration, 0);
+    DisplayPacket frame(PartState part, float[] values, int changes, int duration, double range) {
+        set(part, FRAME, changes, duration, range);
         this.values = values;
         return this;
     }
@@ -162,6 +163,9 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
         if ((changes & BOX) != 0) {
             writeBox();
         }
+        if ((changes & VIEW) != 0) {
+            writeViewRange();
+        }
 
         if ((changes & TRANSLATION) != 0) {
             entry(TRANSLATION_SLOT, vectorType);
@@ -203,9 +207,10 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
         writeVarInt(moveTicks);
     }
 
+    // 0 for a hidden part, the client checks distance < view_range * 64 so it never draws it
     private void writeViewRange() {
         entry(VIEW_RANGE_SLOT, floatType);
-        writeFloat((float) (range / BLOCKS_PER_VIEW_RANGE));
+        writeFloat(part.hidden ? 0f : (float) (range / BLOCKS_PER_VIEW_RANGE));
     }
 
     private void writeLook() {
