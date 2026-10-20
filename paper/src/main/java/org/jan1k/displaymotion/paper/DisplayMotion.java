@@ -16,6 +16,7 @@ import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientAt
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientInteractEntity;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSetPassengers;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSpawnEntity;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -36,7 +37,6 @@ import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.server.PluginDisableEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
-import org.bukkit.scheduler.BukkitTask;
 import org.jan1k.displaymotion.Pose;
 import org.jan1k.displaymotion.paper.bstats.Metrics;
 
@@ -63,8 +63,8 @@ public final class DisplayMotion {
     private final MotionEngine engine;
     private final Events events = new Events();
     private final Effects effects = new Effects(this);
-    private final BukkitTask snapshotTask;
-    private final BukkitTask rideTask;
+    private final ScheduledTask snapshotTask;
+    private final ScheduledTask rideTask;
     private final Location rideScratch = new Location(null, 0, 0, 0);
     private final PacketListenerCommon clicks;
     private final Location scratch = new Location(null, 0, 0, 0);
@@ -74,8 +74,9 @@ public final class DisplayMotion {
         this.plugin = plugin;
         this.engine = new MotionEngine(plugin);
         Bukkit.getPluginManager().registerEvents(events, plugin);
-        this.snapshotTask = Bukkit.getScheduler().runTaskTimer(plugin, this::snapshot, 0L, VIEW_CHECK_TICKS);
-        this.rideTask = Bukkit.getScheduler().runTaskTimer(plugin, this::followVehicles, 1L, 1L);
+        // the global region is the main thread on paper. folia wants a first delay of at least 1
+        this.snapshotTask = Bukkit.getGlobalRegionScheduler().runAtFixedRate(plugin, task -> snapshot(), 1L, VIEW_CHECK_TICKS);
+        this.rideTask = Bukkit.getGlobalRegionScheduler().runAtFixedRate(plugin, task -> followVehicles(), 1L, 1L);
         this.clicks = PacketEvents.getAPI().getEventManager().registerListener(new Packets(), PacketListenerPriority.NORMAL);
         if (metrics && !insidePlugin()) {
             // shows which plugins use the library, owners turn it off in plugins/bStats/config.yml
@@ -319,10 +320,12 @@ public final class DisplayMotion {
             event.setCancelled(true);
             UUID id = event.getUser().getUUID();
             engine.debug((left ? "left" : "right") + " click on hitbox '" + hitbox.name + "' (" + entityId + ") by " + id);
-            if (id == null || !plugin.isEnabled()) {
+            Player player = event.getPlayer();
+            if (id == null || player == null || !plugin.isEnabled()) {
                 return;
             }
-            Bukkit.getScheduler().runTask(plugin, () -> hitbox.handle.click(id, hitbox, left));
+            // the thread that owns the player, so the handler can touch them right away. null means they already left
+            player.getScheduler().run(plugin, task -> hitbox.handle.click(id, hitbox, left), null);
         }
     }
 
