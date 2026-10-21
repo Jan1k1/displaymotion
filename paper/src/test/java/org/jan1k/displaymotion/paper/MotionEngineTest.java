@@ -233,6 +233,40 @@ class MotionEngineTest {
     }
 
     @Test
+    void tinyPartGetsAShortRangeAndGrowsBackWhenItGetsBig() {
+        PartState[] parts = {
+                PartState.block("body", ENTITY, -1, 1, Pose.IDENTITY),
+                PartState.block("spark", ENTITY + 1, -1, 1, Pose.IDENTITY.withScale(0.05f))};
+        MotionDisplay display = new MotionDisplay(engine, new Location(world(), 0, 0, 0), parts, 48);
+        engine.submit(() -> engine.add(display.state()));
+        tick();
+        float body = -1f;
+        float spark = -1f;
+        for (Packet packet : tick()) {
+            if (has(packet, 17)) {
+                if (packet.entity() == ENTITY) {
+                    body = (float) value(packet, 17);
+                } else if (packet.entity() == ENTITY + 1) {
+                    spark = (float) value(packet, 17);
+                }
+            }
+        }
+        assertEquals(52f / 64f, body, 1e-6f);
+        assertTrue(spark > 0f && spark < 52f / 64f, "spark range " + spark);
+
+        display.scale("spark", 20f, 10);
+        float last = spark;
+        for (int i = 0; i < 30; i++) {
+            for (Packet packet : tick()) {
+                if (packet.entity() == ENTITY + 1 && has(packet, 17)) {
+                    last = (float) value(packet, 17);
+                }
+            }
+        }
+        assertEquals(52f / 64f, last, 1e-6f);
+    }
+
+    @Test
     void hiddenChildGetsNoFramesWhileItsParentMoves() {
         PartState[] parts = {
                 PartState.block("body", ENTITY, -1, 1, Pose.IDENTITY),

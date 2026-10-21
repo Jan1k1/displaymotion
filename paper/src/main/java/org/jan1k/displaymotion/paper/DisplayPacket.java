@@ -207,10 +207,11 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
         writeVarInt(moveTicks);
     }
 
-    // 0 for a hidden part, the client checks distance < view_range * 64 so it never draws it
+    // 0 for a hidden part, the client checks distance < view_range * 64 so it never draws it.
+    // else the smaller of the display range and the size range, see Composer.sizeRange
     private void writeViewRange() {
         entry(VIEW_RANGE_SLOT, floatType);
-        writeFloat(part.hidden ? 0f : (float) (range / BLOCKS_PER_VIEW_RANGE));
+        writeFloat(part.hidden ? 0f : (float) (Math.min(range, part.sizeRange) / BLOCKS_PER_VIEW_RANGE));
     }
 
     private void writeLook() {

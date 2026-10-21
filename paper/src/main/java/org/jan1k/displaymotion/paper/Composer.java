@@ -14,6 +14,10 @@ final class Composer {
     private static final float BOX_GROWTH = 1.25f;
     private static final float BELOW_TOLERANCE = 0.001f;
     private static final float GONE = 1e-4f;
+    // a part under 3 pixels on a 1080p screen with fov 70 is not worth a draw. thats 295 blocks away per block of size
+    private static final double BLOCKS_PER_SIZE = 1.0 / (3.0 * Math.toRadians(70.0) / 1080.0);
+    // grow with some room, a part that pops in would send a new range every frame
+    private static final double RANGE_GROWTH = 1.25;
 
     // the engine tick, set before each compose
     long now;
@@ -108,7 +112,7 @@ final class Composer {
             if (cullBox(part, display.pitch == 0f)) {
                 part.changes |= DisplayPacket.BOX;
             }
-            if (shown) {
+            if (shown | sizeRange(display, part)) {
                 part.changes |= DisplayPacket.VIEW;
             }
             int extras = part.changes & (DisplayPacket.BOX | DisplayPacket.VIEW);
@@ -152,6 +156,36 @@ final class Composer {
             }
         }
         return false;
+    }
+
+    // the client measures the distance to the display spot, not to the part, so the way from there to the
+    // part goes on top. never gets smaller, like the culling box. text has no size we know, it keeps the full range
+    private boolean sizeRange(DisplayState display, PartState part) {
+        if (part.kind == PartState.TEXT || part.sized && part.sizeRange >= display.clientRange()) {
+            return false;
+        }
+        float low = part.isBlock() ? 0f : -0.5f;
+        float mid = low + 0.5f;
+        float cx = local[0] * mid + local[3] * mid + local[6] * mid + local[9];
+        float cy = local[1] * mid + local[4] * mid + local[7] * mid + local[10];
+        float cz = local[2] * mid + local[5] * mid + local[8] * mid + local[11];
+        float radius = 0f;
+        for (int corner = 0; corner < 8; corner++) {
+            float x = (corner & 1) == 0 ? low : low + 1f;
+            float y = (corner & 2) == 0 ? low : low + 1f;
+            float z = (corner & 4) == 0 ? low : low + 1f;
+            float dx = local[0] * x + local[3] * y + local[6] * z + local[9] - cx;
+            float dy = local[1] * x + local[4] * y + local[7] * z + local[10] - cy;
+            float dz = local[2] * x + local[5] * y + local[8] * z + local[11] - cz;
+            radius = Math.max(radius, dx * dx + dy * dy + dz * dz);
+        }
+        double range = Math.sqrt(cx * cx + cy * cy + cz * cz) + 2.0 * Math.sqrt(radius) * BLOCKS_PER_SIZE;
+        if (part.sized && range <= part.sizeRange) {
+            return false;
+        }
+        part.sized = true;
+        part.sizeRange = range * RANGE_GROWTH;
+        return true;
     }
 
     // two sides at 0 is a line or a dot. one side at 0 is still a flat square you can see from above

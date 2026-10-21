@@ -716,11 +716,19 @@ final class MotionEngine {
             return;
         }
         display.range = range;
+        // sizeRange stops measuring once it is past the old range, so measure all again or a part grown
+        // since then keeps a size range that is too short now
+        for (PartState part : display.parts) {
+            part.sized = false;
+            part.sizeRange = Double.MAX_VALUE;
+        }
         if (display.fresh) {
             return;
         }
+        composer.compose(display, true);
         List<Viewer> targets = display.viewers;
         if (!targets.isEmpty()) {
+            sendChanges(display, Frames.STEP_TICKS);
             for (PartState part : display.parts) {
                 if (!part.isDisplay()) {
                     continue;

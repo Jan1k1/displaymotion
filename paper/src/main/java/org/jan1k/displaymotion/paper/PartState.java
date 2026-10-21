@@ -49,6 +49,9 @@ final class PartState {
     boolean hidden;
     // engine tick when a part that went to scale 0 gets hidden, -1 when nothing waits
     long hideAfter = -1;
+    // past this many blocks the part is too small to see, so the client gets this as its view range. see Composer.sizeRange
+    double sizeRange = Double.MAX_VALUE;
+    boolean sized;
 
     Component text;
     boolean glowing;
