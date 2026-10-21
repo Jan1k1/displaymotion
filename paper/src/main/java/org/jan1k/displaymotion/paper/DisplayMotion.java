@@ -108,7 +108,8 @@ public final class DisplayMotion {
                     : "PacketEvents is not running. Install the DisplayMotion plugin and add 'depend: [DisplayMotion]' to plugin.yml, "
                     + "or install PacketEvents and add 'depend: [packetevents]'");
         }
-        if (!Bukkit.isGlobalTickThread()) {
+        // folia has no global tick running yet in onEnable, so isGlobalTickThread is false there. this one is true on any tick thread
+        if (!Bukkit.isPrimaryThread()) {
             throw new IllegalStateException("create DisplayMotion on the main thread, for example in onEnable");
         }
         return new DisplayMotion(plugin, metrics);
