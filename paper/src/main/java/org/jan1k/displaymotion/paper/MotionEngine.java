@@ -34,6 +34,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
@@ -377,6 +378,7 @@ final class MotionEngine {
             return;
         }
         display.vehicle = -1;
+        selfHidden(display, null);
         // off the vehicle the turn goes back into the entity yaw
         display.yaw = wrap(display.yaw + display.turn);
         display.turn = 0f;
@@ -686,6 +688,16 @@ final class MotionEngine {
             display.shownTo.remove(player);
             display.hiddenFrom.add(player);
         }
+        if (!display.fresh) {
+            updateViewers(display);
+        }
+    }
+
+    void selfHidden(DisplayState display, UUID player) {
+        if (display.removed || Objects.equals(display.selfHidden, player)) {
+            return;
+        }
+        display.selfHidden = player;
         if (!display.fresh) {
             updateViewers(display);
         }

@@ -908,11 +908,10 @@ public final class MotionDisplay {
         double y = at.getY();
         double z = at.getZ();
         engine.riding.add(this);
-        if (effectiveSelfView() == SelfView.HIDE && vehicle instanceof Player player) {
-            hide(player);
-        }
         UUID wearer = vehicle instanceof Player player ? player.getUniqueId() : null;
         engine.submit(() -> engine.ride(state, id, passengers, world, x, y, z, pose, wearer));
+        // after ride, a ride from one entity to the next dismounts first and that clears the old wearer
+        selfHide(vehicle);
         return this;
     }
 
@@ -990,9 +989,6 @@ public final class MotionDisplay {
         if (vehicle == null || isRemoved()) {
             return this;
         }
-        if (effectiveSelfView() == SelfView.HIDE && vehicle instanceof Player player) {
-            show(player);
-        }
         vehicle = null;
         engine.riding.remove(this);
         engine.submit(() -> engine.dismount(state, true));
@@ -1009,14 +1005,15 @@ public final class MotionDisplay {
         SelfView before = effectiveSelfView();
         selfView = view;
         SelfView after = effectiveSelfView();
-        if (before != after && vehicle instanceof Player player) {
-            if (after == SelfView.HIDE) {
-                hide(player);
-            } else if (before == SelfView.HIDE) {
-                show(player);
-            }
+        if (before != after) {
+            selfHide(vehicle);
         }
         return this;
+    }
+
+    private void selfHide(Entity wearer) {
+        UUID id = effectiveSelfView() == SelfView.HIDE && wearer instanceof Player player ? player.getUniqueId() : null;
+        engine.submit(() -> engine.selfHidden(state, id));
     }
 
     /** What the wearer sees now, the default for the follow when nothing was set. */

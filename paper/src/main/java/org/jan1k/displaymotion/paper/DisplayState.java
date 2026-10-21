@@ -32,6 +32,8 @@ final class DisplayState {
     final List<Viewer> viewers = new ArrayList<>();
     final Set<UUID> shownTo = new HashSet<>();
     final Set<UUID> hiddenFrom = new HashSet<>();
+    // the wearer with SelfView.HIDE. kept apart from hiddenFrom, else teleport or dismount would undo a hide() the plugin did
+    UUID selfHidden;
     boolean visibleByDefault = true;
     // past this many blocks a viewer gets no frames and no detail parts, 0 is off
     double lod;
@@ -113,7 +115,7 @@ final class DisplayState {
     }
 
     boolean allowed(UUID player) {
-        if (hiddenFrom.contains(player)) {
+        if (hiddenFrom.contains(player) || player.equals(selfHidden)) {
             return false;
         }
         return visibleByDefault || shownTo.contains(player);
