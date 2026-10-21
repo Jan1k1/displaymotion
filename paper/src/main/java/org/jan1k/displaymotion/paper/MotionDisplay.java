@@ -122,6 +122,9 @@ public final class MotionDisplay {
 
     volatile boolean playing;
     private volatile boolean visibleByDefault = true;
+    // copy of the engine sets for clicks on the main thread
+    private final Set<UUID> shownTo = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> hiddenFrom = ConcurrentHashMap.newKeySet();
     private volatile double speed = 1.0;
     private volatile boolean removed;
 
@@ -1181,6 +1184,8 @@ public final class MotionDisplay {
     private MotionDisplay visibility(Player player, boolean visible) {
         UUID id = Objects.requireNonNull(player, "player").getUniqueId();
         requireAlive();
+        (visible ? hiddenFrom : shownTo).remove(id);
+        (visible ? shownTo : hiddenFrom).add(id);
         engine.submit(() -> engine.visibility(state, id, visible));
         return this;
     }
@@ -1283,6 +1288,11 @@ public final class MotionDisplay {
         Consumer<Click> handler = onClick;
         if (handler == null || isRemoved()) {
             engine.debug("click on '" + hitbox.name + "' dropped: " + (handler == null ? "no onClick handler" : "display removed"));
+            return;
+        }
+        // ids go up one by one, a hacked client can guess the box of a quest npc it never got
+        if (hiddenFrom.contains(id) || !visibleByDefault && !shownTo.contains(id)) {
+            engine.debug("click on '" + hitbox.name + "' dropped: the player does not see this display");
             return;
         }
         Player player = Bukkit.getPlayer(id);
