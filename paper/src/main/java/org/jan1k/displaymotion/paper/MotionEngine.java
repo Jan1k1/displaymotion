@@ -947,9 +947,23 @@ final class MotionEngine {
         if (display.removed) {
             return;
         }
-        texts.removeIf(job -> job.display == display && job.part == part);
-        texts.add(new TextJob(display, part, ticks, every, frame, onEnd, new int[]{0}));
-        setText(display, part, frame.apply(0));
+        texts.removeIf(job -> job.display == display && (part == ALL_PARTS || job.part == part || job.part == ALL_PARTS));
+        TextJob job = new TextJob(display, part, ticks, every, frame, onEnd, new int[]{0});
+        Component first = frame(job, 0);
+        if (first != null) {
+            texts.add(job);
+            setText(display, part, first);
+        }
+    }
+
+    // the format comes from the plugin, if it throws only that job stops, not the whole tick
+    private Component frame(TextJob job, int tick) {
+        try {
+            return job.frame.apply(tick);
+        } catch (Throwable t) {
+            warn("displaymotion text animation failed", t);
+            return null;
+        }
     }
 
     private void stepTexts() {
@@ -962,12 +976,20 @@ final class MotionEngine {
             int now = ++job.tick[0];
             if (now >= job.ticks) {
                 texts.remove(i);
-                setText(job.display, job.part, job.frame.apply(job.ticks));
+                Component last = frame(job, job.ticks);
+                if (last != null) {
+                    setText(job.display, job.part, last);
+                }
                 if (job.onEnd != null) {
                     mainThread.accept(job.onEnd);
                 }
             } else if (now % job.every == 0) {
-                setText(job.display, job.part, job.frame.apply(now));
+                Component text = frame(job, now);
+                if (text == null) {
+                    texts.remove(i);
+                } else {
+                    setText(job.display, job.part, text);
+                }
             }
         }
     }
