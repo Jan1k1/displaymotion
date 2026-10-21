@@ -85,7 +85,7 @@ public final class DisplayMotion {
     }
 
     /**
-     * Starts the library for this plugin. Call it once, on the main thread.
+     * Starts the library for this plugin. Call it once, in onEnable.
      * It sends anonymous usage stats to bStats (which plugins use displaymotion, server counts).
      * Use {@link #create(Plugin, boolean)} to turn that off. Server owners can turn off all bStats
      * in {@code plugins/bStats/config.yml}.
@@ -108,7 +108,7 @@ public final class DisplayMotion {
                     : "PacketEvents is not running. Install the DisplayMotion plugin and add 'depend: [DisplayMotion]' to plugin.yml, "
                     + "or install PacketEvents and add 'depend: [packetevents]'");
         }
-        if (!Bukkit.isPrimaryThread()) {
+        if (!Bukkit.isGlobalTickThread()) {
             throw new IllegalStateException("create DisplayMotion on the main thread, for example in onEnable");
         }
         return new DisplayMotion(plugin, metrics);
