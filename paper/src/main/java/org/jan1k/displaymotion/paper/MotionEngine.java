@@ -1002,6 +1002,9 @@ final class MotionEngine {
             } catch (Throwable t) {
                 warn("displaymotion command failed", t);
             }
+            // a command can move or change a display after its spawn got cached, a player who comes
+            // close later in this tick would get the old one and never the change
+            dropEncoded();
         }
     }
 
@@ -1489,7 +1492,10 @@ final class MotionEngine {
             ChannelHelper.runInEventLoop(channel, () -> write(channel, buffers));
         }
         dirty.clear();
+        dropEncoded();
+    }
 
+    private void dropEncoded() {
         for (int i = 0; i < encoded.size(); i++) {
             DisplayState display = encoded.get(i);
             if (display.spawnBuffers != null) {
