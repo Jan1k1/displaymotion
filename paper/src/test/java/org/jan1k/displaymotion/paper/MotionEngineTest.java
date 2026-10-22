@@ -888,6 +888,37 @@ class MotionEngineTest {
     }
 
     @Test
+    void lookAtTurnsInPlaceAndDoesNotStopAGlide() {
+        PartState[] parts = {PartState.block("main", ENTITY, -1, 1, Pose.IDENTITY)};
+        MotionDisplay display = new MotionDisplay(engine, new Location(world(), 0, 0, 0), parts, 48);
+        engine.submit(() -> engine.add(display.state()));
+        tick();
+        tick();
+
+        display.lookAt(new Location(world(), 10, 0, 0));
+        assertEquals(270f, display.location().getYaw(), 1e-4f);
+        assertEquals(0f, display.location().getPitch(), 1e-4f);
+        assertTrue(kinds(tick()).contains("teleport"));
+        assertEquals(0.0, display.location().getX(), 1e-9);
+
+        display.lookAt(new Location(world(), 0, 10, 0), 10);
+        assertEquals(-90f, display.location().getPitch(), 1e-4f);
+
+        display.moveTo(new Location(world(), 0, 0, 8), 8);
+        tick();
+        display.lookAt(new Location(world(), 0, 0, 100));
+        for (int i = 0; i < 10; i++) {
+            tick();
+        }
+        assertEquals(8.0, display.location().getZ(), 1e-6);
+        assertEquals(0f, display.location().getYaw(), 1e-4f);
+
+        display.lookAt(display.location());
+        assertEquals(0f, display.location().getYaw(), 1e-4f);
+        assertThrows(IllegalArgumentException.class, () -> display.lookAt(new Location(world(), 1, 0, 0), 60));
+    }
+
+    @Test
     void moveToGlidesWithEaseAndKeepsRotation() {
         assertEquals(2.0, MotionEngine.lerp(2.0, 10.0, 0, 4, Ease.LINEAR), 1e-6);
         assertEquals(6.0, MotionEngine.lerp(2.0, 10.0, 2, 4, Ease.LINEAR), 1e-6);

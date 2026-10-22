@@ -568,6 +568,14 @@ final class MotionEngine {
         move(display, world, x, y, z, yaw, pitch, ticks);
     }
 
+    // same spot, only the rotation. glideSteps stays so a moveTo keeps going with the new yaw
+    void turn(DisplayState display, float yaw, float pitch, int ticks) {
+        if (display.removed) {
+            return;
+        }
+        move(display, display.world, display.x, display.y, display.z, yaw, pitch, ticks);
+    }
+
     // client teleport_duration is linear and caps at 59 ticks, so step the ease here every 2 ticks
     void glide(DisplayState display, double x, double y, double z, int ticks, Ease ease, int id) {
         if (display.removed) {

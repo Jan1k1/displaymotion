@@ -219,6 +219,7 @@ display.moveAlong(List.of(a, b, c, d), 100, Ease.IN_OUT);  // starts and ends sl
 ```
 
 - Both start where the display is now and keep its rotation.
+- `lookAt(target)` or `lookAt(target, ticks)` turns it to face a spot (yaw and pitch, like a mob looks) and keeps it where it is. A `moveTo` or `moveAlong` that runs keeps going, so a turret or a head can track a player while it flies. Ticks are 0 to 59, the players' games turn it smoothly over that time.
 - The curve goes through every point. With `Ease.LINEAR` (the default) the display moves at the same speed the whole way.
 - Ticks are 1 to 6000. A path has 1 to 256 points, all in the same world as the display.
 - A new `moveTo`, `moveAlong`, `teleport` or `follow` stops the old one. They also stop riding.

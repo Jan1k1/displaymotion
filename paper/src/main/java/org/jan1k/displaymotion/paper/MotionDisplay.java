@@ -696,6 +696,45 @@ public final class MotionDisplay {
         return this;
     }
 
+    /** Turns the whole display at once to face {@code target}, see {@link #lookAt(Location, int)}. */
+    public MotionDisplay lookAt(Location target) {
+        return lookAt(target, 0);
+    }
+
+    /**
+     * Turns the whole display to face {@code target}, yaw and pitch like a mob looks, and lets the client turn it
+     * over {@code ticks}, 0 to 59. It stays where it is, a {@link #moveTo(Location, int)} or
+     * {@link #moveAlong(List, int)} keeps going. While it rides or follows, those turn it instead.
+     */
+    public MotionDisplay lookAt(Location target, int ticks) {
+        Objects.requireNonNull(target, "target");
+        if (target.getWorld() == null || !target.getWorld().getUID().equals(location.getWorld().getUID())) {
+            throw new IllegalArgumentException("target must be in the same world");
+        }
+        if (ticks < 0 || ticks > MAX_TELEPORT_TICKS) {
+            throw new IllegalArgumentException("ticks must be 0 to " + MAX_TELEPORT_TICKS + " (the client limit), got " + ticks);
+        }
+        requireAlive();
+        Location at;
+        // no moves++ here, a glide that runs stays the newest and keeps writing the spot with this rotation
+        synchronized (moveLock) {
+            at = location.clone();
+            Vector direction = target.toVector().subtract(at.toVector());
+            if (direction.lengthSquared() < 1e-12) {
+                return this;
+            }
+            at.setDirection(direction);
+            location = at;
+        }
+        if (!seatEntities.isEmpty()) {
+            engine.mainThread.accept(this::moveSeats);
+        }
+        float yaw = at.getYaw();
+        float pitch = at.getPitch();
+        engine.submit(() -> engine.turn(state, yaw, pitch, ticks));
+        return this;
+    }
+
     /** Glides the whole display along a smooth curve through the points, see {@link #moveAlong(List, int, Ease)}. */
     public MotionDisplay moveAlong(List<Location> points, int ticks) {
         return moveAlong(points, ticks, Ease.LINEAR);
