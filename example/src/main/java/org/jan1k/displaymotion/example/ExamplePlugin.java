@@ -15,6 +15,8 @@ import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
+import org.bukkit.block.BlockFace;
+import org.bukkit.block.data.Directional;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.Player;
@@ -191,6 +193,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 .then(spawns("text", EnumSet.of(Part.TEXT), true, this::text))
                 .then(spawns("pet", EnumSet.of(Part.ITEM), this::pet))
                 .then(spawns("path", EnumSet.of(Part.ITEM), this::path))
+                .then(spawns("turret", EnumSet.of(Part.BLOCK), this::turret))
                 .then(spawns("hat", EnumSet.of(Part.BLOCK, Part.ITEM), this::hat))
                 .then(spawns("backpack", EnumSet.of(Part.BLOCK), this::backpack))
                 .then(Commands.literal("selfview").executes(context -> selfView(context.getSource())))
@@ -623,6 +626,27 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
         return motion.item(inFront(player, 3).add(0, 1.5, 0), ItemStack.of(Material.DIAMOND_SWORD), ItemDisplay.ItemDisplayTransform.GROUND)
                 .play(SHOW)
                 .moveAlong(loop, 120, Ease.IN_OUT);
+    }
+
+    // the dispenser front faces south, thats yaw 0, so lookAt points it right at you
+    private MotionDisplay turret(Player player) {
+        Directional front = (Directional) Material.DISPENSER.createBlockData();
+        front.setFacing(BlockFace.SOUTH);
+        MotionDisplay turret = motion.model(inFront(player, 4).add(0, 1.5, 0))
+                .block("body", front, box(0f, 0f, 0f, 0.8f, 0.8f, 0.8f))
+                .block("barrel", Material.IRON_BLOCK.createBlockData(), box(0f, 0f, 0.55f, 0.25f, 0.25f, 0.4f))
+                .spawn()
+                .play(Animations.popIn(10));
+        UUID id = player.getUniqueId();
+        getServer().getScheduler().runTaskTimer(this, task -> {
+            Player target = getServer().getPlayer(id);
+            if (turret.isRemoved() || target == null || !target.getWorld().equals(turret.location().getWorld())) {
+                task.cancel();
+                return;
+            }
+            turret.lookAt(target.getEyeLocation(), 2);
+        }, 2L, 2L);
+        return turret;
     }
 
     // a crown on the head, it turns where the player looks. 0 is the top of the hitbox (1.8), the drawn head
