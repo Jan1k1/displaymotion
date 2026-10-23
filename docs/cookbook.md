@@ -47,6 +47,8 @@ display.hide(player);
 display.show(player);   // back again
 ```
 
+`display.canSee(player)` tells you if the player is allowed to see it. Distance does not count.
+
 ## Label that faces the player
 
 A billboard text turns to look at every player, so it is always readable.

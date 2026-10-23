@@ -500,6 +500,16 @@ class MotionEngineTest {
     }
 
     @Test
+    void canSeeFollowsShowAndHide() {
+        MotionDisplay display = display();
+        assertTrue(display.canSee(player()));
+        display.hide(player());
+        assertFalse(display.canSee(player()));
+        display.visibleByDefault(false).show(player());
+        assertTrue(display.canSee(player()));
+    }
+
+    @Test
     void textForOfflinePlayerIsDropped() {
         PartState[] parts = {PartState.text("main", ENTITY, -1, Component.text("x"), Pose.IDENTITY)};
         MotionDisplay sign = new MotionDisplay(engine, new Location(world(), 0, 0, 0), parts, 48);

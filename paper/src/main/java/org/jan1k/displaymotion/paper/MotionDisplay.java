@@ -1352,6 +1352,18 @@ public final class MotionDisplay {
         return visibleByDefault;
     }
 
+    /**
+     * True when this player may see the display, after {@link #show(Player)}, {@link #hide(Player)}
+     * and {@link #visibleByDefault(boolean)}. Distance does not count.
+     */
+    public boolean canSee(Player player) {
+        return canSee(Objects.requireNonNull(player, "player").getUniqueId());
+    }
+
+    private boolean canSee(UUID id) {
+        return !hiddenFrom.contains(id) && (visibleByDefault || shownTo.contains(id));
+    }
+
     private MotionDisplay visibility(Player player, boolean visible) {
         UUID id = Objects.requireNonNull(player, "player").getUniqueId();
         requireAlive();
@@ -1462,7 +1474,7 @@ public final class MotionDisplay {
             return;
         }
         // ids go up one by one, a hacked client can guess the box of a quest npc it never got
-        if (hiddenFrom.contains(id) || !visibleByDefault && !shownTo.contains(id)) {
+        if (!canSee(id)) {
             engine.debug("click on '" + hitbox.name + "' dropped: the player does not see this display");
             return;
         }
