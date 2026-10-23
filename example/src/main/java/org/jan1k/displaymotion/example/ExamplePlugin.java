@@ -632,21 +632,12 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
     private MotionDisplay turret(Player player) {
         Directional front = (Directional) Material.DISPENSER.createBlockData();
         front.setFacing(BlockFace.SOUTH);
-        MotionDisplay turret = motion.model(inFront(player, 4).add(0, 1.5, 0))
+        return motion.model(inFront(player, 4).add(0, 1.5, 0))
                 .block("body", front, box(0f, 0f, 0f, 0.8f, 0.8f, 0.8f))
                 .block("barrel", Material.IRON_BLOCK.createBlockData(), box(0f, 0f, 0.55f, 0.25f, 0.25f, 0.4f))
                 .spawn()
-                .play(Animations.popIn(10));
-        UUID id = player.getUniqueId();
-        getServer().getScheduler().runTaskTimer(this, task -> {
-            Player target = getServer().getPlayer(id);
-            if (turret.isRemoved() || target == null || !target.getWorld().equals(turret.location().getWorld())) {
-                task.cancel();
-                return;
-            }
-            turret.lookAt(target.getEyeLocation(), 2);
-        }, 2L, 2L);
-        return turret;
+                .play(Animations.popIn(10))
+                .lookAt(player);
     }
 
     // a crown on the head, it turns where the player looks. 0 is the top of the hitbox (1.8), the drawn head
