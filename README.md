@@ -1,9 +1,19 @@
 # displaymotion
 
-Animate vanilla item, block and text displays from Java code.
-No resource pack. No real entities. Packets only, through PacketEvents. No work on the main thread.
+[![JitPack](https://jitpack.io/v/Jan1k1/displaymotion.svg)](https://jitpack.io/#Jan1k1/displaymotion)
+[![Paper](https://img.shields.io/badge/Paper-1.21.4%20to%2026.3-blue)](https://papermc.io)
+[![Java](https://img.shields.io/badge/Java-21%2B-orange)](https://adoptium.net)
+[![Docs](https://img.shields.io/badge/docs-displaymotion.peakstone.app-informational)](https://displaymotion.peakstone.app/docs/)
+
+A **Java library** for Paper plugins that animates Minecraft **display entities**: item displays, block displays and text displays.
+Your plugin calls it to build models, play animations, move them, let players click them and ride them.
+No resource pack. No mods. No real entities. Packets only, through PacketEvents. No work on the main thread.
 
 Java Edition only. Paper 1.21.4 to 26.3, Java 21 or newer. NPCs (mannequins) need a 1.21.9 or newer server.
+
+<p align="center">
+  <img src=".github/media/showcase.gif" alt="One scene made with displaymotion: a model, an NPC, a sword on a curve, counting text and effects" width="900">
+</p>
 
 <p align="center">
   <img src=".github/media/windmill.gif" alt="A windmill model with turning sails" height="300">
@@ -40,15 +50,39 @@ sword.play(Animations.popOut(10), sword::remove); // later: shrink, then remove
 
 ## What it does
 
-- **Models** from many blocks, items and texts. Parts have parents and move as one.
-- **Import** models and animations from Blockbench (`.bbmodel`) and BDEngine (`.bdengine`).
-- **Effects** ready to use: shatter, tombstone, sword rain, soul. One line each.
-- **Animations** with easing, built from presets or keyframes, combined with `then`, `with` and `loop`.
-- **Looks:** glow color, brightness, billboard, live text.
-- **Move** whole models with a smooth glide. Show them to everyone or only to some players.
-- **Light:** one motion thread does the work. Packets are encoded once and shared. Parts that do not move are not sent. The client culls parts that are off screen.
+**Models**
+- Models from many blocks, items and texts, up to 256 parts. Parts have parents and move as one.
+- Import models and animations from Blockbench (`.bbmodel`) and BDEngine (`.bdengine`).
+
+**Animations**
+- Presets (`popIn`, `spin`, `bob`, ...) or your own keyframes, combined with `then`, `with` and `loop`.
+- Easing, also back, elastic and bounce. Crossfade from one animation to the next.
+- Change the speed or the size at any time. Animation events run your code on a tick.
+
+**Movement**
+- `moveTo` and `moveAlong` (a smooth curve through points), with easing and an `onEnd`.
+- `lookAt` a spot, or keep looking at a player or mob.
+- `follow` an entity like a pet, or `ride` it. Hats and backpacks on players. Seats that players sit in.
+
+**Text**
+- Live text, a different text for each player, typing and counting text, a leaderboard that moves.
+- Text style: background, line width, opacity, shadow, see through, alignment.
+
+**Players**
+- Clickable hitboxes with `onClick`.
+- NPCs (mannequins) with skins, poses and items, that look at near players.
+- Show a display to everyone or only to some players.
+
+**Effects**
+- Shatter, tombstone, sword rain, soul. One line each.
+
+**Speed**
+- One motion thread does the work. Packets are encoded once and shared. Parts that do not move are not sent.
+- The client culls parts that are off screen. Invisible and tiny parts are not drawn at all. Far players get fewer parts (LOD).
 
 ## Docs
+
+Also online: [displaymotion.peakstone.app/docs](https://displaymotion.peakstone.app/docs/).
 
 - [Getting started](docs/getting-started.md): plugin way or shaded way, first display.
 - [Animations](docs/animations.md)
