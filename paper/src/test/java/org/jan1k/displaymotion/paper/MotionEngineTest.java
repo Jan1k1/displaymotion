@@ -500,6 +500,24 @@ class MotionEngineTest {
     }
 
     @Test
+    void textForOfflinePlayerIsDropped() {
+        PartState[] parts = {PartState.text("main", ENTITY, -1, Component.text("x"), Pose.IDENTITY)};
+        MotionDisplay sign = new MotionDisplay(engine, new Location(world(), 0, 0, 0), parts, 48);
+        engine.submit(() -> engine.add(sign.state()));
+        tick();
+        tick();
+
+        Player gone = FakePacketEvents.proxy(Player.class, (method, args) -> switch (method) {
+            case "getUniqueId" -> PLAYER;
+            case "isOnline" -> false;
+            default -> null;
+        });
+        sign.text(gone, Component.text("hi"));
+
+        assertEquals(List.of(), tick());
+    }
+
+    @Test
     void privateDisplayOnlyShowsToChosenPlayers() {
         MotionDisplay display = display().visibleByDefault(false);
         tick();

@@ -541,6 +541,10 @@ public final class MotionDisplay {
             throw new IllegalArgumentException("this display has no text part");
         }
         requireAlive();
+        // quit already ran for an offline player, nothing would clear this text again
+        if (text != null && !player.isOnline()) {
+            return this;
+        }
         UUID id = player.getUniqueId();
         engine.submit(() -> engine.textFor(state, part, id, text));
         return this;
