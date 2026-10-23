@@ -800,6 +800,33 @@ class MotionEngineTest {
     }
 
     @Test
+    void ownTextStaysForThatPlayerAndComesBackAfterRespawn() {
+        PartState[] parts = {PartState.text("main", ENTITY, -1, Component.text("x"), Pose.IDENTITY)};
+        MotionDisplay sign = new MotionDisplay(engine, new Location(world(), 0, 0, 0), parts, 48);
+        engine.submit(() -> engine.add(sign.state()));
+        tick();
+        tick();
+
+        Component own = Component.text("hi Steve");
+        engine.submit(() -> engine.textFor(sign.state(), MotionEngine.ALL_PARTS, PLAYER, own));
+        List<Packet> set = tick();
+        sign.text(Component.text("shared"));
+        List<Packet> shared = tick();
+        viewerAt(200);
+        tick();
+        viewerAt(0);
+        List<Packet> back = tick();
+        engine.submit(() -> engine.textFor(sign.state(), MotionEngine.ALL_PARTS, PLAYER, null));
+        List<Packet> cleared = tick();
+
+        assertEquals(own, value(set.getFirst(), 23));
+        assertEquals(0, shared.size());
+        Packet last = back.stream().filter(p -> p.kind().equals("meta")).reduce((a, b) -> b).orElseThrow();
+        assertEquals(own, value(last, 23));
+        assertEquals(Component.text("shared"), value(cleared.getFirst(), 23));
+    }
+
+    @Test
     void farViewerGetsNoFramesAndCatchesUpWhenItComesBack() {
         MotionDisplay display = display().lod(10);
         tick();

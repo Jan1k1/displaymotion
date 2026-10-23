@@ -60,6 +60,7 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
     private final int componentType;
 
     private PartState part;
+    private net.kyori.adventure.text.Component text;
     private float[] values;
     private int changes;
     private int duration;
@@ -119,9 +120,17 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
         return set(part, CONTENT, 0, 0, 0);
     }
 
+    // a text part with the text of one player instead of the shared one
+    DisplayPacket content(PartState part, net.kyori.adventure.text.Component text) {
+        set(part, CONTENT, 0, 0, 0);
+        this.text = text;
+        return this;
+    }
+
     private DisplayPacket set(PartState part, int mode, int changes, int duration, double range) {
         this.part = part;
         this.values = part.sent;
+        this.text = part.text;
         this.mode = mode;
         this.changes = changes;
         this.duration = duration;
@@ -253,7 +262,7 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
             }
             default -> {
                 entry(CONTENT_SLOT, componentType);
-                writeComponent(part.text);
+                writeComponent(text);
             }
         }
     }

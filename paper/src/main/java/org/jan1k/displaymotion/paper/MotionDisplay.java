@@ -513,6 +513,39 @@ public final class MotionDisplay {
         return text(index, text);
     }
 
+    /**
+     * Gives one player its own text on every text part, the other players keep the shared text.
+     * Good for names, coins or placeholders. {@code null} gives the player the shared text again.
+     * The text goes away when the player leaves the server.
+     * @throws IllegalArgumentException if the display has no text part or the text is too big
+     */
+    public MotionDisplay text(Player player, Component text) {
+        return textFor(player, MotionEngine.ALL_PARTS, text);
+    }
+
+    /** Gives one player its own text on one text part, see {@link #text(Player, Component)}. */
+    public MotionDisplay text(Player player, String part, Component text) {
+        int index = index(part);
+        if (state.parts[index].kind != PartState.TEXT) {
+            throw new IllegalArgumentException("part '" + part + "' is not a text part");
+        }
+        return textFor(player, index, text);
+    }
+
+    private MotionDisplay textFor(Player player, int part, Component text) {
+        Objects.requireNonNull(player, "player");
+        if (text != null) {
+            ModelBuilder.checkText(text);
+        }
+        if (part == MotionEngine.ALL_PARTS && !hasText()) {
+            throw new IllegalArgumentException("this display has no text part");
+        }
+        requireAlive();
+        UUID id = player.getUniqueId();
+        engine.submit(() -> engine.textFor(state, part, id, text));
+        return this;
+    }
+
     private MotionDisplay glow(int part, Color color) {
         requireAlive();
         boolean on = color != null;

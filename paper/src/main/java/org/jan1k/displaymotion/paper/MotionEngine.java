@@ -552,7 +552,80 @@ final class MotionEngine {
             PartState state = display.parts[i];
             if ((part == ALL_PARTS || part == i) && state.kind == PartState.TEXT && !text.equals(state.text)) {
                 state.text = text;
-                sendPart(display, state, packet.content(state));
+                sendText(display, state);
+            }
+        }
+    }
+
+    // players with their own text keep it, the rest get the shared one
+    private void sendText(DisplayState display, PartState part) {
+        if (part.ownTexts == null) {
+            sendPart(display, part, packet.content(part));
+            return;
+        }
+        if (display.fresh) {
+            return;
+        }
+        List<Viewer> targets = new ArrayList<>(display.viewers.size());
+        for (Viewer viewer : display.viewers) {
+            if (!part.ownTexts.containsKey(viewer.id)) {
+                targets.add(viewer);
+            }
+        }
+        if (!targets.isEmpty()) {
+            sendToAll(targets, encode(packet.content(part), targets.getFirst().channel), false);
+        }
+    }
+
+    // null goes back to the shared text
+    void textFor(DisplayState display, int part, UUID player, Component text) {
+        if (display.removed) {
+            return;
+        }
+        Viewer viewer = viewers.get(player);
+        boolean sees = !display.fresh && viewer != null && viewer.visible.contains(display);
+        for (int i = 0; i < display.parts.length; i++) {
+            PartState state = display.parts[i];
+            if ((part != ALL_PARTS && part != i) || state.kind != PartState.TEXT) {
+                continue;
+            }
+            if (text == null) {
+                if (state.ownTexts == null || state.ownTexts.remove(player) == null) {
+                    continue;
+                }
+                if (state.ownTexts.isEmpty()) {
+                    state.ownTexts = null;
+                }
+            } else {
+                if (state.ownTexts == null) {
+                    state.ownTexts = new HashMap<>();
+                }
+                if (text.equals(state.ownTexts.put(player, text))) {
+                    continue;
+                }
+            }
+            if (sees) {
+                queue(viewer, encode(packet.content(state, text == null ? state.text : text), viewer.channel));
+            }
+        }
+    }
+
+    // the spawn packets carry the shared text, so a player with its own gets it right after
+    private void ownTexts(DisplayState display, Viewer viewer) {
+        for (PartState part : display.parts) {
+            Component own = part.ownTexts == null ? null : part.ownTexts.get(viewer.id);
+            if (own != null && part.hasEntity()) {
+                queue(viewer, encode(packet.content(part, own), viewer.channel));
+            }
+        }
+    }
+
+    private void forgetTexts(UUID player) {
+        for (DisplayState display : displays) {
+            for (PartState part : display.parts) {
+                if (part.ownTexts != null && part.ownTexts.remove(player) != null && part.ownTexts.isEmpty()) {
+                    part.ownTexts = null;
+                }
             }
         }
     }
@@ -788,6 +861,7 @@ final class MotionEngine {
     }
 
     void viewerGone(UUID id) {
+        forgetTexts(id);
         Viewer viewer = viewers.remove(id);
         if (viewer == null) {
             return;
@@ -1091,6 +1165,7 @@ final class MotionEngine {
                 float[] values = viewer.id.equals(display.wearer) ? part.own : part.sent;
                 queue(viewer, encode(packet.spawn(part, values, display.clientRange(), display.moveTicks), viewer.channel));
             }
+            ownTexts(display, viewer);
         }
     }
 
@@ -1339,6 +1414,7 @@ final class MotionEngine {
             queue(viewer, encode(wearer ? packet.spawn(part, part.own, display.clientRange(), display.moveTicks)
                     : packet.spawn(part, display.clientRange(), display.moveTicks), viewer.channel));
         }
+        ownTexts(display, viewer);
         if (display.vehicle >= 0) {
             queue(viewer, encode(passengers(display.vehicle), viewer.channel));
         }
@@ -1468,6 +1544,7 @@ final class MotionEngine {
                 }
             }
         }
+        ownTexts(display, viewer);
         // after the spawn, the client ignores passengers it does not know yet
         if (display.vehicle >= 0) {
             queue(viewer, encode(passengers(display.vehicle), viewer.channel));

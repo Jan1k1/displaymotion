@@ -54,6 +54,8 @@ final class PartState {
     boolean sized;
 
     Component text;
+    // players with their own text on this part, see MotionDisplay.text(Player, Component). null while nobody has one
+    java.util.Map<java.util.UUID, Component> ownTexts;
     boolean glowing;
     int glowColor = -1;
     int brightness = -1;

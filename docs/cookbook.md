@@ -63,6 +63,18 @@ motion.text(location, Component.text("Spawn", NamedTextColor.GOLD))
 label.text(Component.text("Open now", NamedTextColor.AQUA));   // label is a text display you spawned before
 ```
 
+## A different text for each player
+
+```java
+label.text(player, Component.text("Hi " + player.getName(), NamedTextColor.GOLD));   // only this player sees it
+label.text(player, null);                                                              // back to the shared text
+```
+
+- The other players keep the shared text. A model with more text parts takes the part name: `text(player, "title", text)`.
+- Good for names, coins, quests or PlaceholderAPI. Call it again when the value changes.
+- It is one packet to one player, the display is not spawned again. The text goes away when the player leaves.
+- Try it in game with `/dm button`: every player sees only its own clicks.
+
 ## Glowing outline
 
 ```java
