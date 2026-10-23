@@ -735,9 +735,9 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 .type(message, 2);
     }
 
-    // right click presses it and counts, left click breaks it
+    // right click presses it and counts, left click breaks it. every player sees only its own clicks
     private MotionDisplay button(Location at) {
-        int[] clicks = {0};
+        Map<UUID, Integer> clicks = new HashMap<>();
         MotionDisplay button = motion.model(at)
                 .block("base", Material.POLISHED_BLACKSTONE.createBlockData(), Pose.IDENTITY.withOffset(0f, 0.1f, 0f).withScale(0.9f, 0.2f, 0.9f))
                 .block("cap", Material.RED_CONCRETE.createBlockData(), Pose.IDENTITY.withOffset(0f, 0.27f, 0f).withScale(0.6f, 0.14f, 0.6f))
@@ -756,9 +756,9 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 button.remove();
                 return;
             }
-            clicks[0]++;
+            int mine = clicks.merge(click.player().getUniqueId(), 1, Integer::sum);
             button.glow("cap", Color.WHITE)
-                    .text("label", Component.text("Clicks: " + clicks[0], NamedTextColor.GOLD))
+                    .text(click.player(), "label", Component.text("Your clicks: " + mine, NamedTextColor.GOLD))
                     .play("cap", PRESS, () -> {
                         if (!button.isRemoved()) {
                             button.glow("cap", null).play("cap", CAP_IDLE);
