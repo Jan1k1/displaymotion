@@ -681,6 +681,14 @@ public final class MotionDisplay {
      * {@link #follow(Entity)} stops the old one.
      */
     public MotionDisplay moveTo(Location to, int ticks, Ease ease) {
+        return moveTo(to, ticks, ease, null);
+    }
+
+    /**
+     * Same as {@link #moveTo(Location, int, Ease)}. {@code onEnd} runs once on the main thread when it gets there.
+     * It never runs when a new move, a ride or a follow stops the glide first.
+     */
+    public MotionDisplay moveTo(Location to, int ticks, Ease ease, Runnable onEnd) {
         Objects.requireNonNull(to, "location");
         Objects.requireNonNull(ease, "ease");
         if (to.getWorld() == null || !to.getWorld().getUID().equals(location.getWorld().getUID())) {
@@ -692,7 +700,7 @@ public final class MotionDisplay {
         double y = to.getY();
         double z = to.getZ();
         int glide = startGlide();
-        engine.submit(() -> engine.glide(state, x, y, z, ticks, ease, glide));
+        engine.submit(() -> engine.glide(state, x, y, z, ticks, ease, glide, onEnd));
         return this;
     }
 
@@ -749,6 +757,14 @@ public final class MotionDisplay {
      * @throws IllegalArgumentException if there are no points, more than {@link #MAX_PATH_POINTS}, or a point is in another world
      */
     public MotionDisplay moveAlong(List<Location> points, int ticks, Ease ease) {
+        return moveAlong(points, ticks, ease, null);
+    }
+
+    /**
+     * Same as {@link #moveAlong(List, int, Ease)}. {@code onEnd} runs once on the main thread when it gets to the
+     * last point. It never runs when a new move, a ride or a follow stops the glide first.
+     */
+    public MotionDisplay moveAlong(List<Location> points, int ticks, Ease ease, Runnable onEnd) {
         Objects.requireNonNull(points, "points");
         Objects.requireNonNull(ease, "ease");
         if (points.isEmpty() || points.size() > MAX_PATH_POINTS) {
@@ -768,7 +784,7 @@ public final class MotionDisplay {
         checkGlideTicks(ticks);
         requireAlive();
         int glide = startGlide();
-        engine.submit(() -> engine.glideAlong(state, xyz, ticks, ease, glide));
+        engine.submit(() -> engine.glideAlong(state, xyz, ticks, ease, glide, onEnd));
         return this;
     }
 

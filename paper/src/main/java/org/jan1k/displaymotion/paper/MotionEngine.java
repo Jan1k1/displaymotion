@@ -273,6 +273,7 @@ final class MotionEngine {
             return;
         }
         display.glideSteps = 0;
+        display.glideEnd = null;
         if (display.vehicle >= 0) {
             dismount(display, false);
         }
@@ -565,6 +566,7 @@ final class MotionEngine {
 
     void teleport(DisplayState display, UUID world, double x, double y, double z, float yaw, float pitch, int ticks) {
         display.glideSteps = 0;
+        display.glideEnd = null;
         move(display, world, x, y, z, yaw, pitch, ticks);
     }
 
@@ -577,7 +579,7 @@ final class MotionEngine {
     }
 
     // client teleport_duration is linear and caps at 59 ticks, so step the ease here every 2 ticks
-    void glide(DisplayState display, double x, double y, double z, int ticks, Ease ease, int id) {
+    void glide(DisplayState display, double x, double y, double z, int ticks, Ease ease, int id, Runnable onEnd) {
         if (display.removed) {
             return;
         }
@@ -592,11 +594,12 @@ final class MotionEngine {
         display.glideSteps = Math.max(1, Math.round(ticks / (float) Frames.STEP_TICKS));
         display.glideStep = 0;
         display.glideEase = ease;
+        display.glideEnd = onEnd;
         display.active = true;
     }
 
     // the curve starts where the display is now, only the motion thread knows that for sure
-    void glideAlong(DisplayState display, double[] points, int ticks, Ease ease, int id) {
+    void glideAlong(DisplayState display, double[] points, int ticks, Ease ease, int id, Runnable onEnd) {
         if (display.removed) {
             return;
         }
@@ -607,7 +610,7 @@ final class MotionEngine {
         System.arraycopy(points, 0, all, 3, points.length);
         Curve curve = Curve.through(all);
         double[] end = curve.end();
-        glide(display, end[0], end[1], end[2], ticks, ease, id);
+        glide(display, end[0], end[1], end[2], ticks, ease, id, onEnd);
         display.glideCurve = curve;
     }
 
@@ -1194,6 +1197,10 @@ final class MotionEngine {
             double[] at = glideSpot(display);
             display.handle.movedTo(display.glideId, at[0], at[1], at[2]);
             move(display, display.world, at[0], at[1], at[2], display.yaw, display.pitch, Frames.STEP_TICKS);
+            if (display.glideStep >= display.glideSteps && display.glideEnd != null) {
+                mainThread.accept(display.glideEnd);
+                display.glideEnd = null;
+            }
         }
     }
 

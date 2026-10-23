@@ -888,6 +888,42 @@ class MotionEngineTest {
     }
 
     @Test
+    void moveOnEndRunsOnceWhenItArrivesAndNotWhenStopped() {
+        engine.mainThread = Runnable::run;
+        MotionDisplay display = display();
+        tick();
+        tick();
+        List<String> ended = new ArrayList<>();
+
+        display.moveTo(new Location(world(), 6, 0, 0), 6, Ease.LINEAR, () -> ended.add("to at " + display.location().getX()));
+        for (int i = 0; i < 2; i++) {
+            tick();
+        }
+        assertEquals(List.of(), ended);
+        for (int i = 0; i < 8; i++) {
+            tick();
+        }
+        assertEquals(List.of("to at 6.0"), ended);
+
+        display.moveAlong(List.of(new Location(world(), 6, 3, 0), new Location(world(), 0, 0, 0)), 10, Ease.LINEAR,
+                () -> ended.add("stopped"));
+        tick();
+        display.moveTo(new Location(world(), 2, 0, 0), 4, Ease.LINEAR, () -> ended.add("second"));
+        tick();
+        display.teleport(new Location(world(), 9, 0, 0));
+        for (int i = 0; i < 20; i++) {
+            tick();
+        }
+        assertEquals(List.of("to at 6.0"), ended);
+
+        display.moveAlong(List.of(new Location(world(), 9, 4, 0)), 4, Ease.OUT, () -> ended.add("path"));
+        for (int i = 0; i < 8; i++) {
+            tick();
+        }
+        assertEquals(List.of("to at 6.0", "path"), ended);
+    }
+
+    @Test
     void lookAtTurnsInPlaceAndDoesNotStopAGlide() {
         PartState[] parts = {PartState.block("main", ENTITY, -1, 1, Pose.IDENTITY)};
         MotionDisplay display = new MotionDisplay(engine, new Location(world(), 0, 0, 0), parts, 48);

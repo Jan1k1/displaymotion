@@ -625,7 +625,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
         }
         return motion.item(inFront(player, 3).add(0, 1.5, 0), ItemStack.of(Material.DIAMOND_SWORD), ItemDisplay.ItemDisplayTransform.GROUND)
                 .play(SHOW)
-                .moveAlong(loop, 120, Ease.IN_OUT);
+                .moveAlong(loop, 120, Ease.IN_OUT, () -> player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1.2f));
     }
 
     // the dispenser front faces south, thats yaw 0, so lookAt points it right at you

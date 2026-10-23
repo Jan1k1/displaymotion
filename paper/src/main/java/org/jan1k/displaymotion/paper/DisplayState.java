@@ -66,6 +66,8 @@ final class DisplayState {
     Ease glideEase = Ease.LINEAR;
     // null for a straight moveTo
     Curve glideCurve;
+    // runs on the main thread when the glide gets to the end, a new move drops it
+    Runnable glideEnd;
 
     double range;
     int index;
