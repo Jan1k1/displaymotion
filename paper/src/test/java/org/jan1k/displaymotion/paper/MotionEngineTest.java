@@ -12,6 +12,7 @@ import io.netty.channel.embedded.EmbeddedChannel;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TextDisplay;
 import org.bukkit.plugin.Plugin;
@@ -921,6 +922,52 @@ class MotionEngineTest {
             tick();
         }
         assertEquals(List.of("to at 6.0", "path"), ended);
+    }
+
+    @Test
+    void lookAtEntityTurnsOnlyWhenTheTargetMoves() {
+        // Location only keeps a weak ref to its world, so hold the fake one or the gc takes it mid test
+        World world = world();
+        PartState[] parts = {PartState.block("main", ENTITY, -1, 1, Pose.IDENTITY)};
+        MotionDisplay display = new MotionDisplay(engine, new Location(world, 0, 0, 0), parts, 48);
+        engine.submit(() -> engine.add(display.state()));
+        tick();
+        tick();
+        Location[] eyes = {new Location(world, 10, 0, 0)};
+        boolean[] valid = {true};
+        LivingEntity target = FakePacketEvents.proxy(LivingEntity.class, (method, args) -> switch (method) {
+            case "isValid" -> valid[0];
+            case "getEyeLocation", "getLocation" -> eyes[0].clone();
+            default -> null;
+        });
+
+        display.watch(target);
+        assertEquals(270f, display.location().getYaw(), 1e-4f);
+        assertEquals(target, display.lookingAt());
+        tick();
+
+        int turns = 0;
+        for (int i = 0; i < 6; i++) {
+            display.watchTarget(false);
+            turns += kinds(tick()).contains("teleport") ? 1 : 0;
+        }
+        assertEquals(0, turns);
+
+        eyes[0] = new Location(world, 0, 0, 10);
+        for (int i = 0; i < 2; i++) {
+            display.watchTarget(false);
+            turns += kinds(tick()).contains("teleport") ? 1 : 0;
+        }
+        assertEquals(1, turns);
+        assertEquals(0f, display.location().getYaw(), 1e-4f);
+
+        valid[0] = false;
+        display.watchTarget(false);
+        assertNull(display.lookingAt());
+
+        display.watch(target);
+        display.lookAt(new Location(world, 5, 0, 0));
+        assertNull(display.lookingAt());
     }
 
     @Test

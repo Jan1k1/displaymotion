@@ -98,6 +98,7 @@ final class MotionEngine {
     private final Map<Integer, List<DisplayState>> rideGroups = new HashMap<>();
     final Set<MotionDisplay> riding = ConcurrentHashMap.newKeySet();
     final Set<MotionDisplay> following = ConcurrentHashMap.newKeySet();
+    final Set<MotionDisplay> watching = ConcurrentHashMap.newKeySet();
     // main thread only
     final Bodies bodies = new Bodies();
     // real server entities players sit on, removed when the library closes

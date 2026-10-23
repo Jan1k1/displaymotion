@@ -35,6 +35,7 @@ import java.util.function.LongFunction;
 public final class MotionDisplay {
 
     public static final int MAX_TELEPORT_TICKS = 59;
+    private static final float MIN_LOOK_TURN = 0.5f;
     /** The longest {@link #crossfade(Animation, int)}. */
     public static final int MAX_FADE_TICKS = 200;
     /** The biggest size for {@link #scale(float)}. */
@@ -97,6 +98,9 @@ public final class MotionDisplay {
     private final Map<String, Entity> seatEntities = new ConcurrentHashMap<>();
     private volatile Entity vehicle;
     private volatile Entity followed;
+    private volatile Entity watched;
+    // main thread only
+    private int watchTick;
     private volatile Vector followOffset;
     private volatile int followGlide;
     // main thread only
@@ -723,15 +727,91 @@ public final class MotionDisplay {
             throw new IllegalArgumentException("ticks must be 0 to " + MAX_TELEPORT_TICKS + " (the client limit), got " + ticks);
         }
         requireAlive();
+        watched = null;
+        engine.watching.remove(this);
+        turnTo(target, ticks, 0f);
+        return this;
+    }
+
+    /**
+     * Keeps facing {@code target}, a living entity at its eyes. Every 2 ticks it turns if the target moved, the
+     * players' games turn it smooth. A player keeps it after death, other targets stop it when they leave the world.
+     * {@link #lookAt(Location)} or {@link #stopLooking()} stops it. Main thread.
+     * @throws IllegalArgumentException if the entity is not in the world
+     */
+    public MotionDisplay lookAt(Entity target) {
+        Objects.requireNonNull(target, "target");
+        if (!Bukkit.isPrimaryThread()) {
+            throw new IllegalStateException("call lookAt on the main thread");
+        }
+        if (!target.isValid()) {
+            throw new IllegalArgumentException("the target is not in the world");
+        }
+        return watch(target);
+    }
+
+    MotionDisplay watch(Entity target) {
+        requireAlive();
+        watched = target;
+        watchTick = 0;
+        engine.watching.add(this);
+        watchTarget(true);
+        return this;
+    }
+
+    /** Stops {@link #lookAt(Entity)}. It keeps the rotation it has now. */
+    public MotionDisplay stopLooking() {
+        watched = null;
+        engine.watching.remove(this);
+        return this;
+    }
+
+    /** What it keeps looking at, or {@code null}. */
+    public Entity lookingAt() {
+        return watched;
+    }
+
+    // main thread, every tick, but it only turns every 2 ticks like the frames
+    void watchTarget(boolean now) {
+        Entity target = watched;
+        if (target == null) {
+            return;
+        }
+        if (isRemoved()) {
+            engine.watching.remove(this);
+            return;
+        }
+        if (!target.isValid()) {
+            if (!(target instanceof Player player && player.isOnline())) {
+                stopLooking();
+            }
+            return;
+        }
+        if (!now && ++watchTick % Frames.STEP_TICKS != 0) {
+            return;
+        }
+        Location eyes = target instanceof LivingEntity living ? living.getEyeLocation() : target.getLocation();
+        if (eyes.getWorld() == null || !eyes.getWorld().getUID().equals(location.getWorld().getUID())) {
+            return;
+        }
+        turnTo(eyes, now ? 0 : Frames.STEP_TICKS, now ? 0f : MIN_LOOK_TURN);
+    }
+
+    // skips turns smaller than minTurn degrees, a player that stands still would get a packet every 2 ticks for nothing
+    private void turnTo(Location target, int ticks, float minTurn) {
         Location at;
         // no moves++ here, a glide that runs stays the newest and keeps writing the spot with this rotation
         synchronized (moveLock) {
             at = location.clone();
             Vector direction = target.toVector().subtract(at.toVector());
             if (direction.lengthSquared() < 1e-12) {
-                return this;
+                return;
             }
             at.setDirection(direction);
+            float yawTurn = Math.abs(Location.normalizeYaw(at.getYaw() - location.getYaw()));
+            if (yawTurn < minTurn && Math.abs(at.getPitch() - location.getPitch()) < minTurn) {
+                return;
+            }
             location = at;
         }
         if (!seatEntities.isEmpty()) {
@@ -740,7 +820,6 @@ public final class MotionDisplay {
         float yaw = at.getYaw();
         float pitch = at.getPitch();
         engine.submit(() -> engine.turn(state, yaw, pitch, ticks));
-        return this;
     }
 
     /** Glides the whole display along a smooth curve through the points, see {@link #moveAlong(List, int, Ease)}. */
@@ -1390,6 +1469,8 @@ public final class MotionDisplay {
         engine.riding.remove(this);
         followed = null;
         engine.following.remove(this);
+        watched = null;
+        engine.watching.remove(this);
         if (!seatEntities.isEmpty()) {
             if (Bukkit.isPrimaryThread()) {
                 removeSeats();
