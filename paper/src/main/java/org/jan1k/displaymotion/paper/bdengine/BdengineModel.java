@@ -144,6 +144,8 @@ public final class BdengineModel implements ImportedModel {
 
         List<Node> nodes = new ArrayList<>();
         Map<String, Integer> names = new HashMap<>();
+        // spawn adds its own "root" group on top, a collection called Root would clash with it
+        names.put(ROOT, 1);
         walk(root, -1, nodes, names, true);
         return new BdengineModel(List.copyOf(nodes), clips);
     }
@@ -390,8 +392,12 @@ public final class BdengineModel implements ImportedModel {
 
     private static String unique(String base, Map<String, Integer> names) {
         String name = base.isBlank() ? "part" : base.replace(' ', '_').toLowerCase(Locale.ROOT);
-        int seen = names.merge(name, 1, Integer::sum);
-        return seen == 1 ? name : name + "_" + seen;
+        // a, a_2, a would give a_2 two times, so count up until the name is really free
+        String unique = name;
+        for (int n = 2; names.putIfAbsent(unique, 1) != null; n++) {
+            unique = name + "_" + n;
+        }
+        return unique;
     }
 
     private static BlockData blockData(String state) {

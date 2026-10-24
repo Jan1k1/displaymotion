@@ -34,6 +34,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
@@ -98,6 +99,7 @@ final class MotionEngine {
     private final Map<Integer, List<DisplayState>> rideGroups = new HashMap<>();
     final Set<MotionDisplay> riding = ConcurrentHashMap.newKeySet();
     final Set<MotionDisplay> following = ConcurrentHashMap.newKeySet();
+    final Set<MotionDisplay> watching = ConcurrentHashMap.newKeySet();
     // main thread only
     final Bodies bodies = new Bodies();
     // real server entities players sit on, removed when the library closes
@@ -274,6 +276,7 @@ final class MotionEngine {
             return;
         }
         display.glideSteps = 0;
+        display.glideEnd = null;
         if (display.vehicle >= 0) {
             dismount(display, false);
         }
@@ -379,6 +382,7 @@ final class MotionEngine {
             return;
         }
         display.vehicle = -1;
+        selfHidden(display, null);
         // off the vehicle the turn goes back into the entity yaw
         display.yaw = wrap(display.yaw + display.turn);
         display.turn = 0f;
@@ -550,7 +554,80 @@ final class MotionEngine {
             PartState state = display.parts[i];
             if ((part == ALL_PARTS || part == i) && state.kind == PartState.TEXT && !text.equals(state.text)) {
                 state.text = text;
-                sendPart(display, state, packet.content(state));
+                sendText(display, state);
+            }
+        }
+    }
+
+    // players with their own text keep it, the rest get the shared one
+    private void sendText(DisplayState display, PartState part) {
+        if (part.ownTexts == null) {
+            sendPart(display, part, packet.content(part));
+            return;
+        }
+        if (display.fresh) {
+            return;
+        }
+        List<Viewer> targets = new ArrayList<>(display.viewers.size());
+        for (Viewer viewer : display.viewers) {
+            if (!part.ownTexts.containsKey(viewer.id)) {
+                targets.add(viewer);
+            }
+        }
+        if (!targets.isEmpty()) {
+            sendToAll(targets, encode(packet.content(part), targets.getFirst().channel), false);
+        }
+    }
+
+    // null goes back to the shared text
+    void textFor(DisplayState display, int part, UUID player, Component text) {
+        if (display.removed) {
+            return;
+        }
+        Viewer viewer = viewers.get(player);
+        boolean sees = !display.fresh && viewer != null && viewer.visible.contains(display);
+        for (int i = 0; i < display.parts.length; i++) {
+            PartState state = display.parts[i];
+            if ((part != ALL_PARTS && part != i) || state.kind != PartState.TEXT) {
+                continue;
+            }
+            if (text == null) {
+                if (state.ownTexts == null || state.ownTexts.remove(player) == null) {
+                    continue;
+                }
+                if (state.ownTexts.isEmpty()) {
+                    state.ownTexts = null;
+                }
+            } else {
+                if (state.ownTexts == null) {
+                    state.ownTexts = new HashMap<>();
+                }
+                if (text.equals(state.ownTexts.put(player, text))) {
+                    continue;
+                }
+            }
+            if (sees) {
+                queue(viewer, encode(packet.content(state, text == null ? state.text : text), viewer.channel));
+            }
+        }
+    }
+
+    // the spawn packets carry the shared text, so a player with its own gets it right after
+    private void ownTexts(DisplayState display, Viewer viewer) {
+        for (PartState part : display.parts) {
+            Component own = part.ownTexts == null ? null : part.ownTexts.get(viewer.id);
+            if (own != null && part.hasEntity()) {
+                queue(viewer, encode(packet.content(part, own), viewer.channel));
+            }
+        }
+    }
+
+    private void forgetTexts(UUID player) {
+        for (DisplayState display : displays) {
+            for (PartState part : display.parts) {
+                if (part.ownTexts != null && part.ownTexts.remove(player) != null && part.ownTexts.isEmpty()) {
+                    part.ownTexts = null;
+                }
             }
         }
     }
@@ -565,15 +642,25 @@ final class MotionEngine {
 
     void teleport(DisplayState display, UUID world, double x, double y, double z, float yaw, float pitch, int ticks) {
         display.glideSteps = 0;
+        display.glideEnd = null;
         move(display, world, x, y, z, yaw, pitch, ticks);
     }
 
+    // same spot, only the rotation. glideSteps stays so a moveTo keeps going with the new yaw
+    void turn(DisplayState display, float yaw, float pitch, int ticks) {
+        if (display.removed) {
+            return;
+        }
+        move(display, display.world, display.x, display.y, display.z, yaw, pitch, ticks);
+    }
+
     // client teleport_duration is linear and caps at 59 ticks, so step the ease here every 2 ticks
-    void glide(DisplayState display, double x, double y, double z, int ticks, Ease ease, int id) {
+    void glide(DisplayState display, double x, double y, double z, int ticks, Ease ease, int id, Runnable onEnd) {
         if (display.removed) {
             return;
         }
         display.glideId = id;
+        display.glideCurve = null;
         display.fromX = display.x;
         display.fromY = display.y;
         display.fromZ = display.z;
@@ -583,7 +670,37 @@ final class MotionEngine {
         display.glideSteps = Math.max(1, Math.round(ticks / (float) Frames.STEP_TICKS));
         display.glideStep = 0;
         display.glideEase = ease;
+        display.glideEnd = onEnd;
         display.active = true;
+    }
+
+    // the curve starts where the display is now, only the motion thread knows that for sure
+    void glideAlong(DisplayState display, double[] points, int ticks, Ease ease, int id, Runnable onEnd) {
+        if (display.removed) {
+            return;
+        }
+        double[] all = new double[points.length + 3];
+        all[0] = display.x;
+        all[1] = display.y;
+        all[2] = display.z;
+        System.arraycopy(points, 0, all, 3, points.length);
+        Curve curve = Curve.through(all);
+        double[] end = curve.end();
+        glide(display, end[0], end[1], end[2], ticks, ease, id, onEnd);
+        display.glideCurve = curve;
+    }
+
+    private static double[] glideSpot(DisplayState display) {
+        int step = display.glideStep;
+        int steps = display.glideSteps;
+        Ease ease = display.glideEase;
+        if (display.glideCurve != null) {
+            return step >= steps ? display.glideCurve.end() : display.glideCurve.at(ease.apply(step / (float) steps));
+        }
+        return new double[]{
+                lerp(display.fromX, display.toX, step, steps, ease),
+                lerp(display.fromY, display.toY, step, steps, ease),
+                lerp(display.fromZ, display.toZ, step, steps, ease)};
     }
 
     // last step snaps to the exact spot so float math doesnt leave it a hair off
@@ -663,6 +780,16 @@ final class MotionEngine {
         }
     }
 
+    void selfHidden(DisplayState display, UUID player) {
+        if (display.removed || Objects.equals(display.selfHidden, player)) {
+            return;
+        }
+        display.selfHidden = player;
+        if (!display.fresh) {
+            updateViewers(display);
+        }
+    }
+
     void visibleByDefault(DisplayState display, boolean visible) {
         if (display.removed) {
             return;
@@ -688,11 +815,19 @@ final class MotionEngine {
             return;
         }
         display.range = range;
+        // sizeRange stops measuring once it is past the old range, so measure all again or a part grown
+        // since then keeps a size range that is too short now
+        for (PartState part : display.parts) {
+            part.sized = false;
+            part.sizeRange = Double.MAX_VALUE;
+        }
         if (display.fresh) {
             return;
         }
+        composer.compose(display, true);
         List<Viewer> targets = display.viewers;
         if (!targets.isEmpty()) {
+            sendChanges(display, Frames.STEP_TICKS);
             for (PartState part : display.parts) {
                 if (!part.isDisplay()) {
                     continue;
@@ -728,6 +863,7 @@ final class MotionEngine {
     }
 
     void viewerGone(UUID id) {
+        forgetTexts(id);
         Viewer viewer = viewers.remove(id);
         if (viewer == null) {
             return;
@@ -767,6 +903,8 @@ final class MotionEngine {
     }
 
     private void tick() {
+        // commands run as part of the tick that comes now
+        composer.now = tick + 1;
         drainCommands();
         tick++;
 
@@ -897,9 +1035,23 @@ final class MotionEngine {
         if (display.removed) {
             return;
         }
-        texts.removeIf(job -> job.display == display && job.part == part);
-        texts.add(new TextJob(display, part, ticks, every, frame, onEnd, new int[]{0}));
-        setText(display, part, frame.apply(0));
+        texts.removeIf(job -> job.display == display && (part == ALL_PARTS || job.part == part || job.part == ALL_PARTS));
+        TextJob job = new TextJob(display, part, ticks, every, frame, onEnd, new int[]{0});
+        Component first = frame(job, 0);
+        if (first != null) {
+            texts.add(job);
+            setText(display, part, first);
+        }
+    }
+
+    // the format comes from the plugin, if it throws only that job stops, not the whole tick
+    private Component frame(TextJob job, int tick) {
+        try {
+            return job.frame.apply(tick);
+        } catch (Throwable t) {
+            warn("displaymotion text animation failed", t);
+            return null;
+        }
     }
 
     private void stepTexts() {
@@ -912,12 +1064,20 @@ final class MotionEngine {
             int now = ++job.tick[0];
             if (now >= job.ticks) {
                 texts.remove(i);
-                setText(job.display, job.part, job.frame.apply(job.ticks));
+                Component last = frame(job, job.ticks);
+                if (last != null) {
+                    setText(job.display, job.part, last);
+                }
                 if (job.onEnd != null) {
                     regionThread.accept(job.display.handle.location(), job.onEnd);
                 }
             } else if (now % job.every == 0) {
-                setText(job.display, job.part, job.frame.apply(now));
+                Component text = frame(job, now);
+                if (text == null) {
+                    texts.remove(i);
+                } else {
+                    setText(job.display, job.part, text);
+                }
             }
         }
     }
@@ -930,6 +1090,9 @@ final class MotionEngine {
             } catch (Throwable t) {
                 warn("displaymotion command failed", t);
             }
+            // a command can move or change a display after its spawn got cached, a player who comes
+            // close later in this tick would get the old one and never the change
+            dropEncoded();
         }
     }
 
@@ -1004,6 +1167,7 @@ final class MotionEngine {
                 float[] values = viewer.id.equals(display.wearer) ? part.own : part.sent;
                 queue(viewer, encode(packet.spawn(part, values, display.clientRange(), display.moveTicks), viewer.channel));
             }
+            ownTexts(display, viewer);
         }
     }
 
@@ -1021,6 +1185,35 @@ final class MotionEngine {
                 if (i < displays.size() && displays.get(i) != display) {
                     i--;
                 }
+            }
+        }
+        hideCollapsed();
+    }
+
+    // after the steps, so a part that grows again in this step is not hidden first
+    private void hideCollapsed() {
+        List<DisplayState> waiting = composer.hiding;
+        for (int i = waiting.size() - 1; i >= 0; i--) {
+            DisplayState display = waiting.get(i);
+            boolean more = false;
+            for (PartState part : display.parts) {
+                if (part.hideAfter < 0 || display.removed) {
+                    continue;
+                }
+                if (tick < part.hideAfter) {
+                    more = true;
+                    continue;
+                }
+                part.hideAfter = -1;
+                part.hidden = true;
+                List<Viewer> targets = nearViewers(display);
+                if (!display.fresh && !targets.isEmpty()) {
+                    sendToAll(targets, encode(packet.range(part, display.clientRange()), targets.getFirst().channel), false);
+                }
+            }
+            if (!more) {
+                display.hiding = false;
+                waiting.remove(i);
             }
         }
     }
@@ -1079,11 +1272,13 @@ final class MotionEngine {
             }
         }
         if (gliding) {
-            double x = lerp(display.fromX, display.toX, display.glideStep, display.glideSteps, display.glideEase);
-            double y = lerp(display.fromY, display.toY, display.glideStep, display.glideSteps, display.glideEase);
-            double z = lerp(display.fromZ, display.toZ, display.glideStep, display.glideSteps, display.glideEase);
-            display.handle.movedTo(display.glideId, x, y, z);
-            move(display, display.world, x, y, z, display.yaw, display.pitch, Frames.STEP_TICKS);
+            double[] at = glideSpot(display);
+            display.handle.movedTo(display.glideId, at[0], at[1], at[2]);
+            move(display, display.world, at[0], at[1], at[2], display.yaw, display.pitch, Frames.STEP_TICKS);
+            if (display.glideStep >= display.glideSteps && display.glideEnd != null) {
+                regionThread.accept(display.handle.location(), display.glideEnd);
+                display.glideEnd = null;
+            }
         }
     }
 
@@ -1221,6 +1416,7 @@ final class MotionEngine {
             queue(viewer, encode(wearer ? packet.spawn(part, part.own, display.clientRange(), display.moveTicks)
                     : packet.spawn(part, display.clientRange(), display.moveTicks), viewer.channel));
         }
+        ownTexts(display, viewer);
         if (display.vehicle >= 0) {
             queue(viewer, encode(passengers(display.vehicle), viewer.channel));
         }
@@ -1254,10 +1450,10 @@ final class MotionEngine {
                 continue;
             }
             if (part.changes != 0 && (wearer == null || targets.size() > 1)) {
-                sendToAll(targets, wearer, encode(packet.frame(part, part.changes, duration), targets.getFirst().channel), true);
+                sendToAll(targets, wearer, encode(packet.frame(part, part.changes, duration, display.clientRange()), targets.getFirst().channel), true);
             }
             if (wearer != null && part.ownChanges != 0) {
-                sendToAll(List.of(wearer), null, encode(packet.frame(part, part.own, part.ownChanges, duration), wearer.channel), true);
+                sendToAll(List.of(wearer), null, encode(packet.frame(part, part.own, part.ownChanges, duration, display.clientRange()), wearer.channel), true);
             }
         }
     }
@@ -1350,6 +1546,7 @@ final class MotionEngine {
                 }
             }
         }
+        ownTexts(display, viewer);
         // after the spawn, the client ignores passengers it does not know yet
         if (display.vehicle >= 0) {
             queue(viewer, encode(passengers(display.vehicle), viewer.channel));
@@ -1390,7 +1587,10 @@ final class MotionEngine {
             ChannelHelper.runInEventLoop(channel, () -> write(channel, buffers));
         }
         dirty.clear();
+        dropEncoded();
+    }
 
+    private void dropEncoded() {
         for (int i = 0; i < encoded.size(); i++) {
             DisplayState display = encoded.get(i);
             if (display.spawnBuffers != null) {

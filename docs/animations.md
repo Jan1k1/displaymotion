@@ -40,7 +40,7 @@ Animation hop = Animations.slide(0f, 1f, 0f, 6, Ease.OUT)
 
 Read the code above like this:
 
-- `idle` turns and floats at the same time, for ever.
+- `idle` turns and floats at the same time, forever.
 - `show` grows the display in, then goes on with `idle`.
 - `hop` jumps up one block, falls back down, and does this again and again.
 

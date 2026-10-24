@@ -35,6 +35,7 @@ import java.util.function.LongFunction;
 public final class MotionDisplay {
 
     public static final int MAX_TELEPORT_TICKS = 59;
+    private static final float MIN_LOOK_TURN = 0.5f;
     /** The longest {@link #crossfade(Animation, int)}. */
     public static final int MAX_FADE_TICKS = 200;
     /** The biggest size for {@link #scale(float)}. */
@@ -51,6 +52,8 @@ public final class MotionDisplay {
     private static final int COUNT_EVERY_TICKS = 2;
     /** The biggest hitbox side, in blocks. */
     public static final float MAX_HITBOX_SIZE = 16f;
+    /** The most points for {@link #moveAlong(List, int)}. */
+    public static final int MAX_PATH_POINTS = 256;
 
     // a bit more then survival reach, so a click on the far edge of a big box still counts
     private static final double CLICK_REACH = 8.0;
@@ -95,6 +98,9 @@ public final class MotionDisplay {
     private final Map<String, Entity> seatEntities = new ConcurrentHashMap<>();
     private volatile Entity vehicle;
     private volatile Entity followed;
+    private volatile Entity watched;
+    // main thread only
+    private int watchTick;
     private volatile Vector followOffset;
     private volatile int followGlide;
     // main thread only
@@ -120,6 +126,9 @@ public final class MotionDisplay {
 
     volatile boolean playing;
     private volatile boolean visibleByDefault = true;
+    // copy of the engine sets for clicks on the main thread
+    private final Set<UUID> shownTo = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> hiddenFrom = ConcurrentHashMap.newKeySet();
     private volatile double speed = 1.0;
     private volatile boolean removed;
 
@@ -505,6 +514,43 @@ public final class MotionDisplay {
         return text(index, text);
     }
 
+    /**
+     * Gives one player its own text on every text part, the other players keep the shared text.
+     * Good for names, coins or placeholders. {@code null} gives the player the shared text again.
+     * The text goes away when the player leaves the server.
+     * @throws IllegalArgumentException if the display has no text part or the text is too big
+     */
+    public MotionDisplay text(Player player, Component text) {
+        return textFor(player, MotionEngine.ALL_PARTS, text);
+    }
+
+    /** Gives one player its own text on one text part, see {@link #text(Player, Component)}. */
+    public MotionDisplay text(Player player, String part, Component text) {
+        int index = index(part);
+        if (state.parts[index].kind != PartState.TEXT) {
+            throw new IllegalArgumentException("part '" + part + "' is not a text part");
+        }
+        return textFor(player, index, text);
+    }
+
+    private MotionDisplay textFor(Player player, int part, Component text) {
+        Objects.requireNonNull(player, "player");
+        if (text != null) {
+            ModelBuilder.checkText(text);
+        }
+        if (part == MotionEngine.ALL_PARTS && !hasText()) {
+            throw new IllegalArgumentException("this display has no text part");
+        }
+        requireAlive();
+        // quit already ran for an offline player, nothing would clear this text again
+        if (text != null && !player.isOnline()) {
+            return this;
+        }
+        UUID id = player.getUniqueId();
+        engine.submit(() -> engine.textFor(state, part, id, text));
+        return this;
+    }
+
     private MotionDisplay glow(int part, Color color) {
         requireAlive();
         boolean on = color != null;
@@ -676,18 +722,199 @@ public final class MotionDisplay {
 
     /**
      * Glides the whole display from where it is now to {@code to} over {@code ticks} with {@code ease},
-     * keeping its rotation. A new {@code moveTo}, {@link #teleport(Location)} or {@link #follow(Entity)} stops the old one.
+     * keeping its rotation. A new {@code moveTo}, {@link #moveAlong(List, int)}, {@link #teleport(Location)} or
+     * {@link #follow(Entity)} stops the old one.
      */
     public MotionDisplay moveTo(Location to, int ticks, Ease ease) {
+        return moveTo(to, ticks, ease, null);
+    }
+
+    /**
+     * Same as {@link #moveTo(Location, int, Ease)}. {@code onEnd} runs once on the main thread when it gets there.
+     * It never runs when a new move, a ride or a follow stops the glide first.
+     */
+    public MotionDisplay moveTo(Location to, int ticks, Ease ease, Runnable onEnd) {
         Objects.requireNonNull(to, "location");
         Objects.requireNonNull(ease, "ease");
         if (to.getWorld() == null || !to.getWorld().getUID().equals(location.getWorld().getUID())) {
             throw new IllegalArgumentException("location must be in the same world");
         }
+        checkGlideTicks(ticks);
+        requireAlive();
+        double x = to.getX();
+        double y = to.getY();
+        double z = to.getZ();
+        int glide = startGlide();
+        engine.submit(() -> engine.glide(state, x, y, z, ticks, ease, glide, onEnd));
+        return this;
+    }
+
+    /** Turns the whole display at once to face {@code target}, see {@link #lookAt(Location, int)}. */
+    public MotionDisplay lookAt(Location target) {
+        return lookAt(target, 0);
+    }
+
+    /**
+     * Turns the whole display to face {@code target}, yaw and pitch like a mob looks, and lets the client turn it
+     * over {@code ticks}, 0 to 59. It stays where it is, a {@link #moveTo(Location, int)} or
+     * {@link #moveAlong(List, int)} keeps going. While it rides or follows, those turn it instead.
+     */
+    public MotionDisplay lookAt(Location target, int ticks) {
+        Objects.requireNonNull(target, "target");
+        if (target.getWorld() == null || !target.getWorld().getUID().equals(location.getWorld().getUID())) {
+            throw new IllegalArgumentException("target must be in the same world");
+        }
+        if (ticks < 0 || ticks > MAX_TELEPORT_TICKS) {
+            throw new IllegalArgumentException("ticks must be 0 to " + MAX_TELEPORT_TICKS + " (the client limit), got " + ticks);
+        }
+        requireAlive();
+        watched = null;
+        engine.watching.remove(this);
+        turnTo(target, ticks, 0f);
+        return this;
+    }
+
+    /**
+     * Keeps facing {@code target}, a living entity at its eyes. Every 2 ticks it turns if the target moved, the
+     * players' games turn it smooth. A player keeps it after death, other targets stop it when they leave the world.
+     * {@link #lookAt(Location)} or {@link #stopLooking()} stops it. Main thread.
+     * @throws IllegalArgumentException if the entity is not in the world
+     */
+    public MotionDisplay lookAt(Entity target) {
+        Objects.requireNonNull(target, "target");
+        if (!Bukkit.isPrimaryThread()) {
+            throw new IllegalStateException("call lookAt on the main thread");
+        }
+        if (!target.isValid()) {
+            throw new IllegalArgumentException("the target is not in the world");
+        }
+        return watch(target);
+    }
+
+    MotionDisplay watch(Entity target) {
+        requireAlive();
+        watched = target;
+        watchTick = 0;
+        engine.watching.add(this);
+        watchTarget(true);
+        return this;
+    }
+
+    /** Stops {@link #lookAt(Entity)}. It keeps the rotation it has now. */
+    public MotionDisplay stopLooking() {
+        watched = null;
+        engine.watching.remove(this);
+        return this;
+    }
+
+    /** What it keeps looking at, or {@code null}. */
+    public Entity lookingAt() {
+        return watched;
+    }
+
+    // main thread, every tick, but it only turns every 2 ticks like the frames
+    void watchTarget(boolean now) {
+        Entity target = watched;
+        if (target == null) {
+            return;
+        }
+        if (isRemoved()) {
+            engine.watching.remove(this);
+            return;
+        }
+        if (!target.isValid()) {
+            if (!(target instanceof Player player && player.isOnline())) {
+                stopLooking();
+            }
+            return;
+        }
+        if (!now && ++watchTick % Frames.STEP_TICKS != 0) {
+            return;
+        }
+        Location eyes = target instanceof LivingEntity living ? living.getEyeLocation() : target.getLocation();
+        if (eyes.getWorld() == null || !eyes.getWorld().getUID().equals(location.getWorld().getUID())) {
+            return;
+        }
+        turnTo(eyes, now ? 0 : Frames.STEP_TICKS, now ? 0f : MIN_LOOK_TURN);
+    }
+
+    // skips turns smaller than minTurn degrees, a player that stands still would get a packet every 2 ticks for nothing
+    private void turnTo(Location target, int ticks, float minTurn) {
+        Location at;
+        // no moves++ here, a glide that runs stays the newest and keeps writing the spot with this rotation
+        synchronized (moveLock) {
+            at = location.clone();
+            Vector direction = target.toVector().subtract(at.toVector());
+            if (direction.lengthSquared() < 1e-12) {
+                return;
+            }
+            at.setDirection(direction);
+            float yawTurn = Math.abs(Location.normalizeYaw(at.getYaw() - location.getYaw()));
+            if (yawTurn < minTurn && Math.abs(at.getPitch() - location.getPitch()) < minTurn) {
+                return;
+            }
+            location = at;
+        }
+        if (!seatEntities.isEmpty()) {
+            engine.regionThread.accept(location, this::moveSeats);
+        }
+        float yaw = at.getYaw();
+        float pitch = at.getPitch();
+        engine.submit(() -> engine.turn(state, yaw, pitch, ticks));
+    }
+
+    /** Glides the whole display along a smooth curve through the points, see {@link #moveAlong(List, int, Ease)}. */
+    public MotionDisplay moveAlong(List<Location> points, int ticks) {
+        return moveAlong(points, ticks, Ease.LINEAR);
+    }
+
+    /**
+     * Glides the whole display from where it is now along a smooth curve through {@code points} over {@code ticks},
+     * keeping its rotation. It ends on the last point. With {@code LINEAR} it moves at the same speed the whole way,
+     * other eases change the speed like on {@link #moveTo(Location, int, Ease)}. Good for flights, cutscenes and
+     * projectiles. A new {@code moveAlong}, {@link #moveTo(Location, int)}, {@link #teleport(Location)} or
+     * {@link #follow(Entity)} stops the old one.
+     * @throws IllegalArgumentException if there are no points, more than {@link #MAX_PATH_POINTS}, or a point is in another world
+     */
+    public MotionDisplay moveAlong(List<Location> points, int ticks, Ease ease) {
+        return moveAlong(points, ticks, ease, null);
+    }
+
+    /**
+     * Same as {@link #moveAlong(List, int, Ease)}. {@code onEnd} runs once on the main thread when it gets to the
+     * last point. It never runs when a new move, a ride or a follow stops the glide first.
+     */
+    public MotionDisplay moveAlong(List<Location> points, int ticks, Ease ease, Runnable onEnd) {
+        Objects.requireNonNull(points, "points");
+        Objects.requireNonNull(ease, "ease");
+        if (points.isEmpty() || points.size() > MAX_PATH_POINTS) {
+            throw new IllegalArgumentException("a path has 1 to " + MAX_PATH_POINTS + " points, got " + points.size());
+        }
+        UUID world = location.getWorld().getUID();
+        double[] xyz = new double[points.size() * 3];
+        for (int i = 0; i < points.size(); i++) {
+            Location point = Objects.requireNonNull(points.get(i), "point");
+            if (point.getWorld() == null || !point.getWorld().getUID().equals(world)) {
+                throw new IllegalArgumentException("every point must be in the same world as the display");
+            }
+            xyz[i * 3] = point.getX();
+            xyz[i * 3 + 1] = point.getY();
+            xyz[i * 3 + 2] = point.getZ();
+        }
+        checkGlideTicks(ticks);
+        requireAlive();
+        int glide = startGlide();
+        engine.submit(() -> engine.glideAlong(state, xyz, ticks, ease, glide, onEnd));
+        return this;
+    }
+
+    private static void checkGlideTicks(int ticks) {
         if (ticks < 1 || ticks > Frames.MAX_TICKS) {
             throw new IllegalArgumentException("ticks must be 1 to " + Frames.MAX_TICKS + ", got " + ticks);
         }
-        requireAlive();
+    }
+
+    private int startGlide() {
         if (vehicle != null) {
             vehicle = null;
             engine.riding.remove(this);
@@ -696,15 +923,9 @@ public final class MotionDisplay {
         if (followed != null) {
             unfollow();
         }
-        double x = to.getX();
-        double y = to.getY();
-        double z = to.getZ();
-        int glide;
         synchronized (moveLock) {
-            glide = ++moves;
+            return ++moves;
         }
-        engine.submit(() -> engine.glide(state, x, y, z, ticks, ease, glide));
-        return this;
     }
 
     private void moved(Location at) {
@@ -865,11 +1086,10 @@ public final class MotionDisplay {
         double y = at.getY();
         double z = at.getZ();
         engine.riding.add(this);
-        if (effectiveSelfView() == SelfView.HIDE && vehicle instanceof Player player) {
-            hide(player);
-        }
         UUID wearer = vehicle instanceof Player player ? player.getUniqueId() : null;
         engine.submit(() -> engine.ride(state, id, passengers, world, x, y, z, pose, wearer));
+        // after ride, a ride from one entity to the next dismounts first and that clears the old wearer
+        selfHide(vehicle);
         return this;
     }
 
@@ -947,9 +1167,6 @@ public final class MotionDisplay {
         if (vehicle == null || isRemoved()) {
             return this;
         }
-        if (effectiveSelfView() == SelfView.HIDE && vehicle instanceof Player player) {
-            show(player);
-        }
         vehicle = null;
         engine.riding.remove(this);
         engine.submit(() -> engine.dismount(state, true));
@@ -966,14 +1183,15 @@ public final class MotionDisplay {
         SelfView before = effectiveSelfView();
         selfView = view;
         SelfView after = effectiveSelfView();
-        if (before != after && vehicle instanceof Player player) {
-            if (after == SelfView.HIDE) {
-                hide(player);
-            } else if (before == SelfView.HIDE) {
-                show(player);
-            }
+        if (before != after) {
+            selfHide(vehicle);
         }
         return this;
+    }
+
+    private void selfHide(Entity wearer) {
+        UUID id = effectiveSelfView() == SelfView.HIDE && wearer instanceof Player player ? player.getUniqueId() : null;
+        engine.submit(() -> engine.selfHidden(state, id));
     }
 
     /** What the wearer sees now, the default for the follow when nothing was set. */
@@ -1138,9 +1356,23 @@ public final class MotionDisplay {
         return visibleByDefault;
     }
 
+    /**
+     * True when this player may see the display, after {@link #show(Player)}, {@link #hide(Player)}
+     * and {@link #visibleByDefault(boolean)}. Distance does not count.
+     */
+    public boolean canSee(Player player) {
+        return canSee(Objects.requireNonNull(player, "player").getUniqueId());
+    }
+
+    private boolean canSee(UUID id) {
+        return !hiddenFrom.contains(id) && (visibleByDefault || shownTo.contains(id));
+    }
+
     private MotionDisplay visibility(Player player, boolean visible) {
         UUID id = Objects.requireNonNull(player, "player").getUniqueId();
         requireAlive();
+        (visible ? hiddenFrom : shownTo).remove(id);
+        (visible ? shownTo : hiddenFrom).add(id);
         engine.submit(() -> engine.visibility(state, id, visible));
         return this;
     }
@@ -1247,6 +1479,11 @@ public final class MotionDisplay {
             engine.debug("click on '" + hitbox.name + "' dropped: " + (handler == null ? "no onClick handler" : "display removed"));
             return;
         }
+        // ids go up one by one, a hacked client can guess the box of a quest npc it never got
+        if (!canSee(id)) {
+            engine.debug("click on '" + hitbox.name + "' dropped: the player does not see this display");
+            return;
+        }
         Player player = Bukkit.getPlayer(id);
         if (player == null || !inReach(player, hitbox)) {
             engine.debug("click on '" + hitbox.name + "' dropped: " + (player == null ? "player not online" : "too far away"));
@@ -1287,6 +1524,8 @@ public final class MotionDisplay {
         engine.riding.remove(this);
         followed = null;
         engine.following.remove(this);
+        watched = null;
+        engine.watching.remove(this);
         if (!seatEntities.isEmpty()) {
             if (Bukkit.isPrimaryThread()) {
                 removeSeats();

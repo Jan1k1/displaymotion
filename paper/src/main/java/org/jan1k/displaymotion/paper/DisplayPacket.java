@@ -14,6 +14,7 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
     static final int RIGHT_ROTATION = 8;
     static final int ALL = TRANSLATION | LEFT_ROTATION | SCALE | RIGHT_ROTATION;
     static final int BOX = 16;
+    static final int VIEW = 32;
 
     private static final int FLAGS_SLOT = 0;
     private static final int START_DELAY_SLOT = 8;
@@ -59,6 +60,7 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
     private final int componentType;
 
     private PartState part;
+    private net.kyori.adventure.text.Component text;
     private float[] values;
     private int changes;
     private int duration;
@@ -79,13 +81,13 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
         componentType = EntityDataTypes.ADV_COMPONENT.getId(version);
     }
 
-    DisplayPacket frame(PartState part, int changes, int duration) {
-        return frame(part, part.sent, changes, duration);
+    DisplayPacket frame(PartState part, int changes, int duration, double range) {
+        return frame(part, part.sent, changes, duration, range);
     }
 
     // values is part.sent, or part.own for the player that wears a riding display
-    DisplayPacket frame(PartState part, float[] values, int changes, int duration) {
-        set(part, FRAME, changes, duration, 0);
+    DisplayPacket frame(PartState part, float[] values, int changes, int duration, double range) {
+        set(part, FRAME, changes, duration, range);
         this.values = values;
         return this;
     }
@@ -118,9 +120,17 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
         return set(part, CONTENT, 0, 0, 0);
     }
 
+    // a text part with the text of one player instead of the shared one
+    DisplayPacket content(PartState part, net.kyori.adventure.text.Component text) {
+        set(part, CONTENT, 0, 0, 0);
+        this.text = text;
+        return this;
+    }
+
     private DisplayPacket set(PartState part, int mode, int changes, int duration, double range) {
         this.part = part;
         this.values = part.sent;
+        this.text = part.text;
         this.mode = mode;
         this.changes = changes;
         this.duration = duration;
@@ -161,6 +171,9 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
         }
         if ((changes & BOX) != 0) {
             writeBox();
+        }
+        if ((changes & VIEW) != 0) {
+            writeViewRange();
         }
 
         if ((changes & TRANSLATION) != 0) {
@@ -203,9 +216,11 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
         writeVarInt(moveTicks);
     }
 
+    // 0 for a hidden part, the client checks distance < view_range * 64 so it never draws it.
+    // else the smaller of the display range and the size range, see Composer.sizeRange
     private void writeViewRange() {
         entry(VIEW_RANGE_SLOT, floatType);
-        writeFloat((float) (range / BLOCKS_PER_VIEW_RANGE));
+        writeFloat(part.hidden ? 0f : (float) (Math.min(range, part.sizeRange) / BLOCKS_PER_VIEW_RANGE));
     }
 
     private void writeLook() {
@@ -247,7 +262,7 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
             }
             default -> {
                 entry(CONTENT_SLOT, componentType);
-                writeComponent(part.text);
+                writeComponent(text);
             }
         }
     }

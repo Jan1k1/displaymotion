@@ -22,33 +22,13 @@ display.play(Animations.popOut(10), display::remove);
 
 ## Follow a player like a pet
 
-A task moves the display every 2 ticks. The `4` makes the client glide over 4 ticks, so the pet trails a bit behind the player.
+`follow` moves the display every 2 ticks and the client glides it over 4 ticks, so the pet trails a bit behind the player.
 
 ```java
-MotionDisplay pet = motion.item(spot(player), ItemStack.of(Material.DIAMOND_SWORD)).play(FLOAT);
-Bukkit.getScheduler().runTaskTimer(plugin, task -> {
-    if (pet.isRemoved() || !player.isOnline()) {
-        task.cancel();
-        return;
-    }
-    pet.teleport(spot(player), 4);   // move every 2 ticks, glide over 4, so it trails behind
-}, 2L, 2L);
+MotionDisplay pet = motion.item(player.getLocation(), ItemStack.of(Material.DIAMOND_SWORD)).play(FLOAT).follow(player);
 ```
 
-`spot` is a small helper that picks a place behind the player:
-
-```java
-static Location spot(Player player) {
-    Location spot = player.getLocation();
-    Vector back = spot.getDirection().setY(0);
-    if (back.lengthSquared() > 1e-6) {
-        spot.subtract(back.normalize().multiply(1.2));
-    }
-    spot.add(0, 1.6, 0);
-    spot.setPitch(0f);
-    return spot;
-}
-```
+To pick the spot yourself, use `follow(player, new Vector(0.7, 1.7, -0.6), 5)`: x to the right, y up, z forward. `unfollow()` stops it. See [Models](models.md).
 
 ## Only one player sees it
 
@@ -67,6 +47,8 @@ display.hide(player);
 display.show(player);   // back again
 ```
 
+`display.canSee(player)` tells you if the player is allowed to see it. Distance does not count.
+
 ## Label that faces the player
 
 A billboard text turns to look at every player, so it is always readable.
@@ -82,6 +64,18 @@ motion.text(location, Component.text("Spawn", NamedTextColor.GOLD))
 ```java
 label.text(Component.text("Open now", NamedTextColor.AQUA));   // label is a text display you spawned before
 ```
+
+## A different text for each player
+
+```java
+label.text(player, Component.text("Hi " + player.getName(), NamedTextColor.GOLD));   // only this player sees it
+label.text(player, null);                                                              // back to the shared text
+```
+
+- The other players keep the shared text. A model with more text parts takes the part name: `text(player, "title", text)`.
+- Good for names, coins, quests or PlaceholderAPI. Call it again when the value changes.
+- It is one packet to one player, the display is not spawned again. The text goes away when the player leaves.
+- Try it in game with `/dm button`: every player sees only its own clicks.
 
 ## Glowing outline
 
@@ -187,7 +181,7 @@ board.remove();                                        // when you are done
 
 ## Spawn an imported model
 
-Load the file once. Spawn it every time you need it. See [Importing](importing.md) for the full steps.
+Load the file once. Spawn it every time you need it. `load` throws an `IOException` when the file is missing or broken, so catch it. See [Importing](importing.md) for the full steps.
 
 ```java
 ImportedModel robot = ImportedModel.load(getDataFolder().toPath().resolve("models/robot.bbmodel"));

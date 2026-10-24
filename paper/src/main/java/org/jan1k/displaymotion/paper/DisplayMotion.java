@@ -248,6 +248,9 @@ public final class DisplayMotion {
         for (MotionDisplay display : engine.following) {
             display.followTarget(rideScratch);
         }
+        for (MotionDisplay display : engine.watching) {
+            display.watchTarget(false);
+        }
     }
 
     private final class Packets implements PacketListener {

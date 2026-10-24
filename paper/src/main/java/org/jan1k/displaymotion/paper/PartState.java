@@ -45,8 +45,17 @@ final class PartState {
     int changes;
     float cullWidth;
     float cullHeight;
+    // at scale 0, so the client has view range 0 for it and does not draw it at all. see Composer.hide
+    boolean hidden;
+    // engine tick when a part that went to scale 0 gets hidden, -1 when nothing waits
+    long hideAfter = -1;
+    // past this many blocks the part is too small to see, so the client gets this as its view range. see Composer.sizeRange
+    double sizeRange = Double.MAX_VALUE;
+    boolean sized;
 
     Component text;
+    // players with their own text on this part, see MotionDisplay.text(Player, Component). null while nobody has one
+    java.util.Map<java.util.UUID, Component> ownTexts;
     boolean glowing;
     int glowColor = -1;
     int brightness = -1;

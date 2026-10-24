@@ -12,6 +12,7 @@ import io.netty.channel.embedded.EmbeddedChannel;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TextDisplay;
 import org.bukkit.plugin.Plugin;
@@ -184,10 +185,115 @@ class MotionEngineTest {
         List<Float> scales = new ArrayList<>();
         for (int i = 0; i < 60; i++) {
             for (Packet packet : tick()) {
-                scales.add(((Vector3f) value(packet, 12)).x);
+                if (has(packet, 12)) {
+                    scales.add(((Vector3f) value(packet, 12)).x);
+                }
             }
         }
         return scales;
+    }
+
+    @Test
+    void partAtScaleZeroIsNotDrawnUntilItGrows() {
+        Animation wait = Animation.keyframes()
+                .at(0, Pose.IDENTITY.withScale(0f))
+                .at(20, Pose.IDENTITY.withScale(0f))
+                .at(30, Pose.IDENTITY, Ease.OUT)
+                .build();
+        display().play(wait);
+        tick();
+        List<Packet> spawn = tick();
+        assertEquals(52f / 64f, (float) value(spawn.get(2), 17), 1e-6f);
+
+        List<Float> ranges = new ArrayList<>();
+        int frames = 0;
+        for (int i = 0; i < 16; i++) {
+            for (Packet packet : tick()) {
+                if (has(packet, 17)) {
+                    ranges.add((float) value(packet, 17));
+                }
+                if (has(packet, 12)) {
+                    frames++;
+                }
+            }
+        }
+        assertEquals(List.of(0f), ranges);
+        assertEquals(0, frames);
+
+        Packet first = null;
+        for (int i = 0; i < 20 && first == null; i++) {
+            for (Packet packet : tick()) {
+                if (first == null && has(packet, 12)) {
+                    first = packet;
+                }
+            }
+        }
+        assertNotNull(first);
+        assertTrue(((Vector3f) value(first, 12)).x > 0f);
+        assertEquals(52f / 64f, (float) value(first, 17), 1e-6f);
+    }
+
+    @Test
+    void tinyPartGetsAShortRangeAndGrowsBackWhenItGetsBig() {
+        PartState[] parts = {
+                PartState.block("body", ENTITY, -1, 1, Pose.IDENTITY),
+                PartState.block("spark", ENTITY + 1, -1, 1, Pose.IDENTITY.withScale(0.05f))};
+        MotionDisplay display = new MotionDisplay(engine, new Location(world(), 0, 0, 0), parts, 48);
+        engine.submit(() -> engine.add(display.state()));
+        tick();
+        float body = -1f;
+        float spark = -1f;
+        for (Packet packet : tick()) {
+            if (has(packet, 17)) {
+                if (packet.entity() == ENTITY) {
+                    body = (float) value(packet, 17);
+                } else if (packet.entity() == ENTITY + 1) {
+                    spark = (float) value(packet, 17);
+                }
+            }
+        }
+        assertEquals(52f / 64f, body, 1e-6f);
+        assertTrue(spark > 0f && spark < 52f / 64f, "spark range " + spark);
+
+        display.scale("spark", 20f, 10);
+        float last = spark;
+        for (int i = 0; i < 30; i++) {
+            for (Packet packet : tick()) {
+                if (packet.entity() == ENTITY + 1 && has(packet, 17)) {
+                    last = (float) value(packet, 17);
+                }
+            }
+        }
+        assertEquals(52f / 64f, last, 1e-6f);
+    }
+
+    @Test
+    void hiddenChildGetsNoFramesWhileItsParentMoves() {
+        PartState[] parts = {
+                PartState.block("body", ENTITY, -1, 1, Pose.IDENTITY),
+                PartState.block("flame", ENTITY + 1, 0, 1, Pose.IDENTITY.withScale(0f))};
+        MotionDisplay display = new MotionDisplay(engine, new Location(world(), 0, 0, 0), parts, 48);
+        engine.submit(() -> engine.add(display.state()));
+        display.play(Animations.spin(40));
+        tick();
+        tick();
+        for (int i = 0; i < 6; i++) {
+            tick();
+        }
+
+        int body = 0;
+        int flame = 0;
+        for (int i = 0; i < 20; i++) {
+            for (Packet packet : tick()) {
+                if (packet.entity() == ENTITY) {
+                    body++;
+                } else if (packet.entity() == ENTITY + 1) {
+                    flame++;
+                }
+            }
+        }
+        assertTrue(body >= 9);
+        assertEquals(0, flame);
     }
 
     @Test
@@ -391,6 +497,34 @@ class MotionEngineTest {
         assertEquals(List.of("destroy"), kinds(tick()));
         display.show(player());
         assertEquals(List.of("bundle", "spawn", "meta", "bundle"), kinds(tick()));
+    }
+
+    @Test
+    void canSeeFollowsShowAndHide() {
+        MotionDisplay display = display();
+        assertTrue(display.canSee(player()));
+        display.hide(player());
+        assertFalse(display.canSee(player()));
+        display.visibleByDefault(false).show(player());
+        assertTrue(display.canSee(player()));
+    }
+
+    @Test
+    void textForOfflinePlayerIsDropped() {
+        PartState[] parts = {PartState.text("main", ENTITY, -1, Component.text("x"), Pose.IDENTITY)};
+        MotionDisplay sign = new MotionDisplay(engine, new Location(world(), 0, 0, 0), parts, 48);
+        engine.submit(() -> engine.add(sign.state()));
+        tick();
+        tick();
+
+        Player gone = FakePacketEvents.proxy(Player.class, (method, args) -> switch (method) {
+            case "getUniqueId" -> PLAYER;
+            case "isOnline" -> false;
+            default -> null;
+        });
+        sign.text(gone, Component.text("hi"));
+
+        assertEquals(List.of(), tick());
     }
 
     @Test
@@ -694,6 +828,33 @@ class MotionEngineTest {
     }
 
     @Test
+    void ownTextStaysForThatPlayerAndComesBackAfterRespawn() {
+        PartState[] parts = {PartState.text("main", ENTITY, -1, Component.text("x"), Pose.IDENTITY)};
+        MotionDisplay sign = new MotionDisplay(engine, new Location(world(), 0, 0, 0), parts, 48);
+        engine.submit(() -> engine.add(sign.state()));
+        tick();
+        tick();
+
+        Component own = Component.text("hi Steve");
+        engine.submit(() -> engine.textFor(sign.state(), MotionEngine.ALL_PARTS, PLAYER, own));
+        List<Packet> set = tick();
+        sign.text(Component.text("shared"));
+        List<Packet> shared = tick();
+        viewerAt(200);
+        tick();
+        viewerAt(0);
+        List<Packet> back = tick();
+        engine.submit(() -> engine.textFor(sign.state(), MotionEngine.ALL_PARTS, PLAYER, null));
+        List<Packet> cleared = tick();
+
+        assertEquals(own, value(set.getFirst(), 23));
+        assertEquals(0, shared.size());
+        Packet last = back.stream().filter(p -> p.kind().equals("meta")).reduce((a, b) -> b).orElseThrow();
+        assertEquals(own, value(last, 23));
+        assertEquals(Component.text("shared"), value(cleared.getFirst(), 23));
+    }
+
+    @Test
     void farViewerGetsNoFramesAndCatchesUpWhenItComesBack() {
         MotionDisplay display = display().lod(10);
         tick();
@@ -783,6 +944,119 @@ class MotionEngineTest {
     }
 
     @Test
+    void moveOnEndRunsOnceWhenItArrivesAndNotWhenStopped() {
+        engine.regionThread = (at, task) -> task.run();
+        MotionDisplay display = display();
+        tick();
+        tick();
+        List<String> ended = new ArrayList<>();
+
+        display.moveTo(new Location(world(), 6, 0, 0), 6, Ease.LINEAR, () -> ended.add("to at " + display.location().getX()));
+        for (int i = 0; i < 2; i++) {
+            tick();
+        }
+        assertEquals(List.of(), ended);
+        for (int i = 0; i < 8; i++) {
+            tick();
+        }
+        assertEquals(List.of("to at 6.0"), ended);
+
+        display.moveAlong(List.of(new Location(world(), 6, 3, 0), new Location(world(), 0, 0, 0)), 10, Ease.LINEAR,
+                () -> ended.add("stopped"));
+        tick();
+        display.moveTo(new Location(world(), 2, 0, 0), 4, Ease.LINEAR, () -> ended.add("second"));
+        tick();
+        display.teleport(new Location(world(), 9, 0, 0));
+        for (int i = 0; i < 20; i++) {
+            tick();
+        }
+        assertEquals(List.of("to at 6.0"), ended);
+
+        display.moveAlong(List.of(new Location(world(), 9, 4, 0)), 4, Ease.OUT, () -> ended.add("path"));
+        for (int i = 0; i < 8; i++) {
+            tick();
+        }
+        assertEquals(List.of("to at 6.0", "path"), ended);
+    }
+
+    @Test
+    void lookAtEntityTurnsOnlyWhenTheTargetMoves() {
+        // Location only keeps a weak ref to its world, so hold the fake one or the gc takes it mid test
+        World world = world();
+        PartState[] parts = {PartState.block("main", ENTITY, -1, 1, Pose.IDENTITY)};
+        MotionDisplay display = new MotionDisplay(engine, new Location(world, 0, 0, 0), parts, 48);
+        engine.submit(() -> engine.add(display.state()));
+        tick();
+        tick();
+        Location[] eyes = {new Location(world, 10, 0, 0)};
+        boolean[] valid = {true};
+        LivingEntity target = FakePacketEvents.proxy(LivingEntity.class, (method, args) -> switch (method) {
+            case "isValid" -> valid[0];
+            case "getEyeLocation", "getLocation" -> eyes[0].clone();
+            default -> null;
+        });
+
+        display.watch(target);
+        assertEquals(270f, display.location().getYaw(), 1e-4f);
+        assertEquals(target, display.lookingAt());
+        tick();
+
+        int turns = 0;
+        for (int i = 0; i < 6; i++) {
+            display.watchTarget(false);
+            turns += kinds(tick()).contains("teleport") ? 1 : 0;
+        }
+        assertEquals(0, turns);
+
+        eyes[0] = new Location(world, 0, 0, 10);
+        for (int i = 0; i < 2; i++) {
+            display.watchTarget(false);
+            turns += kinds(tick()).contains("teleport") ? 1 : 0;
+        }
+        assertEquals(1, turns);
+        assertEquals(0f, display.location().getYaw(), 1e-4f);
+
+        valid[0] = false;
+        display.watchTarget(false);
+        assertNull(display.lookingAt());
+
+        display.watch(target);
+        display.lookAt(new Location(world, 5, 0, 0));
+        assertNull(display.lookingAt());
+    }
+
+    @Test
+    void lookAtTurnsInPlaceAndDoesNotStopAGlide() {
+        PartState[] parts = {PartState.block("main", ENTITY, -1, 1, Pose.IDENTITY)};
+        MotionDisplay display = new MotionDisplay(engine, new Location(world(), 0, 0, 0), parts, 48);
+        engine.submit(() -> engine.add(display.state()));
+        tick();
+        tick();
+
+        display.lookAt(new Location(world(), 10, 0, 0));
+        assertEquals(270f, display.location().getYaw(), 1e-4f);
+        assertEquals(0f, display.location().getPitch(), 1e-4f);
+        assertTrue(kinds(tick()).contains("teleport"));
+        assertEquals(0.0, display.location().getX(), 1e-9);
+
+        display.lookAt(new Location(world(), 0, 10, 0), 10);
+        assertEquals(-90f, display.location().getPitch(), 1e-4f);
+
+        display.moveTo(new Location(world(), 0, 0, 8), 8);
+        tick();
+        display.lookAt(new Location(world(), 0, 0, 100));
+        for (int i = 0; i < 10; i++) {
+            tick();
+        }
+        assertEquals(8.0, display.location().getZ(), 1e-6);
+        assertEquals(0f, display.location().getYaw(), 1e-4f);
+
+        display.lookAt(display.location());
+        assertEquals(0f, display.location().getYaw(), 1e-4f);
+        assertThrows(IllegalArgumentException.class, () -> display.lookAt(new Location(world(), 1, 0, 0), 60));
+    }
+
+    @Test
     void moveToGlidesWithEaseAndKeepsRotation() {
         assertEquals(2.0, MotionEngine.lerp(2.0, 10.0, 0, 4, Ease.LINEAR), 1e-6);
         assertEquals(6.0, MotionEngine.lerp(2.0, 10.0, 2, 4, Ease.LINEAR), 1e-6);
@@ -846,6 +1120,44 @@ class MotionEngineTest {
         }
         assertEquals(-5.0, display.location().getX(), 1e-6);
         assertEquals(1.0, display.location().getY(), 1e-6);
+    }
+
+    @Test
+    void moveAlongCurvesThroughThePointsAndKeepsRotation() {
+        PartState[] parts = {PartState.block("main", ENTITY, -1, 1, Pose.IDENTITY)};
+        MotionDisplay display = new MotionDisplay(engine, new Location(world(), 0, 0, 0, 90f, 15f), parts, 48);
+        engine.submit(() -> engine.add(display.state()));
+        tick();
+        tick();
+
+        display.moveAlong(List.of(new Location(world(), 5, 1, 5), new Location(world(), 10, 0, 0)), 80);
+        double closest = Double.MAX_VALUE;
+        double furthestZ = 0;
+        int teleports = 0;
+        for (int i = 0; i < 90; i++) {
+            for (Packet packet : tick()) {
+                if (packet.kind().equals("teleport")) {
+                    teleports++;
+                    Location at = display.location();
+                    closest = Math.min(closest, at.toVector().distance(new org.bukkit.util.Vector(5, 1, 5)));
+                    furthestZ = Math.max(furthestZ, at.getZ());
+                }
+            }
+        }
+
+        assertEquals(40, teleports);
+        assertTrue(closest < 0.3, "missed the middle point by " + closest);
+        assertTrue(furthestZ > 4.5);
+        assertEquals(10.0, display.location().getX(), 1e-6);
+        assertEquals(0.0, display.location().getY(), 1e-6);
+        assertEquals(0.0, display.location().getZ(), 1e-6);
+        assertEquals(90f, display.location().getYaw());
+        assertEquals(15f, display.location().getPitch());
+
+        UUID other = UUID.randomUUID();
+        World otherWorld = FakePacketEvents.proxy(World.class, (method, args) -> method.equals("getUID") ? other : null);
+        assertThrows(IllegalArgumentException.class, () -> display.moveAlong(List.of(), 20));
+        assertThrows(IllegalArgumentException.class, () -> display.moveAlong(List.of(new Location(otherWorld, 0, 0, 0)), 20));
     }
 
     private MotionDisplay npcDisplay() {
@@ -976,6 +1288,10 @@ class MotionEngineTest {
 
     private static List<String> kinds(List<Packet> packets) {
         return packets.stream().map(Packet::kind).toList();
+    }
+
+    private static boolean has(Packet packet, int slot) {
+        return packet.data().stream().anyMatch(entry -> entry.getIndex() == slot);
     }
 
     private static Object value(Packet packet, int slot) {

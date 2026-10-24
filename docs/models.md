@@ -128,7 +128,7 @@ guide.npc().swing();                                               // one hit wi
 - Poses: `STANDING`, `CROUCHING`, `SWIMMING`, `GLIDING`, `SLEEPING`.
 - `size(size)` changes the mannequin body size, clamped to 0.0625 to 16 (1 is normal). Display `scale` does not touch the mannequin body.
 - `lookAtPlayers(range)` sends each player their own head turn, only when it changes. Farther players see it look ahead.
-- `hitbox`, `onClick`, `teleport`, `moveTo`, `follow`, `ride`, `glow`, `lod` and per player visibility work like on any display. Mannequins need a 1.21.9 or newer server and game, `npc(...)` throws an `UnsupportedOperationException` on older servers. Games older than 26.3 do not show the swing.
+- `hitbox`, `onClick`, `teleport`, `moveTo`, `moveAlong`, `follow`, `ride`, `glow`, `lod` and per player visibility work like on any display. Mannequins need a 1.21.9 or newer server and game, `npc(...)` throws an `UnsupportedOperationException` on older servers. Games older than 26.3 do not show the swing.
 
 ## Level of detail
 
@@ -204,9 +204,28 @@ pet.unfollow();
 
 - The offset turns with the body: x to the right, y up, z forward (negative is behind).
 - Every 2 ticks it moves to the new spot and the players' games glide it there, so the server sends little.
-- `teleport`, `moveTo` or `unfollow` stops it. When the target dies, a player keeps it after respawn, a mob leaves it where it was.
+- `teleport`, `moveTo`, `moveAlong` or `unfollow` stops it. When the target dies, a player keeps it after respawn, a mob leaves it where it was.
 - Call it on the main thread.
-- To glide a display to a fixed spot instead of an entity, use `display.moveTo(location, ticks)` or `display.moveTo(location, ticks, ease)`. It keeps its rotation, and a new `moveTo`, `teleport` or `follow` stops the old one.
+
+## Moving to a spot or along a path
+
+`moveTo` glides a display in a straight line to a fixed spot. `moveAlong` glides it on a smooth curve through many points, for flights, cutscenes and projectiles:
+
+```java
+display.moveTo(target, 40);                                // straight there in 2 seconds
+display.moveTo(target, 40, Ease.OUT);                      // fast at first, slow at the end
+display.moveAlong(List.of(a, b, c, d), 100);               // a curve through a, b, c and d, ends on d
+display.moveAlong(List.of(a, b, c, d), 100, Ease.IN_OUT);  // starts and ends slow
+display.moveTo(target, 20, Ease.IN, () -> boom(target));     // runs boom on the main thread when it gets there
+```
+
+- Both start where the display is now and keep its rotation.
+- `lookAt(target)` or `lookAt(target, ticks)` turns it to face a spot (yaw and pitch, like a mob looks) and keeps it where it is. A `moveTo` or `moveAlong` that runs keeps going, so a turret or a head can track a player while it flies. Ticks are 0 to 59, the players' games turn it smoothly over that time.
+- `lookAt(entity)` keeps facing a player or mob, at its eyes, every 2 ticks while it moves. `stopLooking()` or a `lookAt(location)` stops it. Call it on the main thread.
+- The curve goes through every point. With `Ease.LINEAR` (the default) the display moves at the same speed the whole way.
+- Ticks are 1 to 6000. A path has 1 to 256 points, all in the same world as the display.
+- A new `moveTo`, `moveAlong`, `teleport` or `follow` stops the old one. They also stop riding. A stopped move never runs its `onEnd`.
+- Every 2 ticks the server sends the next spot and the players' games glide between them.
 
 ## Seats
 

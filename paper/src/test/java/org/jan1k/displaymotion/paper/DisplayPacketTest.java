@@ -32,7 +32,7 @@ class DisplayPacketTest {
     void fullFrameReadsBackAsTheSameTransform() {
         PartState part = block(42, 7, Pose.IDENTITY.withOffset(1f, 2f, 3f).withRotation(0f, 90f, 0f).withScale(0.5f));
 
-        List<EntityData<?>> data = readBack(42, new DisplayPacket().frame(part, DisplayPacket.ALL, 2));
+        List<EntityData<?>> data = readBack(42, new DisplayPacket().frame(part, DisplayPacket.ALL, 2, 48));
 
         assertEquals(6, data.size());
         assertEquals(0, value(data, 8));
@@ -54,7 +54,7 @@ class DisplayPacketTest {
     void onlyChangedFieldsAreWritten() {
         PartState part = block(43, 7, Pose.IDENTITY.withRotation(0f, 30f, 0f));
 
-        List<EntityData<?>> data = readBack(43, new DisplayPacket().frame(part, DisplayPacket.LEFT_ROTATION, 2));
+        List<EntityData<?>> data = readBack(43, new DisplayPacket().frame(part, DisplayPacket.LEFT_ROTATION, 2, 48));
 
         assertEquals(3, data.size());
         value(data, 13);
