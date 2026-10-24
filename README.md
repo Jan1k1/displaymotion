@@ -28,7 +28,7 @@ Two ways. Both have the same API.
 
 ```kotlin
 repositories { maven("https://jitpack.io") }
-dependencies { compileOnly("com.github.Jan1k1.displaymotion:displaymotion-paper:v0.3.2") }
+dependencies { compileOnly("com.github.Jan1k1.displaymotion:displaymotion-paper:v0.4.0") }
 ```
 
 **Shaded way.** You put the library in your own jar with `implementation(...)`. The server owner installs the PacketEvents plugin and you write `depend: [packetevents]`. No extra jar from us.

@@ -25,7 +25,7 @@ Pick the plugin way if you are not sure. It is the simplest. Pick the shaded way
 
 ## 2. Plugin way
 
-The server owner downloads `DisplayMotion-0.3.2.jar` from the [releases](https://github.com/Jan1k1/displaymotion/releases/latest) and puts it in the `plugins` folder. It has PacketEvents inside. It also works next to the normal PacketEvents plugin.
+The server owner downloads `DisplayMotion-0.4.0.jar` from the [releases](https://github.com/Jan1k1/displaymotion/releases/latest) and puts it in the `plugins` folder. It has PacketEvents inside. It also works next to the normal PacketEvents plugin.
 
 Your `build.gradle.kts`:
 
@@ -48,7 +48,7 @@ repositories {
 
 dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
-    compileOnly("com.github.Jan1k1.displaymotion:displaymotion-paper:v0.3.2")
+    compileOnly("com.github.Jan1k1.displaymotion:displaymotion-paper:v0.4.0")
 }
 ```
 
@@ -97,7 +97,7 @@ repositories {
 dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
     compileOnly("com.github.retrooper:packetevents-spigot:2.14.0")
-    implementation("com.github.Jan1k1.displaymotion:displaymotion-paper:v0.3.2")
+    implementation("com.github.Jan1k1.displaymotion:displaymotion-paper:v0.4.0")
 }
 
 tasks.shadowJar {
@@ -110,7 +110,7 @@ What the parts do:
 - `compileOnly` means: use it to build, but do not put it in the jar. Paper and PacketEvents are on the server already.
 - `implementation` means: put it in the jar. This is displaymotion.
 - `relocate` moves the displaymotion classes into your own package. Then two plugins that both use displaymotion never clash. Change `your.plugin.libs.displaymotion` to a package that fits your plugin.
-- `v0.3.2` is the newest release. `main-SNAPSHOT` gives the newest commit instead.
+- `v0.4.0` is the newest release. `main-SNAPSHOT` gives the newest commit instead.
 
 Do not shade PacketEvents. The server installs it.
 
@@ -184,7 +184,7 @@ That is all. The library removes every display when your plugin disables.
 ## 5. Build and run
 
 1. Run `./gradlew build` (plugin way) or `./gradlew shadowJar` (shaded way). The jar is in `build/libs/`.
-2. Copy the jar to the `plugins` folder of a Paper 1.21.4 or newer server. Put `DisplayMotion-0.3.2.jar` there too (plugin way), or the PacketEvents jar (shaded way).
+2. Copy the jar to the `plugins` folder of a Paper 1.21.4 or newer server. Put `DisplayMotion-0.4.0.jar` there too (plugin way), or the PacketEvents jar (shaded way).
 3. Start the server and join.
 4. Type `/sword`.
 
