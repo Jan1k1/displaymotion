@@ -777,13 +777,13 @@ public final class MotionDisplay {
     /**
      * Keeps facing {@code target}, a living entity at its eyes. Every 2 ticks it turns if the target moved, the
      * players' games turn it smooth. A player keeps it after death, other targets stop it when they leave the world.
-     * {@link #lookAt(Location)} or {@link #stopLooking()} stops it. Main thread.
+     * {@link #lookAt(Location)} or {@link #stopLooking()} stops it. Target's thread.
      * @throws IllegalArgumentException if the entity is not in the world
      */
     public MotionDisplay lookAt(Entity target) {
         Objects.requireNonNull(target, "target");
-        if (!Bukkit.isPrimaryThread()) {
-            throw new IllegalStateException("call lookAt on the main thread");
+        if (!Bukkit.isOwnedByCurrentRegion(target)) {
+            throw new IllegalStateException("call lookAt on the thread that owns the target");
         }
         if (!target.isValid()) {
             throw new IllegalArgumentException("the target is not in the world");
@@ -957,14 +957,14 @@ public final class MotionDisplay {
      * Floats after the entity. Every 2 ticks it moves to the spot at {@code offset} from the entity and the
      * players' games glide it there over {@code glideTicks}, so it trails a bit behind. The offset turns with the
      * body: x to the right, y up, z forward (negative is behind). Unlike {@link #ride(Entity)} it lags a bit, which
-     * looks alive for pets and drones. {@link #teleport(Location)} or {@link #unfollow()} stops it. Main thread.
+     * looks alive for pets and drones. {@link #teleport(Location)} or {@link #unfollow()} stops it. Target's thread.
      * @throws IllegalArgumentException if the glide is not 1 to 59 ticks or the entity is not in the world
      */
     public MotionDisplay follow(Entity target, Vector offset, int glideTicks) {
         Objects.requireNonNull(target, "target");
         Objects.requireNonNull(offset, "offset");
-        if (!Bukkit.isPrimaryThread()) {
-            throw new IllegalStateException("call follow on the main thread");
+        if (!Bukkit.isOwnedByCurrentRegion(target)) {
+            throw new IllegalStateException("call follow on the thread that owns the target");
         }
         if (glideTicks < 1 || glideTicks > MAX_TELEPORT_TICKS) {
             throw new IllegalArgumentException("glide must be 1 to " + MAX_TELEPORT_TICKS + " ticks, got " + glideTicks);
@@ -1057,14 +1057,14 @@ public final class MotionDisplay {
      * so walking costs the server nothing. Only a turn is sent, and only when it changes.
      * The display location is where a passenger sits: the top of the hitbox, 1.8 above the feet of a player. Move parts down
      * with their pose for a backpack. Real passengers of the entity stay on it.
-     * Call it on the main thread. {@link #teleport(Location)} or {@link #dismount()} stops riding.
+     * Vehicle's thread. {@link #teleport(Location)} or {@link #dismount()} stops riding.
      * @throws IllegalArgumentException if the entity is not in the world
      */
     public MotionDisplay ride(Entity vehicle, Follow follow) {
         Objects.requireNonNull(vehicle, "vehicle");
         Objects.requireNonNull(follow, "follow");
-        if (!Bukkit.isPrimaryThread()) {
-            throw new IllegalStateException("call ride on the main thread");
+        if (!Bukkit.isOwnedByCurrentRegion(vehicle)) {
+            throw new IllegalStateException("call ride on the thread that owns the vehicle");
         }
         requireAlive();
         if (!vehicle.isValid()) {
@@ -1109,23 +1109,26 @@ public final class MotionDisplay {
      * Puts the player on a seat. The player gets off with sneak, like from a horse.
      * The seat is a real invisible entity, the server needs one for a player to ride.
      * It is made the first time someone sits, moves with {@link #teleport(Location)} and goes away with the display.
-     * Call it on the main thread.
+     * Player's and seat's thread.
      * @return false when someone already sits there
      * @throws IllegalArgumentException if there is no seat with that name
      */
     public boolean sit(Player player, String seat) {
         Objects.requireNonNull(player, "player");
-        if (!Bukkit.isPrimaryThread()) {
-            throw new IllegalStateException("call sit on the main thread");
-        }
         requireAlive();
         double[] offset = seats.get(seat);
         if (offset == null) {
             throw new IllegalArgumentException("no seat named '" + seat + "', seats are " + seats.keySet());
         }
         Entity entity = seatEntities.get(seat);
-        if (entity == null || !entity.isValid()) {
-            entity = location.getWorld().spawn(seatSpot(offset), ItemDisplay.class, made -> made.setPersistent(false));
+        boolean spawn = entity == null || !entity.isValid();
+        Location spot = spawn ? seatSpot(offset) : null;
+        if (!Bukkit.isOwnedByCurrentRegion(player)
+                || !(spawn ? Bukkit.isOwnedByCurrentRegion(spot) : Bukkit.isOwnedByCurrentRegion(entity))) {
+            throw new IllegalStateException("call sit on the thread that owns the player and the seat");
+        }
+        if (spawn) {
+            entity = location.getWorld().spawn(spot, ItemDisplay.class, made -> made.setPersistent(false));
             seatEntities.put(seat, entity);
             engine.seats.add(entity);
         }
@@ -1527,7 +1530,7 @@ public final class MotionDisplay {
         watched = null;
         engine.watching.remove(this);
         if (!seatEntities.isEmpty()) {
-            if (Bukkit.isPrimaryThread()) {
+            if (Bukkit.isOwnedByCurrentRegion(location)) {
                 removeSeats();
             } else {
                 engine.regionThread.accept(location, this::removeSeats);
