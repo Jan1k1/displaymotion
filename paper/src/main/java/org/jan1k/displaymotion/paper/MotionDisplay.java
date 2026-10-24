@@ -777,13 +777,13 @@ public final class MotionDisplay {
     /**
      * Keeps facing {@code target}, a living entity at its eyes. Every 2 ticks it turns if the target moved, the
      * players' games turn it smooth. A player keeps it after death, other targets stop it when they leave the world.
-     * {@link #lookAt(Location)} or {@link #stopLooking()} stops it. Main thread.
+     * {@link #lookAt(Location)} or {@link #stopLooking()} stops it. Target's thread.
      * @throws IllegalArgumentException if the entity is not in the world
      */
     public MotionDisplay lookAt(Entity target) {
         Objects.requireNonNull(target, "target");
-        if (!Bukkit.isPrimaryThread()) {
-            throw new IllegalStateException("call lookAt on the main thread");
+        if (!Bukkit.isOwnedByCurrentRegion(target)) {
+            throw new IllegalStateException("call lookAt on the thread that owns the target");
         }
         if (!target.isValid()) {
             throw new IllegalArgumentException("the target is not in the world");
