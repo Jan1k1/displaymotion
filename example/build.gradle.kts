@@ -21,6 +21,7 @@ tasks.shadowJar {
 }
 
 tasks.processResources {
+    inputs.property("version", project.version)
     filesMatching("plugin.yml") {
         expand("version" to project.version)
     }

@@ -607,8 +607,11 @@ public final class BlockbenchModel implements ImportedModel {
 
         private String unique(String base) {
             String name = base.isBlank() ? "part" : base;
-            int seen = names.merge(name, 1, Integer::sum);
-            return seen == 1 ? name : name + "_" + seen;
+            String unique = name;
+            for (int n = 2; names.putIfAbsent(unique, 1) != null; n++) {
+                unique = name + "_" + n;
+            }
+            return unique;
         }
     }
 }

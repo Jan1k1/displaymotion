@@ -15,6 +15,8 @@ import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
+import org.bukkit.block.BlockFace;
+import org.bukkit.block.data.Directional;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.Player;
@@ -190,6 +192,8 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 .then(spawns("windmill", EnumSet.of(Part.BLOCK), player -> windmill(inFront(player, 6))))
                 .then(spawns("text", EnumSet.of(Part.TEXT), true, this::text))
                 .then(spawns("pet", EnumSet.of(Part.ITEM), this::pet))
+                .then(spawns("path", EnumSet.of(Part.ITEM), this::path))
+                .then(spawns("turret", EnumSet.of(Part.BLOCK), this::turret))
                 .then(spawns("hat", EnumSet.of(Part.BLOCK, Part.ITEM), this::hat))
                 .then(spawns("backpack", EnumSet.of(Part.BLOCK), this::backpack))
                 .then(Commands.literal("selfview").executes(context -> selfView(context.getSource())))
@@ -610,6 +614,32 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 .follow(player, new Vector(0.7, 1.7, -0.6), 5);
     }
 
+    // flies one loop around you on a smooth curve, up and down on the way, and stops in front of you again
+    private MotionDisplay path(Player player) {
+        Location center = player.getLocation();
+        List<Location> loop = new ArrayList<>();
+        for (int i = 1; i <= 6; i++) {
+            double angle = i * Math.PI / 3;
+            Vector around = forward(center, 3f * (float) Math.cos(angle)).add(sideways(center, 3f * (float) Math.sin(angle)));
+            loop.add(center.clone().add(around).add(0, 1.5 + Math.sin(angle * 2) * 1.2, 0));
+        }
+        return motion.item(inFront(player, 3).add(0, 1.5, 0), ItemStack.of(Material.DIAMOND_SWORD), ItemDisplay.ItemDisplayTransform.GROUND)
+                .play(SHOW)
+                .moveAlong(loop, 120, Ease.IN_OUT, () -> player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1.2f));
+    }
+
+    // the dispenser front faces south, thats yaw 0, so lookAt points it right at you
+    private MotionDisplay turret(Player player) {
+        Directional front = (Directional) Material.DISPENSER.createBlockData();
+        front.setFacing(BlockFace.SOUTH);
+        return motion.model(inFront(player, 4).add(0, 1.5, 0))
+                .block("body", front, box(0f, 0f, 0f, 0.8f, 0.8f, 0.8f))
+                .block("barrel", Material.IRON_BLOCK.createBlockData(), box(0f, 0f, 0.55f, 0.25f, 0.25f, 0.4f))
+                .spawn()
+                .play(Animations.popIn(10))
+                .lookAt(player);
+    }
+
     // a crown on the head, it turns where the player looks. 0 is the top of the hitbox (1.8), the drawn head
     // goes up to 1.875 so the crown sits a bit higher or it ends up inside the head
     private MotionDisplay hat(Player player) {
@@ -705,9 +735,9 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 .type(message, 2);
     }
 
-    // right click presses it and counts, left click breaks it
+    // right click presses it and counts, left click breaks it. every player sees only its own clicks
     private MotionDisplay button(Location at) {
-        int[] clicks = {0};
+        Map<UUID, Integer> clicks = new HashMap<>();
         MotionDisplay button = motion.model(at)
                 .block("base", Material.POLISHED_BLACKSTONE.createBlockData(), Pose.IDENTITY.withOffset(0f, 0.1f, 0f).withScale(0.9f, 0.2f, 0.9f))
                 .block("cap", Material.RED_CONCRETE.createBlockData(), Pose.IDENTITY.withOffset(0f, 0.27f, 0f).withScale(0.6f, 0.14f, 0.6f))
@@ -726,9 +756,9 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 button.remove();
                 return;
             }
-            clicks[0]++;
+            int mine = clicks.merge(click.player().getUniqueId(), 1, Integer::sum);
             button.glow("cap", Color.WHITE)
-                    .text("label", Component.text("Clicks: " + clicks[0], NamedTextColor.GOLD))
+                    .text(click.player(), "label", Component.text("Your clicks: " + mine, NamedTextColor.GOLD))
                     .play("cap", PRESS, () -> {
                         if (!button.isRemoved()) {
                             button.glow("cap", null).play("cap", CAP_IDLE);

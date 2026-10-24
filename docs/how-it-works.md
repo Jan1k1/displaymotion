@@ -18,6 +18,7 @@ You do not need this page to use the library. Read it if you want to know why it
 - A packet is encoded once and shared by every viewer. Only the changed transform fields are sent.
 - A slow connection skips frames and gets the full state when it catches up.
 - Parts that stay above the spawn point get a culling box, so the client skips them when they are off screen.
+- A part at scale 0 (hidden flames, the start of a pop in, the end of a pop out) gets view range 0 two ticks later, so the client does not draw it at all. The server sends it no frames until it grows again. Nothing changes on screen. The fire dragon draws 199 of its 339 blocks most of the time, not 339. In a test with `/dm dragon three` (a real 26.3 client at 1280x720, frame rate not limited, same spot and view) the average went from 437 to 1014 fps, and the time per frame from 2.3 ms to 1.0 ms.
 - Big animations are baked on another thread.
 
 ## Fake entities

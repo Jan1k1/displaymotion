@@ -2,6 +2,10 @@ package org.jan1k.displaymotion.paper;
 
 import org.jan1k.displaymotion.Affine;
 import org.jan1k.displaymotion.Decomposer;
+import org.jan1k.displaymotion.Frames;
+
+import java.util.ArrayList;
+import java.util.List;
 
 final class Composer {
 
@@ -9,7 +13,16 @@ final class Composer {
     // grow with some room so we dont send a new box every single frame while it pops in
     private static final float BOX_GROWTH = 1.25f;
     private static final float BELOW_TOLERANCE = 0.001f;
+    private static final float GONE = 1e-4f;
+    // a part under 3 pixels on a 1080p screen with fov 70 is not worth a draw. thats 295 blocks away per block of size
+    private static final double BLOCKS_PER_SIZE = 1.0 / (3.0 * Math.toRadians(70.0) / 1080.0);
+    // grow with some room, a part that pops in would send a new range every frame
+    private static final double RANGE_GROWTH = 1.25;
 
+    // the engine tick, set before each compose
+    long now;
+    // displays with a part waiting to be hidden, the engine works thru them every step
+    final List<DisplayState> hiding = new ArrayList<>();
     private final Decomposer decomposer = new Decomposer();
     private final float[] root = new float[Affine.SIZE];
     private final float[] turn = new float[Affine.SIZE];
@@ -86,6 +99,12 @@ final class Composer {
                 Affine.translate(local, 0, -0.5f, -0.5f, -0.5f);
             }
             decomposer.decompose(local, 0, current, 0);
+            boolean shown = hide(display, part);
+            // the client does not draw it, so its frames can wait. sent stays what everyone has,
+            // the frame that shows it again carries the whole difference
+            if (part.hidden) {
+                continue;
+            }
             part.changes = changes(part.sent, current);
             if (part.changes != 0) {
                 System.arraycopy(current, 0, part.sent, 0, Decomposer.SIZE);
@@ -93,16 +112,20 @@ final class Composer {
             if (cullBox(part, display.pitch == 0f)) {
                 part.changes |= DisplayPacket.BOX;
             }
+            if (shown | sizeRange(display, part)) {
+                part.changes |= DisplayPacket.VIEW;
+            }
+            int extras = part.changes & (DisplayPacket.BOX | DisplayPacket.VIEW);
             if (ownTilted) {
                 Affine.multiply(toOwn, 0, local, 0, ownLocal, 0);
                 decomposer.decompose(ownLocal, 0, ownCurrent, 0);
                 hideIf(display.ownHidden, ownCurrent);
-                part.ownChanges = changes(part.own, ownCurrent) | part.changes & DisplayPacket.BOX;
+                part.ownChanges = changes(part.own, ownCurrent) | extras;
                 System.arraycopy(ownCurrent, 0, part.own, 0, Decomposer.SIZE);
             } else if (display.wearer != null) {
                 turnAround(current, display.ownTurn - display.turn, ownCurrent);
                 hideIf(display.ownHidden, ownCurrent);
-                part.ownChanges = changes(part.own, ownCurrent) | part.changes & DisplayPacket.BOX;
+                part.ownChanges = changes(part.own, ownCurrent) | extras;
                 System.arraycopy(ownCurrent, 0, part.own, 0, Decomposer.SIZE);
             }
         }
@@ -111,6 +134,69 @@ final class Composer {
                 track.moved = false;
             }
         }
+    }
+
+    // a part at scale 0 is invisible but the client still draws it every frame. the fire dragon has 140 flame
+    // blocks like that, 41% of all its blocks. so it gets view range 0, but a step later, the shrink to 0 has
+    // to finish on screen first. true when a hidden part just came back
+    private boolean hide(DisplayState display, PartState part) {
+        if (!collapsed(current)) {
+            part.hideAfter = -1;
+            if (part.hidden) {
+                part.hidden = false;
+                return true;
+            }
+            return false;
+        }
+        if (!part.hidden && part.hideAfter < 0) {
+            part.hideAfter = now + Frames.STEP_TICKS;
+            if (!display.hiding) {
+                display.hiding = true;
+                hiding.add(display);
+            }
+        }
+        return false;
+    }
+
+    // the client measures the distance to the display spot, not to the part, so the way from there to the
+    // part goes on top. never gets smaller, like the culling box. text has no size we know, it keeps the full range
+    private boolean sizeRange(DisplayState display, PartState part) {
+        if (part.kind == PartState.TEXT || part.sized && part.sizeRange >= display.clientRange()) {
+            return false;
+        }
+        float low = part.isBlock() ? 0f : -0.5f;
+        float mid = low + 0.5f;
+        float cx = local[0] * mid + local[3] * mid + local[6] * mid + local[9];
+        float cy = local[1] * mid + local[4] * mid + local[7] * mid + local[10];
+        float cz = local[2] * mid + local[5] * mid + local[8] * mid + local[11];
+        float radius = 0f;
+        for (int corner = 0; corner < 8; corner++) {
+            float x = (corner & 1) == 0 ? low : low + 1f;
+            float y = (corner & 2) == 0 ? low : low + 1f;
+            float z = (corner & 4) == 0 ? low : low + 1f;
+            float dx = local[0] * x + local[3] * y + local[6] * z + local[9] - cx;
+            float dy = local[1] * x + local[4] * y + local[7] * z + local[10] - cy;
+            float dz = local[2] * x + local[5] * y + local[8] * z + local[11] - cz;
+            radius = Math.max(radius, dx * dx + dy * dy + dz * dz);
+        }
+        double range = Math.sqrt(cx * cx + cy * cy + cz * cz) + 2.0 * Math.sqrt(radius) * BLOCKS_PER_SIZE;
+        if (part.sized && range <= part.sizeRange) {
+            return false;
+        }
+        part.sized = true;
+        part.sizeRange = range * RANGE_GROWTH;
+        return true;
+    }
+
+    // two sides at 0 is a line or a dot. one side at 0 is still a flat square you can see from above
+    private static boolean collapsed(float[] values) {
+        int flat = 0;
+        for (int i = Decomposer.SX; i <= Decomposer.SZ; i++) {
+            if (Math.abs(values[i]) < GONE) {
+                flat++;
+            }
+        }
+        return flat >= 2;
     }
 
     // a track in a crossfade is a mix of the old and the new matrix. blending matrices squashes a big turn
