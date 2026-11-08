@@ -39,6 +39,7 @@ import org.jan1k.displaymotion.example.DisplayOptions.Part;
 import org.jan1k.displaymotion.paper.DisplayMotion;
 import org.jan1k.displaymotion.paper.Follow;
 import org.jan1k.displaymotion.paper.Leaderboard;
+import org.jan1k.displaymotion.paper.Menu;
 import org.jan1k.displaymotion.paper.Skin;
 import org.jan1k.displaymotion.paper.SelfView;
 import org.jan1k.displaymotion.paper.ModelBuilder;
@@ -50,6 +51,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -198,6 +200,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                 .then(spawns("backpack", EnumSet.of(Part.BLOCK), this::backpack))
                 .then(Commands.literal("selfview").executes(context -> selfView(context.getSource())))
                 .then(Commands.literal("leaderboard").executes(context -> leaderboard(context.getSource())))
+                .then(Commands.literal("menu").executes(context -> menu(context.getSource())))
                 .then(Commands.literal("ease").executes(context -> easings(context.getSource())))
                 .then(dragons())
                 .then(spawns("npc", EnumSet.of(Part.TEXT), false, (player, options) -> npc(player, inFront(player, 4), options)))
@@ -766,6 +769,41 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
                     });
         });
         return button;
+    }
+
+    // a small shop in front of you that only you see. a click counts on the label, only you see your count
+    private int menu(CommandSourceStack source) {
+        if (!(source.getSender() instanceof Player player)) {
+            source.getSender().sendPlainMessage("players only");
+            return 0;
+        }
+        UUID id = player.getUniqueId();
+        MotionDisplay old = displays.remove(id);
+        if (old != null) {
+            old.remove();
+        }
+        Map<String, Integer> bought = new HashMap<>();
+        Menu shop = motion.menu(inFront(player, 3))
+                .title(Component.text("Shop", NamedTextColor.GOLD));
+        Map<String, Material> wares = new LinkedHashMap<>();
+        wares.put("Sword", Material.DIAMOND_SWORD);
+        wares.put("Bow", Material.BOW);
+        wares.put("Apple", Material.GOLDEN_APPLE);
+        wares.put("Pearl", Material.ENDER_PEARL);
+        wares.put("Shield", Material.SHIELD);
+        wares.forEach((name, material) -> shop.button(name, ItemStack.of(material), Component.text(name, NamedTextColor.WHITE), click -> {
+            int count = bought.merge(name, 1, Integer::sum);
+            click.player().playSound(click.player(), Sound.UI_BUTTON_CLICK, 0.6f, 1.4f);
+            click.menu().label(click.player(), name, Component.text(name + " x" + count, NamedTextColor.GREEN));
+        }));
+        shop.button("close", ItemStack.of(Material.BARRIER), Component.text("Close", NamedTextColor.RED), click -> {
+            click.player().playSound(click.player(), Sound.UI_BUTTON_CLICK, 0.6f, 0.8f);
+            click.menu().close();
+        });
+        shop.open(player);
+        displays.put(id, shop.display());
+        player.sendPlainMessage("click the buttons, close or /dm stop removes it");
+        return Command.SINGLE_SUCCESS;
     }
 
     private int debug(CommandSourceStack source) {
