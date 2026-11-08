@@ -162,6 +162,15 @@ public final class DisplayMotion {
         return new Leaderboard(this, plugin, location);
     }
 
+    /**
+     * Starts a menu here, facing where the location looks. The location is its bottom center.
+     * Add buttons with {@link Menu#button}, then {@link Menu#open()} it. Main thread only.
+     */
+    public Menu menu(Location location) {
+        requireWorld(location);
+        return new Menu(this, location);
+    }
+
     /** Ready-made effects like kill effects. Each one removes itself when it ends. */
     public Effects effects() {
         return effects;

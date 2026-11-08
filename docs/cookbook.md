@@ -179,6 +179,30 @@ board.remove();                                        // when you are done
 - `format(score -> Component.text(score + " kills"))` changes how a score shows.
 - Call it on the main thread. Try it with `/dm leaderboard`.
 
+## A menu in the world
+
+Buttons in a grid, each one an item with a label. Players click them like a sign or an NPC. Good for shops, lobbies and minigames.
+
+```java
+Menu shop = motion.menu(location)                      // faces where the location looks, location is the bottom center
+        .title(Component.text("Shop", NamedTextColor.GOLD))
+        .columns(3)
+        .button("sword", ItemStack.of(Material.DIAMOND_SWORD), Component.text("Sword"), click -> buy(click.player(), "sword"))
+        .button("bow", ItemStack.of(Material.BOW), Component.text("Bow"), click -> buy(click.player(), "bow"))
+        .button("close", ItemStack.of(Material.BARRIER), Component.text("Close"), click -> click.menu().close())
+        .open(player);                                 // only this player sees it, open() is for everybody
+
+shop.label(player, "sword", Component.text("Bought!"));  // a label for one player only
+shop.close();                                          // pops out and removes it
+```
+
+- Buttons fill the rows from the top left. A last row that is not full is centered.
+- A click on a button runs its code on the main thread and the button bumps. The click has `player()`, `menu()`, `button()` (the id) and `leftClick()`.
+- `label(id, text)` changes a label for everybody, `label(player, id, text)` for one player. `item(id, itemStack)` swaps the icon.
+- `panel(blockData)` changes the square behind each button, `null` is no panel. The default is black stained glass.
+- Set it up before `open`. Up to 9 columns and 54 buttons. `display()` gives the display under it for glow, hide and show.
+- Call it on the main thread. Try it with `/dm menu`.
+
 ## Spawn an imported model
 
 Load the file once. Spawn it every time you need it. `load` throws an `IOException` when the file is missing or broken, so catch it. See [Importing](importing.md) for the full steps.

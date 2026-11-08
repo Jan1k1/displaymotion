@@ -52,7 +52,6 @@ public final class ModelBuilder {
         return add(name, pose, parent, (id, parentIndex) -> PartState.block(name, id, parentIndex, blockState, pose));
     }
 
-    /** Adds a text part. The text grows up from its pose. */
     /** Adds an invisible pivot. Hang parts under it and animate it to turn them all around one point. */
     public ModelBuilder group(String name, Pose pose) {
         return group(name, pose, null);
@@ -101,6 +100,7 @@ public final class ModelBuilder {
                 PartState.matrix(name, -1, parentIndex, PartState.GROUP, null, 0, 0, null, matrix.clone()));
     }
 
+    /** Adds a text part. The text grows up from its pose. */
     public ModelBuilder text(String name, Component text, Pose pose) {
         return text(name, text, pose, null);
     }
@@ -145,7 +145,6 @@ public final class ModelBuilder {
         }
     }
 
-    /** Spawns the model. Call {@code play} on the result in the same tick to avoid a frame at the rest pose. */
     /**
      * Marks parts as detail: small extras that players far away do not get at all, so their game has
      * less to draw. Only counts when the display has a {@link MotionDisplay#lod(double)}.
@@ -174,6 +173,7 @@ public final class ModelBuilder {
         return add(name, Pose.IDENTITY, null, (entityId, parent) -> PartState.npc(name, entityId, parent, skin));
     }
 
+    /** Spawns the model. Call {@code play} on the result in the same tick to avoid a frame at the rest pose. */
     public MotionDisplay spawn() {
         if (spawned) {
             throw new IllegalStateException("this model was already spawned, make a new one with motion.model(location)");
