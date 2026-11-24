@@ -302,7 +302,7 @@ public final class ExamplePlugin extends JavaPlugin implements Listener {
             MotionDisplay display = spawn.apply(player, parsed.options());
             displays.put(player.getUniqueId(), display);
             DisplayOptions toApply = ownText ? parsed.options().withoutText() : parsed.options();
-            problems.addAll(toApply.apply(display, parts));
+            problems.addAll(toApply.apply(player, display, parts));
         } catch (UnsupportedOperationException e) {
             player.sendPlainMessage(e.getMessage());
             return 0;

@@ -4,6 +4,7 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.Color;
 import org.bukkit.Material;
 import org.bukkit.entity.Display;
+import org.bukkit.entity.Player;
 import org.bukkit.entity.TextDisplay;
 import org.bukkit.inventory.ItemStack;
 import org.jan1k.displaymotion.paper.MotionDisplay;
@@ -62,6 +63,7 @@ final class DisplayOptions {
         VALUES.put("grow", List.of("10", "20", "40"));
         VALUES.put("speed", List.of("0.5", "1", "2"));
         VALUES.put("glow", glow);
+        VALUES.put("glowme", glow);
         VALUES.put("bright", List.of("0", "8", "15"));
         VALUES.put("billboard", BILLBOARDS);
         VALUES.put("shadow", List.of("0.5", "1", "2"));
@@ -80,6 +82,8 @@ final class DisplayOptions {
     private Double speed;
     private boolean glowSet;
     private Integer glow;
+    private boolean glowMeSet;
+    private Integer glowMe;
     private Integer bright;
     private String billboard;
     private Float shadow;
@@ -170,6 +174,18 @@ final class DisplayOptions {
                     glow = rgb;
                 }
                 glowSet = true;
+            }
+            case "glowme" -> {
+                if (value.equalsIgnoreCase("off")) {
+                    glowMe = null;
+                } else {
+                    Integer rgb = color(value);
+                    if (rgb == null) {
+                        return "glowme: use off, #rrggbb or " + String.join(", ", COLORS.keySet()) + ", got " + value;
+                    }
+                    glowMe = rgb;
+                }
+                glowMeSet = true;
             }
             case "bright" -> {
                 Double number = number(value);
@@ -262,6 +278,8 @@ final class DisplayOptions {
         copy.speed = speed;
         copy.glowSet = glowSet;
         copy.glow = glow;
+        copy.glowMeSet = glowMeSet;
+        copy.glowMe = glowMe;
         copy.bright = bright;
         copy.billboard = billboard;
         copy.shadow = shadow;
@@ -284,7 +302,7 @@ final class DisplayOptions {
     }
 
     // returns the problems it could not apply, the rest is done
-    List<String> apply(MotionDisplay display, Set<Part> parts) {
+    List<String> apply(Player player, MotionDisplay display, Set<Part> parts) {
         List<String> errors = new ArrayList<>();
         if (grow != null && size == null) {
             errors.add("grow: needs size, like size:3 grow:20");
@@ -302,6 +320,11 @@ final class DisplayOptions {
         run(errors, () -> {
             if (glowSet) {
                 display.glow(glow == null ? null : Color.fromRGB(glow));
+            }
+        });
+        run(errors, () -> {
+            if (glowMeSet) {
+                display.glow(player, glowMe == null ? null : Color.fromRGB(glowMe));
             }
         });
         run(errors, () -> {
