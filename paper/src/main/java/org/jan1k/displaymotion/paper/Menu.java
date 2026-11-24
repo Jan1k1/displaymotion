@@ -250,6 +250,9 @@ public final class Menu {
     }
 
     private void requireNotOpen() {
+        if (closed) {
+            throw new IllegalStateException("the menu is closed, make a new one");
+        }
         if (display != null) {
             throw new IllegalStateException("the menu is already open, add buttons and set it up before open()");
         }
