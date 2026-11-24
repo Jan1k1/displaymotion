@@ -83,6 +83,16 @@ label.text(player, null);                                                       
 display.glow(Color.AQUA);   // null turns it off
 ```
 
+To outline it for one player only, give the player too. The others see no glow.
+
+```java
+marker.glow(player, Color.GOLD);   // only this player sees the outline
+marker.glow(player, null);         // back to the shared glow
+```
+
+- A model with more parts takes the part name: `glow(player, "head", Color.GOLD)`.
+- It works on item and block parts. Text and mannequins do not glow this way. The glow goes away when the player leaves.
+
 ## Always bright, even in a cave
 
 By default a display is lit by the world, so it is dark in a cave. A fixed light level fixes this.

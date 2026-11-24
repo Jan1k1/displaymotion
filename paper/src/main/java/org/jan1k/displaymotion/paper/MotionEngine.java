@@ -515,13 +515,73 @@ final class MotionEngine {
             if (part == ALL_PARTS || part == i) {
                 PartState state = display.parts[i];
                 change.accept(state);
-                sendPart(display, state, state.kind == PartState.NPC ? NpcPackets.data(state) : packet.look(state));
+                if (state.kind == PartState.NPC) {
+                    sendPart(display, state, NpcPackets.data(state));
+                } else {
+                    sendLook(display, state);
+                }
             }
         }
         // billboard decides if a part can have a culling box so check boxes again
         composer.compose(display, true);
         if (!display.fresh && !display.viewers.isEmpty()) {
             sendChanges(display, Frames.STEP_TICKS);
+        }
+    }
+
+    // players with their own glow get the look with it, the rest get the shared one
+    private void sendLook(DisplayState display, PartState part) {
+        if (part.ownGlows == null) {
+            sendPart(display, part, packet.look(part));
+            return;
+        }
+        if (display.fresh || !part.hasEntity()) {
+            return;
+        }
+        List<Viewer> targets = new ArrayList<>(display.viewers.size());
+        for (Viewer viewer : display.viewers) {
+            Integer own = part.ownGlows.get(viewer.id);
+            if (own == null) {
+                targets.add(viewer);
+            } else {
+                queue(viewer, encode(packet.look(part, own), viewer.channel));
+            }
+        }
+        if (!targets.isEmpty()) {
+            sendToAll(targets, encode(packet.look(part), targets.getFirst().channel), false);
+        }
+    }
+
+    // null goes back to the shared glow. Text does not glow and a mannequin has no glow color, so only items and blocks
+    void glowFor(DisplayState display, int part, UUID player, Integer rgb) {
+        if (display.removed) {
+            return;
+        }
+        Viewer viewer = viewers.get(player);
+        boolean sees = !display.fresh && viewer != null && viewer.visible.contains(display);
+        for (int i = 0; i < display.parts.length; i++) {
+            PartState state = display.parts[i];
+            if ((part != ALL_PARTS && part != i) || state.kind != PartState.ITEM && state.kind != PartState.BLOCK) {
+                continue;
+            }
+            if (rgb == null) {
+                if (state.ownGlows == null || state.ownGlows.remove(player) == null) {
+                    continue;
+                }
+                if (state.ownGlows.isEmpty()) {
+                    state.ownGlows = null;
+                }
+            } else {
+                if (state.ownGlows == null) {
+                    state.ownGlows = new HashMap<>();
+                }
+                if (rgb.equals(state.ownGlows.put(player, rgb))) {
+                    continue;
+                }
+            }
+            if (sees) {
+                queue(viewer, encode(rgb == null ? packet.look(state) : packet.look(state, rgb), viewer.channel));
+            }
         }
     }
 
@@ -621,11 +681,24 @@ final class MotionEngine {
         }
     }
 
-    private void forgetTexts(UUID player) {
+    // the spawn packets carry the shared glow, so a player with its own gets it right after
+    private void ownGlows(DisplayState display, Viewer viewer) {
+        for (PartState part : display.parts) {
+            Integer own = part.ownGlows == null ? null : part.ownGlows.get(viewer.id);
+            if (own != null && part.hasEntity()) {
+                queue(viewer, encode(packet.look(part, own), viewer.channel));
+            }
+        }
+    }
+
+    private void forgetOwn(UUID player) {
         for (DisplayState display : displays) {
             for (PartState part : display.parts) {
                 if (part.ownTexts != null && part.ownTexts.remove(player) != null && part.ownTexts.isEmpty()) {
                     part.ownTexts = null;
+                }
+                if (part.ownGlows != null && part.ownGlows.remove(player) != null && part.ownGlows.isEmpty()) {
+                    part.ownGlows = null;
                 }
             }
         }
@@ -863,7 +936,7 @@ final class MotionEngine {
     }
 
     void viewerGone(UUID id) {
-        forgetTexts(id);
+        forgetOwn(id);
         Viewer viewer = viewers.remove(id);
         if (viewer == null) {
             return;
@@ -1168,6 +1241,7 @@ final class MotionEngine {
                 queue(viewer, encode(packet.spawn(part, values, display.clientRange(), display.moveTicks), viewer.channel));
             }
             ownTexts(display, viewer);
+            ownGlows(display, viewer);
         }
     }
 
@@ -1417,6 +1491,7 @@ final class MotionEngine {
                     : packet.spawn(part, display.clientRange(), display.moveTicks), viewer.channel));
         }
         ownTexts(display, viewer);
+        ownGlows(display, viewer);
         if (display.vehicle >= 0) {
             queue(viewer, encode(passengers(display.vehicle), viewer.channel));
         }
@@ -1547,6 +1622,7 @@ final class MotionEngine {
             }
         }
         ownTexts(display, viewer);
+        ownGlows(display, viewer);
         // after the spawn, the client ignores passengers it does not know yet
         if (display.vehicle >= 0) {
             queue(viewer, encode(passengers(display.vehicle), viewer.channel));

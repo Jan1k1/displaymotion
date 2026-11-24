@@ -528,6 +528,56 @@ class MotionEngineTest {
     }
 
     @Test
+    void ownGlowStaysForThatPlayerAndComesBackAfterRespawn() {
+        MotionDisplay block = display();
+        tick();
+        tick();
+
+        engine.submit(() -> engine.glowFor(block.state(), MotionEngine.ALL_PARTS, PLAYER, 0x00FF00));
+        List<Packet> set = tick();
+        block.glow(Color.RED);
+        List<Packet> shared = tick();
+        viewerAt(200);
+        tick();
+        viewerAt(0);
+        List<Packet> back = tick();
+        engine.submit(() -> engine.glowFor(block.state(), MotionEngine.ALL_PARTS, PLAYER, null));
+        List<Packet> cleared = tick();
+
+        assertEquals((byte) 0x40, value(set.getFirst(), 0));
+        assertEquals(0x00FF00, value(set.getFirst(), 22));
+        assertEquals(0x00FF00, value(shared.getFirst(), 22));
+        Packet last = back.stream().filter(p -> p.kind().equals("meta")).reduce((a, b) -> b).orElseThrow();
+        assertEquals(0x00FF00, value(last, 22));
+        assertEquals(Color.RED.asRGB(), value(cleared.getFirst(), 22));
+    }
+
+    @Test
+    void glowForOnePlayerNeedsAnItemOrBlockPart() {
+        PartState[] parts = {PartState.text("main", ENTITY, -1, Component.text("x"), Pose.IDENTITY)};
+        MotionDisplay sign = new MotionDisplay(engine, new Location(world(), 0, 0, 0), parts, 48);
+
+        assertThrows(IllegalArgumentException.class, () -> sign.glow(player(), Color.RED));
+        assertThrows(IllegalArgumentException.class, () -> sign.glow(player(), "main", Color.RED));
+    }
+
+    @Test
+    void glowForOfflinePlayerIsDropped() {
+        MotionDisplay block = display();
+        tick();
+        tick();
+
+        Player gone = FakePacketEvents.proxy(Player.class, (method, args) -> switch (method) {
+            case "getUniqueId" -> PLAYER;
+            case "isOnline" -> false;
+            default -> null;
+        });
+        block.glow(gone, Color.RED);
+
+        assertEquals(List.of(), tick());
+    }
+
+    @Test
     void removedDisplayLeavesTheHandleSet() {
         MotionDisplay display = display();
         tick();

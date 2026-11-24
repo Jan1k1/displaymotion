@@ -61,6 +61,8 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
 
     private PartState part;
     private net.kyori.adventure.text.Component text;
+    private boolean glowing;
+    private int glowColor;
     private float[] values;
     private int changes;
     private int duration;
@@ -116,6 +118,14 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
         return set(part, LOOK, 0, 0, 0);
     }
 
+    // the look of a part with the glow of one player instead of the shared one
+    DisplayPacket look(PartState part, int glowRgb) {
+        set(part, LOOK, 0, 0, 0);
+        this.glowing = true;
+        this.glowColor = glowRgb;
+        return this;
+    }
+
     DisplayPacket content(PartState part) {
         return set(part, CONTENT, 0, 0, 0);
     }
@@ -131,6 +141,8 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
         this.part = part;
         this.values = part.sent;
         this.text = part.text;
+        this.glowing = part.glowing;
+        this.glowColor = part.glowColor;
         this.mode = mode;
         this.changes = changes;
         this.duration = duration;
@@ -225,13 +237,13 @@ final class DisplayPacket extends PacketWrapper<DisplayPacket> {
 
     private void writeLook() {
         entry(FLAGS_SLOT, byteType);
-        writeByte(part.glowing ? GLOWING_FLAG : 0);
+        writeByte(glowing ? GLOWING_FLAG : 0);
         entry(BILLBOARD_SLOT, byteType);
         writeByte(part.billboard);
         entry(BRIGHTNESS_SLOT, intType);
         writeVarInt(part.brightness);
         entry(GLOW_COLOR_SLOT, intType);
-        writeVarInt(part.glowColor);
+        writeVarInt(glowColor);
         entry(SHADOW_RADIUS_SLOT, floatType);
         writeFloat(part.shadowRadius);
         entry(SHADOW_STRENGTH_SLOT, floatType);

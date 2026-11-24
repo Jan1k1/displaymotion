@@ -18,6 +18,7 @@ import org.jan1k.displaymotion.Animation;
 import org.jan1k.displaymotion.Ease;
 import org.jan1k.displaymotion.Frames;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -287,6 +288,28 @@ public final class MotionDisplay {
         return glow(index(part), color);
     }
 
+    /**
+     * Outlines every item and block part for one player only, the other players keep the shared glow. Good for
+     * quest markers and picks. {@code null} gives the player the shared glow again. The glow goes away when the
+     * player leaves the server. Text parts do not glow and mannequins have no glow color, so they are skipped.
+     * @throws IllegalArgumentException if the display has no item or block part
+     */
+    public MotionDisplay glow(Player player, Color color) {
+        return glowFor(player, MotionEngine.ALL_PARTS, color);
+    }
+
+    /**
+     * Outlines one item or block part for one player only, see {@link #glow(Player, Color)}.
+     * @throws IllegalArgumentException if the part is not an item or a block
+     */
+    public MotionDisplay glow(Player player, String part, Color color) {
+        int index = index(part);
+        if (!canGlow(state.parts[index])) {
+            throw new IllegalArgumentException("part '" + part + "' is not an item or a block");
+        }
+        return glowFor(player, index, color);
+    }
+
     /** Draws every part with a fixed light level. {@code null} uses the light of the world. */
     public MotionDisplay brightness(Display.Brightness brightness) {
         return brightness(MotionEngine.ALL_PARTS, brightness);
@@ -548,6 +571,26 @@ public final class MotionDisplay {
         }
         UUID id = player.getUniqueId();
         engine.submit(() -> engine.textFor(state, part, id, text));
+        return this;
+    }
+
+    private static boolean canGlow(PartState part) {
+        return part.kind == PartState.ITEM || part.kind == PartState.BLOCK;
+    }
+
+    private MotionDisplay glowFor(Player player, int part, Color color) {
+        Objects.requireNonNull(player, "player");
+        if (part == MotionEngine.ALL_PARTS && Arrays.stream(state.parts).noneMatch(MotionDisplay::canGlow)) {
+            throw new IllegalArgumentException("this display has no item or block part");
+        }
+        requireAlive();
+        // quit already ran for an offline player, nothing would clear this glow again
+        if (color != null && !player.isOnline()) {
+            return this;
+        }
+        UUID id = player.getUniqueId();
+        Integer rgb = color == null ? null : color.asRGB();
+        engine.submit(() -> engine.glowFor(state, part, id, rgb));
         return this;
     }
 
